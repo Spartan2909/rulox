@@ -14,7 +14,7 @@ pub enum LoxError {
         found: LoxValueType,
     },
     /// An error that occurred when attempting to convert a LoxValue into a Rust type that is too small.
-    SizeError { required: usize, found: usize },
+    SizeError { found: usize },
 }
 
 impl fmt::Display for LoxError {
@@ -23,11 +23,11 @@ impl fmt::Display for LoxError {
             Self::TypeError { expected, found } => {
                 write!(f, "expected one of {:?}, found {:?}", expected, found)
             }
-            Self::SizeError { required, found } => {
+            Self::SizeError { found } => {
                 write!(
                     f,
-                    "could not convert from a LoxValue of size {:?} to a value of size {:?}",
-                    required, found
+                    "could not convert LoxValue to value of size {:?} (LoxValue too large)",
+                    found
                 )
             }
         }
@@ -148,14 +148,12 @@ macro_rules! impl_try_convert_loxvalue_to_num {
         fn try_from(value: LoxValue) -> LoxResult<Self> {
             match value {
                 LoxValue::Num(ref num) => {
-                    let converted = num.value as Self;
-                    if converted as f64 == num.value {
-                        Ok(converted)
-                    } else {
+                    if num.value > Self::MAX as f64 {
                         Err(LoxError::SizeError{
-                            required: 8,
                             found: size_of::<Self>()
                         })
+                    } else {
+                        Ok(num.value as Self)
                     }
                 },
                 _ => Err(LoxError::new_type_single(

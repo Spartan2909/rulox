@@ -51,6 +51,7 @@ type LoxResult<T> = Result<T, LoxError>;
 /// An enum used for error reporting.
 #[derive(Debug)]
 pub enum LoxValueType {
+    Bool,
     Str,
     Num,
     Arr,
@@ -61,6 +62,7 @@ pub enum LoxValueType {
 impl From<LoxValue> for LoxValueType {
     fn from(value: LoxValue) -> Self {
         match value {
+            LoxValue::Bool(_) => Self::Bool,
             LoxValue::Str(_) => Self::Str,
             LoxValue::Num(_) => Self::Num,
             LoxValue::Arr(_) => Self::Arr,
@@ -73,29 +75,12 @@ impl From<LoxValue> for LoxValueType {
 /// A dynamically typed value used by Lox programs.
 #[derive(Debug, Clone)]
 pub enum LoxValue {
-    Str(LoxStr),
-    Num(LoxNum),
-    Arr(LoxArr),
+    Bool(bool),
+    Str(String),
+    Num(f64),
+    Arr(Vec<LoxValue>),
     Instance(LoxInstance),
     Nil,
-}
-
-/// A Lox string.
-#[derive(Debug, Clone)]
-pub struct LoxStr {
-    value: String,
-}
-
-/// A Lox number.
-#[derive(Debug, Clone)]
-pub struct LoxNum {
-    value: f64,
-}
-
-/// A Lox array.
-#[derive(Debug, Clone)]
-pub struct LoxArr {
-    values: Vec<LoxValue>,
 }
 
 /// An instance of a Lox class.
@@ -105,9 +90,15 @@ pub struct LoxInstance {
     methods: Vec<String>,
 }
 
+impl From<bool> for LoxValue {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
 impl From<String> for LoxValue {
     fn from(value: String) -> Self {
-        Self::Str(LoxStr { value })
+        Self::Str(value)
     }
 }
 
@@ -121,7 +112,7 @@ macro_rules! impl_convert_num_to_loxvalue {
     ( $($t:ty),* ) => {
     $( impl From<$t> for LoxValue {
         fn from(value: $t) -> Self {
-            Self::Num(LoxNum { value: value as f64 })
+            Self::Num(value as f64)
         }
     }) *
     };
@@ -134,7 +125,7 @@ impl TryInto<String> for LoxValue {
 
     fn try_into(self) -> LoxResult<String> {
         if let LoxValue::Str(value) = self {
-            return Ok(value.value);
+            return Ok(value);
         }
 
         Err(LoxError::new_type_single(
@@ -152,12 +143,12 @@ macro_rules! impl_try_convert_loxvalue_to_num {
         fn try_from(value: LoxValue) -> LoxResult<Self> {
             match value {
                 LoxValue::Num(ref num) => {
-                    if num.value > Self::MAX as f64 {
+                    if *num > Self::MAX as f64 {
                         Err(LoxError::SizeError{
                             found: size_of::<Self>()
                         })
                     } else {
-                        Ok(num.value as Self)
+                        Ok(*num as Self)
                     }
                 },
                 _ => Err(LoxError::new_type_single(

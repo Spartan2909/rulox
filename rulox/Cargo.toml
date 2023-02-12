@@ -11,6 +11,7 @@ license.workspace = true
 
 [dependencies]
 "rulox_types" = { path = "../rulox_types" }
+"syn" = "1.0"
 
 [lib]
 proc-macro = true

@@ -1,11 +1,19 @@
-use std::{collections::HashMap, error::Error, fmt};
+//! # rulox types
+//!
+//! `rulox_types` is a collection of types used by the `rulox` crate
+//! to represent dynamically typed values.
 
+use std::{collections::HashMap, error::Error, fmt, mem::size_of};
+
+/// An error that occurred when attempting to use a LoxValue in an invalid location.
 #[derive(Debug)]
 pub enum LoxError {
+    /// An error that occurred when attempting to use a LoxValue with an invalid type.
     TypeError {
         expected: Vec<LoxValueType>,
         found: LoxValueType,
     },
+    /// An error that occurred when attempting to convert a LoxValue into a Rust type that is too small.
     SizeError { required: usize, found: usize },
 }
 
@@ -37,6 +45,7 @@ impl LoxError {
     }
 }
 
+/// An enum used for error reporting.
 #[derive(Debug)]
 pub enum LoxValueType {
     Str,
@@ -56,6 +65,7 @@ impl From<LoxValue> for LoxValueType {
     }
 }
 
+/// A dynamically typed value used by Lox programs.
 #[derive(Debug, Clone)]
 pub enum LoxValue {
     Str(LoxStr),
@@ -64,21 +74,25 @@ pub enum LoxValue {
     Instance(LoxInstance),
 }
 
+/// A Lox string.
 #[derive(Debug, Clone)]
 pub struct LoxStr {
     value: String,
 }
 
+/// A Lox number.
 #[derive(Debug, Clone)]
 pub struct LoxNum {
     value: f64,
 }
 
+/// A Lox array.
 #[derive(Debug, Clone)]
 pub struct LoxArr {
     value: Vec<LoxValue>,
 }
 
+/// An instance of a Lox class.
 #[derive(Debug, Clone)]
 pub struct LoxInstance {
     attributes: HashMap<String, LoxValue>,

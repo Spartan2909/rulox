@@ -55,6 +55,7 @@ pub enum LoxValueType {
     Num,
     Arr,
     Instance,
+    Nil,
 }
 
 impl From<LoxValue> for LoxValueType {
@@ -64,6 +65,7 @@ impl From<LoxValue> for LoxValueType {
             LoxValue::Num(_) => Self::Num,
             LoxValue::Arr(_) => Self::Arr,
             LoxValue::Instance(_) => Self::Instance,
+            LoxValue::Nil => Self::Nil,
         }
     }
 }
@@ -75,6 +77,7 @@ pub enum LoxValue {
     Num(LoxNum),
     Arr(LoxArr),
     Instance(LoxInstance),
+    Nil,
 }
 
 /// A Lox string.

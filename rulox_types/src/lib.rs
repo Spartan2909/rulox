@@ -45,6 +45,8 @@ impl LoxError {
     }
 }
 
+type LoxResult<T> = Result<T, LoxError>;
+
 /// An enum used for error reporting.
 #[derive(Debug)]
 pub enum LoxValueType {
@@ -126,7 +128,7 @@ impl_convert_num_to_loxvalue! { f32, f64, u8, u16, u32, u64, u128, i8, i16, i32,
 impl TryInto<String> for LoxValue {
     type Error = LoxError;
 
-    fn try_into(self) -> Result<String, Self::Error> {
+    fn try_into(self) -> LoxResult<String> {
         if let LoxValue::Str(value) = self {
             return Ok(value.value);
         }
@@ -143,7 +145,7 @@ macro_rules! impl_try_convert_loxvalue_to_num {
     $( impl TryFrom<LoxValue> for $t {
         type Error = LoxError;
 
-        fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
+        fn try_from(value: LoxValue) -> LoxResult<Self> {
             match value {
                 LoxValue::Num(ref num) => {
                     let converted = num.value as Self;

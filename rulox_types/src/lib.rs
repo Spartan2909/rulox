@@ -89,7 +89,7 @@ pub struct LoxNum {
 /// A Lox array.
 #[derive(Debug, Clone)]
 pub struct LoxArr {
-    value: Vec<LoxValue>,
+    values: Vec<LoxValue>,
 }
 
 /// An instance of a Lox class.

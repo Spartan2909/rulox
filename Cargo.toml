@@ -3,3 +3,4 @@ members = ["rulox", "rulox_types"]
 
 [workspace.package]
 authors = ["Caleb Robson"]
+license = "MIT"

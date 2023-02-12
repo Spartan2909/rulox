@@ -45,6 +45,7 @@ impl LoxError {
     }
 }
 
+/// A potential error returned by Lox code.
 type LoxResult<T> = Result<T, LoxError>;
 
 /// An enum used for error reporting.

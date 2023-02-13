@@ -11,6 +11,9 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 
+use proc_macro2::{Punct, Spacing, TokenStream};
+use quote::{quote, ToTokens, TokenStreamExt};
+
 /// An error that occurred when attempting to use a LoxValue in an invalid location.
 #[derive(Debug)]
 pub enum LoxError {
@@ -111,7 +114,8 @@ pub struct LoxInstance {
 }
 
 impl<T> PartialEq<T> for LoxValue
-    where T: Into<LoxValue> + Clone
+where
+    T: Into<LoxValue> + Clone,
 {
     fn eq(&self, rhs: &T) -> bool {
         let other: Self = rhs.clone().into();
@@ -433,6 +437,30 @@ impl Div for LoxValue {
                 LoxValueType::from(self),
                 LoxValueType::from(rhs)
             )
+        }
+    }
+}
+
+impl ToTokens for LoxValue {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::Bool(b) => tokens.append_all(quote! { LoxValue::from(#b) }),
+            Self::Str(s) => tokens.append_all(quote! { LoxValue::from(#s) }),
+            Self::Num(n) => tokens.append_all(quote! { LoxValue::from(#n) }),
+            Self::Arr(arr) => {
+                tokens.append_all(quote! { LoxValue::from });
+                tokens.append(Punct::new('(', Spacing::Alone));
+                tokens.append_all(quote! { vec! });
+                tokens.append(Punct::new('[', Spacing::Alone));
+                for i in 0..arr.len() {
+                    let value = arr[i].clone();
+                    tokens.append_all(quote! { #value, });
+                }
+                tokens.append(Punct::new(']', Spacing::Joint));
+                tokens.append(Punct::new(')', Spacing::Alone));
+            }
+            Self::Instance(_) => todo!(),
+            Self::Nil => tokens.append_all(quote! { LoxValue::Nil }),
         }
     }
 }

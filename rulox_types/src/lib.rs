@@ -1,5 +1,3 @@
-//! # rulox types
-//!
 //! `rulox_types` is a collection of types used by the `rulox` crate
 //! to represent dynamically typed values.
 
@@ -378,6 +376,15 @@ impl Add for LoxValue {
                 LoxValueType::from(self)
             ),
         }
+    }
+}
+
+impl Add<&str> for LoxValue {
+    type Output = Self;
+
+    fn add(self, rhs: &str) -> Self::Output {
+        let other: LoxValue = rhs.into();
+        self + other
     }
 }
 

@@ -60,5 +60,7 @@ fn main() {
 - [x] Print statements
 - [x] Control flow statements
 - [x] Loops
-- [ ] Functions
+- [ ] `for ... in ...` loops
+- [x] Functions
+- [ ] Closures
 - [ ] Object orientation (possibly)

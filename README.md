@@ -25,6 +25,7 @@ fn main() {
 
 - [x] Variable declarations
 - [x] Print statements
+- [ ] Control flow statements
 - [ ] Loops
 - [ ] Functions
 - [ ] Object orientation (possibly)

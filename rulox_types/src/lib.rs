@@ -43,6 +43,15 @@ impl Error for LoxError {}
 /// A potential error returned by Lox code.
 type LoxResult<T> = Result<T, LoxError>;
 
+/// Gets the value from a LoxResult, and panics if it is an error. 
+/// # Examples
+/// ```
+/// # use rulox_types::*;
+/// let v = LoxValue::from(5) + LoxValue::from(3);
+/// assert_eq!(extract(v), LoxValue::from(8));
+/// ```
+/// # Panics
+/// If the contained value is an error
 pub fn extract<T>(result: LoxResult<T>) -> T {
     match result {
         Ok(value) => value,
@@ -617,10 +626,6 @@ impl ToTokens for LoxValue {
             Self::Nil => tokens.append_all(quote! { LoxValue::Nil }),
         }
     }
-}
-
-pub mod prelude {
-    pub use super::{extract, LoxValue};
 }
 
 #[cfg(test)]

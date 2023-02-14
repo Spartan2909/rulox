@@ -15,5 +15,5 @@ license.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-"rulox_macro" = { path = "../rulox_macro" }
-"rulox_types" = { path ="../rulox_types" }
+"rulox_macro" = { path = "../rulox_macro", version = "0.1" }
+"rulox_types" = { path ="../rulox_types", version = "0.1" }

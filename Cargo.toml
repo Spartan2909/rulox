@@ -1,3 +1,12 @@
+[package]
+name = "rulox-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+"rulox" = { path = "./rulox" }
+"rulox_types" = { path = "./rulox_types" }
+
 [workspace]
 members = ["rulox", "rulox_types"]
 

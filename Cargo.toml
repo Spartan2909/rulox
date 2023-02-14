@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-"rulox" = { path = "./rulox" }
+"rulox_macro" = { path = "./rulox_macro" }
 "rulox_types" = { path = "./rulox_types" }
 
 [workspace]
-members = ["rulox", "rulox_types"]
+members = ["rulox_macro", "rulox_types"]
 
 [workspace.package]
 authors = ["Caleb Robson"]

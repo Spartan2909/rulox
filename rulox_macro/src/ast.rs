@@ -45,6 +45,10 @@ pub enum Stmt {
         condition: Expr,
         then_branch: Box<Stmt>,
         else_branch: Box<Option<Stmt>>,
+    },
+    While {
+        condition: Expr,
+        body: Box<Stmt>
     }
 }
 
@@ -93,6 +97,11 @@ impl ToTokens for Stmt {
                     tokens.append_all(quote! { else { #branch } });
                 }
             }
+            Self::While { condition, body } => {
+                let body: &Stmt = &*body;
+
+                tokens.append_all(quote! { while extract(#condition.try_into()) { #body } });
+            }
         }
     }
 }
@@ -138,12 +147,14 @@ impl Stmt {
             Self::if_statement(input)
         } else if input.peek(kw::print) {
             Self::print_statement(input)
+        } else if input.peek(Token![while]) {
+            Self::while_statement(input)
+        } else if input.peek(Token![for]) {
+            Self::for_statement(input)
         } else if input.peek(token::Brace) {
             Self::block(input)
         } else {
-            let expr: Expr = input.parse()?;
-            input.parse::<Token![;]>()?;
-            Ok(Self::Expr(expr))
+            Self::expression_statement(input)
         }
     }
 
@@ -176,6 +187,54 @@ impl Stmt {
         Ok(Self::Print(expr))
     }
 
+    fn while_statement(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![while]>()?;
+
+        let content;
+        parenthesized!(content in input);
+        let condition: Expr = content.parse()?;
+
+        let body = Box::new(Self::statement(input)?);
+
+        Ok(Self::While { condition, body })
+    }
+
+    fn for_statement(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![for]>()?;
+
+        let content;
+        parenthesized!(content in input);
+
+        let initializer = if content.peek(Token![;]) {
+            Self::Expr(Expr::Literal(rulox_types::LoxValue::Nil))
+        } else if content.peek(kw::var) {
+            Self::var_declaration(&content)?
+        } else {
+            Self::expression_statement(&content)?
+        };
+
+        let condition = if content.peek(Token![;]) {
+            Expr::Literal(rulox_types::LoxValue::Bool(true))
+        } else {
+            Expr::parse(&content)?
+        };
+        content.parse::<Token![;]>()?;
+
+        let increment = if content.is_empty() {
+            Expr::Literal(rulox_types::LoxValue::Nil)
+        } else {
+            Expr::parse(&content)?
+        };
+
+        let loop_contents = Self::Block(vec![Self::statement(input)?, Self::Expr(increment)]);
+
+        let while_loop = Self::While { condition, body: Box::new(loop_contents) };
+
+        let body = Self::Block(vec![initializer, while_loop]);
+
+        Ok(body)
+    }
+
     fn block(input: ParseStream) -> syn::Result<Self> {
         let content;
         braced!(content in input);
@@ -187,6 +246,12 @@ impl Stmt {
         }
 
         Ok(Self::Block(statements))
+    }
+
+    fn expression_statement(input: ParseStream) -> syn::Result<Self> {
+        let expr: Expr = input.parse()?;
+        input.parse::<Token![;]>()?;
+        Ok(Self::Expr(expr))
     }
 }
 
@@ -203,6 +268,7 @@ pub enum Expr {
         left: Box<Expr>,
         operator: BinOp,
         right: Box<Expr>,
+        comparision: bool,
     },
     Assign {
         name: Ident,
@@ -240,12 +306,19 @@ impl ToTokens for Expr {
                 left,
                 operator,
                 right,
+                comparision,
             } => {
                 let left: &Expr = &*left;
                 let right: &Expr = &*right;
-                tokens.append_all(
-                    quote! { extract(LoxValue::from(#left) #operator LoxValue::from(#right)) },
-                );
+                if *comparision {
+                    tokens.append_all(
+                        quote! { (LoxValue::from(&#left) #operator LoxValue::from(&#right)) }
+                    );
+                } else {
+                    tokens.append_all(
+                        quote! { extract(LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
+                    );
+                }
             }
             Self::Assign { name, value } => {
                 let value: &Expr = &*value;
@@ -294,6 +367,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
+                comparision: false
             }
         }
 
@@ -311,6 +385,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
+                comparision: false
             }
         }
 
@@ -327,6 +402,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
+                comparision: false
             };
         }
 
@@ -347,6 +423,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
+                comparision: true
             };
         }
 
@@ -363,6 +440,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
+                comparision: false
             }
         }
 
@@ -379,6 +457,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
+                comparision: false
             }
         }
 

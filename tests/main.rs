@@ -74,3 +74,17 @@ fn if_statement() {
 
     assert_eq!(a, LoxValue::Num(5.0))
 }
+
+#[test]
+fn while_loop() {
+    lox! {
+        var a = 5;
+
+        while (a > 0) {
+            print a;
+            a = a - 1;
+        }
+    }
+
+    assert_eq!(a, 0);
+}

@@ -41,7 +41,7 @@ impl fmt::Display for LoxError {
 impl Error for LoxError {}
 
 /// A potential error returned by Lox code.
-type LoxResult<T> = Result<T, LoxError>;
+pub type LoxResult<T> = Result<T, LoxError>;
 
 /// Gets the value from a LoxResult, and panics if it is an error.
 /// # Examples
@@ -52,7 +52,9 @@ type LoxResult<T> = Result<T, LoxError>;
 /// ```
 /// # Panics
 /// If the contained value is an error
-pub fn extract<T>(result: LoxResult<T>) -> T {
+pub fn extract<T, E>(result: Result<T, E>) -> T
+    where E: ToString
+{
     match result {
         Ok(value) => value,
         Err(e) => panic!("{}", e.to_string()),
@@ -198,9 +200,11 @@ impl fmt::Display for LoxValue {
     }
 }
 
-impl From<&LoxValue> for LoxValue {
-    fn from(value: &LoxValue) -> Self {
-        value.clone()
+impl<T> From<&T> for LoxValue
+    where T: Clone + Into<LoxValue>
+{
+    fn from(value: &T) -> Self {
+        value.clone().into()
     }
 }
 

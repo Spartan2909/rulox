@@ -48,8 +48,8 @@ pub enum Stmt {
     },
     While {
         condition: Expr,
-        body: Box<Stmt>
-    }
+        body: Box<Stmt>,
+    },
 }
 
 impl ToTokens for Stmt {
@@ -88,7 +88,11 @@ impl ToTokens for Stmt {
 
                 tokens.append_all(quote! { { #inner } })
             }
-            Self::If { condition, then_branch, else_branch } => {
+            Self::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 let then_branch: &Stmt = &*then_branch;
                 let else_branch: &Option<Stmt> = &*else_branch;
 
@@ -177,7 +181,11 @@ impl Stmt {
 
         let else_branch = Box::new(else_branch);
 
-        Ok(Self::If { condition, then_branch, else_branch })
+        Ok(Self::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
     }
 
     fn print_statement(input: ParseStream) -> syn::Result<Self> {
@@ -228,7 +236,10 @@ impl Stmt {
 
         let loop_contents = Self::Block(vec![Self::statement(input)?, Self::Expr(increment)]);
 
-        let while_loop = Self::While { condition, body: Box::new(loop_contents) };
+        let while_loop = Self::While {
+            condition,
+            body: Box::new(loop_contents),
+        };
 
         let body = Self::Block(vec![initializer, while_loop]);
 
@@ -312,7 +323,7 @@ impl ToTokens for Expr {
                 let right: &Expr = &*right;
                 if *comparision {
                     tokens.append_all(
-                        quote! { (LoxValue::from(&#left) #operator LoxValue::from(&#right)) }
+                        quote! { (LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
                     );
                 } else {
                     tokens.append_all(
@@ -367,7 +378,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false
+                comparision: false,
             }
         }
 
@@ -385,7 +396,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false
+                comparision: false,
             }
         }
 
@@ -402,7 +413,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false
+                comparision: false,
             };
         }
 
@@ -423,7 +434,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: true
+                comparision: true,
             };
         }
 
@@ -440,7 +451,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false
+                comparision: false,
             }
         }
 
@@ -457,7 +468,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false
+                comparision: false,
             }
         }
 

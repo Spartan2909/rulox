@@ -53,7 +53,8 @@ pub type LoxResult<T> = Result<T, LoxError>;
 /// # Panics
 /// If the contained value is an error
 pub fn extract<T, E>(result: Result<T, E>) -> T
-    where E: ToString
+where
+    E: ToString,
 {
     match result {
         Ok(value) => value,
@@ -201,7 +202,8 @@ impl fmt::Display for LoxValue {
 }
 
 impl<T> From<&T> for LoxValue
-    where T: Clone + Into<LoxValue>
+where
+    T: Clone + Into<LoxValue>,
 {
     fn from(value: &T) -> Self {
         value.clone().into()

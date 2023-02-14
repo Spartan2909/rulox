@@ -43,7 +43,7 @@ impl Error for LoxError {}
 /// A potential error returned by Lox code.
 type LoxResult<T> = Result<T, LoxError>;
 
-/// Gets the value from a LoxResult, and panics if it is an error. 
+/// Gets the value from a LoxResult, and panics if it is an error.
 /// # Examples
 /// ```
 /// # use rulox_types::*;

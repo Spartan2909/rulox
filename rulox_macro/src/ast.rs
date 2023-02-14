@@ -4,10 +4,9 @@ use quote::{quote, ToTokens, TokenStreamExt};
 
 use rulox_types::LoxValue;
 
-use syn::bracketed;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::{parenthesized, spanned::Spanned, token, BinOp, Ident, Token, UnOp};
+use syn::{braced, bracketed, parenthesized, spanned::Spanned, token, BinOp, Ident, Token, UnOp};
 
 mod kw {
     syn::custom_keyword!(nil);
@@ -36,7 +35,12 @@ impl Parse for LoxProgram {
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),
-    Var { name: Ident, initializer: Expr },
+    Var {
+        name: Ident,
+        initializer: Expr,
+        implicit_nil: bool,
+    },
+    Block(Vec<Stmt>),
 }
 
 impl ToTokens for Stmt {
@@ -50,11 +54,30 @@ impl ToTokens for Stmt {
                 tokens.append_all(quote! { println!("{}", #expr); });
                 tokens.append(Punct::new(';', Spacing::Alone));
             }
-            Self::Var { name, initializer } => {
+            Self::Var {
+                name,
+                initializer,
+                implicit_nil,
+            } => {
+                if *implicit_nil {
+                    tokens.append_all(quote! { #[allow(unused_assignments, unused_mut)] });
+                } else {
+                    tokens.append_all(quote! { #[allow(unused_mut)] });
+                }
+
                 tokens.append_all(quote! { let mut #name });
                 tokens.append(Punct::new('=', Spacing::Alone));
                 initializer.to_tokens(tokens);
                 tokens.append(Punct::new(';', Spacing::Alone));
+            }
+            Self::Block(block) => {
+                let mut inner = TokenStream::new();
+
+                for stmt in block {
+                    stmt.to_tokens(&mut inner);
+                }
+
+                tokens.append_all(quote! { { #inner } })
             }
         }
     }
@@ -80,29 +103,52 @@ impl Stmt {
 
         let name: Ident = input.parse()?;
 
-        let initializer: Expr = if input.peek(Token![=]) {
+        let (initializer, implicit_nil) = if input.peek(Token![=]) {
             input.parse::<Token![=]>()?;
-            input.parse()?
+            (input.parse()?, false)
         } else {
-            Expr::Literal(LoxValue::Nil)
+            (Expr::Literal(LoxValue::Nil), true)
         };
 
         input.parse::<Token![;]>()?;
 
-        Ok(Self::Var { name, initializer })
+        Ok(Self::Var {
+            name,
+            initializer,
+            implicit_nil,
+        })
     }
 
     fn statement(input: ParseStream) -> syn::Result<Self> {
         if input.peek(kw::print) {
-            input.parse::<kw::print>()?;
-            let expr: Expr = input.parse()?;
-            input.parse::<Token![;]>()?;
-            Ok(Self::Print(expr))
+            Self::print_statement(input)
+        } else if input.peek(token::Brace) {
+            Self::block(input)
         } else {
             let expr: Expr = input.parse()?;
             input.parse::<Token![;]>()?;
             Ok(Self::Expr(expr))
         }
+    }
+
+    fn print_statement(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<kw::print>()?;
+        let expr: Expr = input.parse()?;
+        input.parse::<Token![;]>()?;
+        Ok(Self::Print(expr))
+    }
+
+    fn block(input: ParseStream) -> syn::Result<Self> {
+        let content;
+        braced!(content in input);
+
+        let mut statements: Vec<Stmt> = vec![];
+
+        while !content.is_empty() {
+            statements.push(content.parse()?);
+        }
+
+        Ok(Self::Block(statements))
     }
 }
 

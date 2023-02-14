@@ -44,3 +44,18 @@ fn arr() {
         print a;
     }
 }
+
+#[test]
+#[allow(unused_variables)]
+fn block() {
+    lox! {
+        var a;
+
+        {
+            var b = 5;
+            a = 2;
+        }
+
+        print a;
+    }
+}

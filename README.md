@@ -27,4 +27,4 @@ fn main() {
 - [x] Print statements
 - [ ] Loops
 - [ ] Functions
-- [ ] Object Orientation
+- [ ] Object orientation (possibly)

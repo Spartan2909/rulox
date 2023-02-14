@@ -88,3 +88,16 @@ fn while_loop() {
 
     assert_eq!(a, 0);
 }
+
+#[test]
+fn for_loop() {
+    lox! {
+        var a = 1;
+
+        for (var i = 5; i > 0; i = i - 1) {
+            a = a - 1;
+        }
+    }
+
+    assert_eq!(a, -4);
+}

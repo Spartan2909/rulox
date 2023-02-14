@@ -23,11 +23,21 @@ fn main() {
 }
 ```
 
+```rust
+use rulox::*;
+
+fn main() {
+    lox! {
+        for (var i = 5; i > 0; i = i - 1) print i;
+    }
+}
+```
+
 # Features
 
 - [x] Variable declarations
 - [x] Print statements
 - [x] Control flow statements
-- [ ] Loops
+- [x] Loops
 - [ ] Functions
 - [ ] Object orientation (possibly)

@@ -13,5 +13,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Update Rust
+        run: rustup update stable
+
       - name: Test
-        run: cargo test --workspace --verbose
+        run: cargo test +stable --workspace --verbose

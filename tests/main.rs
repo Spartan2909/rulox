@@ -101,3 +101,27 @@ fn for_loop() {
 
     assert_eq!(a, -4);
 }
+
+#[test]
+fn function() {
+    lox! {
+        fun hello(name) {
+            print "Hello " + name + "! :)";
+        }
+
+        hello("Bob");
+    }
+
+    hello(LoxValue::from("Alice"));
+}
+
+#[test]
+fn return_test() {
+    lox! {
+        fun add_one(num) {
+            return num + 1;
+        }
+    }
+
+    assert_eq!(add_one(LoxValue::Num(3.0)), LoxValue::Num(4.0))
+}

@@ -14,6 +14,7 @@ mod kw {
     syn::custom_keyword!(var);
     syn::custom_keyword!(and);
     syn::custom_keyword!(or);
+    syn::custom_keyword!(fun);
 }
 
 pub struct LoxProgram {
@@ -39,6 +40,12 @@ pub enum Stmt {
         name: Ident,
         initializer: Expr,
         implicit_nil: bool,
+    },
+    Return(Expr),
+    Function {
+        name: Ident,
+        params: Vec<Ident>,
+        body: Vec<Stmt>,
     },
     Block(Vec<Stmt>),
     If {
@@ -78,6 +85,24 @@ impl ToTokens for Stmt {
                 tokens.append(Punct::new('=', Spacing::Alone));
                 initializer.to_tokens(tokens);
                 tokens.append(Punct::new(';', Spacing::Alone));
+            }
+            Self::Return(expr) => {
+                tokens.append_all(quote! { return #expr; });
+            }
+            Self::Function { name, params, body } => {
+                tokens.append_all(quote! { fn #name });
+
+                let mut inner = TokenStream::new();
+                for param in params {
+                    inner.append_all(quote! { #param: LoxValue, })
+                }
+
+                tokens.append_all(quote! { (#inner) -> LoxValue });
+
+                let mut inner = TokenStream::new();
+                inner.append_separated(body, Punct::new(',', Spacing::Alone));
+
+                tokens.append_all(quote! { { #inner #[allow(unreachable_code)] LoxValue::Nil } });
             }
             Self::Block(block) => {
                 let mut inner = TokenStream::new();
@@ -120,6 +145,8 @@ impl Stmt {
     fn declaration(input: ParseStream) -> syn::Result<Self> {
         if input.peek(kw::var) {
             Self::var_declaration(input)
+        } else if input.peek(kw::fun) {
+            Self::function(input)
         } else {
             Self::statement(input)
         }
@@ -146,17 +173,33 @@ impl Stmt {
         })
     }
 
+    fn function(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<kw::fun>()?;
+
+        let name: Ident = input.parse()?;
+
+        let content;
+        parenthesized!(content in input);
+        let parameters: Punctuated<Ident, Token![,]> = content.parse_terminated(Ident::parse)?;
+
+        let body = Self::block(input)?;
+
+        Ok(Self::Function { name, params: Vec::from_iter(parameters), body })
+    }
+
     fn statement(input: ParseStream) -> syn::Result<Self> {
         if input.peek(Token![if]) {
             Self::if_statement(input)
         } else if input.peek(kw::print) {
             Self::print_statement(input)
+        } else if input.peek(Token![return]) {
+            Self::return_statement(input)
         } else if input.peek(Token![while]) {
             Self::while_statement(input)
         } else if input.peek(Token![for]) {
             Self::for_statement(input)
         } else if input.peek(token::Brace) {
-            Self::block(input)
+            Ok(Self::Block(Self::block(input)?))
         } else {
             Self::expression_statement(input)
         }
@@ -193,6 +236,20 @@ impl Stmt {
         let expr: Expr = input.parse()?;
         input.parse::<Token![;]>()?;
         Ok(Self::Print(expr))
+    }
+
+    fn return_statement(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![return]>()?;
+
+        let value = if input.peek(Token![;]) {
+            Expr::Literal(LoxValue::Nil)
+        } else {
+            input.parse()?
+        };
+
+        input.parse::<Token![;]>()?;
+
+        Ok(Self::Return(value))
     }
 
     fn while_statement(input: ParseStream) -> syn::Result<Self> {
@@ -246,7 +303,7 @@ impl Stmt {
         Ok(body)
     }
 
-    fn block(input: ParseStream) -> syn::Result<Self> {
+    fn block(input: ParseStream) -> syn::Result<Vec<Stmt>> {
         let content;
         braced!(content in input);
 
@@ -256,7 +313,7 @@ impl Stmt {
             statements.push(content.parse()?);
         }
 
-        Ok(Self::Block(statements))
+        Ok(statements)
     }
 
     fn expression_statement(input: ParseStream) -> syn::Result<Self> {
@@ -271,6 +328,10 @@ pub enum Expr {
     Array(Vec<Expr>),
     Variable(Ident),
     Grouping(Box<Expr>),
+    Call {
+        callee: Box<Expr>,
+        arguments: Vec<Expr>,
+    },
     Unary {
         operator: UnOp,
         expr: Box<Expr>,
@@ -295,9 +356,7 @@ impl ToTokens for Expr {
             }
             Self::Array(arr) => {
                 let mut inner = TokenStream::new();
-                for expr in arr {
-                    inner.append_all(quote! { #expr, })
-                }
+                inner.append_separated(arr, Punct::new(',', Spacing::Alone));
 
                 tokens.append_all(quote! { LoxValue::from([#inner]) })
             }
@@ -307,6 +366,14 @@ impl ToTokens for Expr {
             Self::Grouping(expr) => {
                 let expr: &Expr = &*expr;
                 expr.to_tokens(tokens);
+            }
+            Self::Call { callee, arguments } => {
+                let callee: &Expr = &*callee;
+
+                let mut inner = TokenStream::new();
+                inner.append_separated(arguments, Punct::new(',', Spacing::Alone));
+
+                tokens.append_all(quote! { #callee(#inner) });
             }
             Self::Unary { operator, expr } => {
                 operator.to_tokens(tokens);
@@ -484,8 +551,27 @@ impl Expr {
                 expr: Box::new(right),
             })
         } else {
-            Self::primary(input)
+            Self::call(input)
         }
+    }
+
+    fn call(input: ParseStream) -> syn::Result<Self> {
+        let mut expr = Self::primary(input)?;
+
+        while input.peek(token::Paren) {
+            expr = Self::finish_call(input, expr)?
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(input: ParseStream, callee: Expr) -> syn::Result<Self> {
+        let content;
+        parenthesized!(content in input);
+
+        let arguments: Punctuated<Expr, Token![,]> = content.parse_terminated(Expr::parse)?;
+
+        Ok(Self::Call { callee: Box::new(callee), arguments: Vec::from_iter(arguments) })
     }
 
     fn primary(input: ParseStream) -> syn::Result<Self> {

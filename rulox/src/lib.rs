@@ -1,4 +1,4 @@
-//! A lightweight, dynamically typed scripting language embedded in Rust.
+#![doc = include_str!("../../README.md")]
 
 /// Parses Lox code and converts it to Rust.
 /// # Examples

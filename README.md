@@ -34,6 +34,26 @@ fn main() {
 }
 ```
 
+```rust
+use rulox::*;
+
+fn main() {
+    lox! {
+        fun hello(name) {
+            print "Hello " + name + "! :)"
+        }
+
+        fun add_one(num) {
+            return num + 1;
+        }
+    }
+
+    hello(LoxValue::from("Alice"));
+
+    assert_eq!(add_one(LoxValue::from(3)), LoxValue::from(4));
+}
+```
+
 # Features
 
 - [x] Variable declarations

@@ -1,5 +1,7 @@
 //! A lightweight, dynamically typed scripting language embedded in Rust.
 
+#![doc(html_playground_url = "https://play.rust-lang.org/")]
+
 extern crate proc_macro;
 use proc_macro2::TokenStream;
 
@@ -12,6 +14,7 @@ mod ast;
 /// Parses Lox code and converts it to Rust.
 /// # Examples
 /// ```
+/// # extern crate rulox_types;
 /// use rulox::lox;
 /// use rulox_types::prelude::*;
 /// lox! {

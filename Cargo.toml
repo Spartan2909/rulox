@@ -13,3 +13,5 @@ members = ["rulox", "rulox_types"]
 [workspace.package]
 authors = ["Caleb Robson"]
 license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Spartan2909/rulox"

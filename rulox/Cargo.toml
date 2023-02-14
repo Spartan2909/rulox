@@ -2,8 +2,13 @@
 name = "rulox"
 version = "0.1.0"
 edition = "2021"
-description = "Helper types for the rulox crate."
+description = "A lightweight scripting language embedded in Rust."
 
+keywords = ["lox", "scripting", "parsing"]
+categories = ["parser-implementations"]
+
+repository.workspace = true
+readme.workspace = true
 authors.workspace = true
 license.workspace = true
 

@@ -59,3 +59,18 @@ fn block() {
         print a;
     }
 }
+
+#[test]
+fn if_statement() {
+    lox! {
+        var a;
+
+        if (true) {
+            a = 5;
+        } else {
+            a = 2;
+        }
+    }
+
+    assert_eq!(a, LoxValue::Num(5.0))
+}

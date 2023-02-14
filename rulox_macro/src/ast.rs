@@ -41,6 +41,11 @@ pub enum Stmt {
         implicit_nil: bool,
     },
     Block(Vec<Stmt>),
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Box<Option<Stmt>>,
+    }
 }
 
 impl ToTokens for Stmt {
@@ -78,6 +83,15 @@ impl ToTokens for Stmt {
                 }
 
                 tokens.append_all(quote! { { #inner } })
+            }
+            Self::If { condition, then_branch, else_branch } => {
+                let then_branch: &Stmt = &*then_branch;
+                let else_branch: &Option<Stmt> = &*else_branch;
+
+                tokens.append_all(quote! { if extract(#condition.try_into()) { #then_branch } });
+                if let Some(branch) = else_branch {
+                    tokens.append_all(quote! { else { #branch } });
+                }
             }
         }
     }
@@ -120,7 +134,9 @@ impl Stmt {
     }
 
     fn statement(input: ParseStream) -> syn::Result<Self> {
-        if input.peek(kw::print) {
+        if input.peek(Token![if]) {
+            Self::if_statement(input)
+        } else if input.peek(kw::print) {
             Self::print_statement(input)
         } else if input.peek(token::Brace) {
             Self::block(input)
@@ -129,6 +145,28 @@ impl Stmt {
             input.parse::<Token![;]>()?;
             Ok(Self::Expr(expr))
         }
+    }
+
+    fn if_statement(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![if]>()?;
+
+        let content;
+        parenthesized!(content in input);
+        let condition: Expr = content.parse()?;
+
+        let then_branch = Box::new(Self::statement(input)?);
+
+        let else_branch = if input.peek(Token![else]) {
+            input.parse::<Token![else]>()?;
+
+            Some(Self::statement(input)?)
+        } else {
+            None
+        };
+
+        let else_branch = Box::new(else_branch);
+
+        Ok(Self::If { condition, then_branch, else_branch })
     }
 
     fn print_statement(input: ParseStream) -> syn::Result<Self> {

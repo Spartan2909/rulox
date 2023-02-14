@@ -8,8 +8,7 @@ It is based on the Lox language from [Crafting Interpreters](http://craftinginte
 
 # Examples
 ```rust
-use rulox::lox;
-use rulox_types::prelude::*;
+use rulox::*;
 
 fn main() {
     lox! {

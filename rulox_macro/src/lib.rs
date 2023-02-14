@@ -11,25 +11,6 @@ use quote::ToTokens;
 
 mod ast;
 
-/// Parses Lox code and converts it to Rust.
-/// # Examples
-/// ```
-/// # extern crate rulox_types;
-/// use rulox::lox;
-/// use rulox_types::prelude::*;
-/// lox! {
-///     var hello = "hello ";
-/// }
-///
-/// let world = "world";
-///
-/// lox! {
-///     print hello + world;
-/// }
-/// ```
-///
-/// # Panics
-/// If an operation is attemped between two unsupported types.
 #[proc_macro]
 pub fn lox(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(tokens as ast::LoxProgram);

@@ -2,13 +2,13 @@
 name = "rulox_macro"
 version = "0.1.0"
 edition = "2021"
-description = "A lightweight scripting language embedded in Rust."
+description = "A macro for embedding Lox in Rust."
+readme = "README.md"
 
 keywords = ["lox", "scripting", "parsing"]
 categories = ["parser-implementations"]
 
 repository.workspace = true
-readme.workspace = true
 authors.workspace = true
 license.workspace = true
 

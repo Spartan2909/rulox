@@ -1,5 +1,4 @@
-use rulox_macro::lox;
-use rulox_types::prelude::*;
+use rulox::*;
 
 #[test]
 fn var_declaration() {

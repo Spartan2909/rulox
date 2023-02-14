@@ -13,7 +13,7 @@ use proc_macro2::{Punct, Spacing, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 
 /// An error that occurred when attempting to use a LoxValue in an invalid location.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LoxError {
     /// An error that occurred when attempting to use a LoxValue with an invalid type.
     TypeError(String),
@@ -51,7 +51,7 @@ pub fn extract<T>(result: LoxResult<T>) -> T {
 }
 
 /// An enum used for error reporting.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum LoxValueType {
     Bool,
     Str,

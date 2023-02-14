@@ -1,4 +1,4 @@
-#![doc = include_str!("../../README.md")]
+#![doc = include_str!("../README.md")]
 
 /// Parses Lox code and converts it to Rust.
 /// # Examples

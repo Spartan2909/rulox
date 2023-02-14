@@ -554,6 +554,47 @@ impl BitAnd<bool> for LoxValue {
     }
 }
 
+impl<T> PartialOrd<T> for LoxValue
+where
+    T: Into<LoxValue> + Clone,
+{
+    fn partial_cmp(&self, other: &T) -> Option<std::cmp::Ordering> {
+        let other: Self = other.clone().into();
+        match self {
+            Self::Bool(b1) => {
+                if let Self::Bool(b2) = other {
+                    b1.partial_cmp(&b2)
+                } else {
+                    None
+                }
+            }
+            Self::Num(n1) => {
+                if let Self::Num(n2) = other {
+                    n1.partial_cmp(&n2)
+                } else {
+                    None
+                }
+            }
+            Self::Str(s1) => {
+                if let Self::Str(s2) = other {
+                    s1.partial_cmp(&s2)
+                } else {
+                    None
+                }
+            }
+            Self::Arr(a1) => {
+                if let Self::Arr(a2) = other {
+                    a1.partial_cmp(&a2)
+                } else {
+                    None
+                }
+            }
+            Self::Instance(_) => None,
+            Self::Nil => None,
+        }
+    }
+}
+
 impl ToTokens for LoxValue {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {

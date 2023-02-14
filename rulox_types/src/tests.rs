@@ -48,3 +48,8 @@ fn div() {
 
     assert_eq!(num2.unwrap(), LoxValue::from(4));
 }
+
+#[test]
+fn comp() {
+    assert!(LoxValue::Num(8.0) > LoxValue::Num(5.0))
+}

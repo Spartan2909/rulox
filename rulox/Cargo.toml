@@ -1,6 +1,6 @@
 [package]
 name = "rulox"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "A lightweight scripting language embedded in Rust."
 documentation = "https://docs.rs/rulox/latest"
@@ -16,5 +16,5 @@ license.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-"rulox_macro" = { path = "../rulox_macro", version = "0.2" }
+"rulox_macro" = { path = "../rulox_macro", version = "0.3" }
 "rulox_types" = { path ="../rulox_types", version = "0.1" }

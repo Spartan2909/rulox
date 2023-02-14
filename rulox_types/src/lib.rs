@@ -6,7 +6,7 @@ use std::{
     error::Error,
     fmt,
     mem::size_of,
-    ops::{Add, Div, Mul, Sub, Neg, Not, BitOr, BitAnd},
+    ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub},
 };
 
 use proc_macro2::{Punct, Spacing, TokenStream};
@@ -403,7 +403,10 @@ impl Sub for LoxValue {
             if let Self::Num(num2) = rhs {
                 Ok(LoxValue::from(num1 - num2))
             } else {
-                Err(LoxError::TypeError(format!("cannot subtract {} from number", LoxValueType::from(rhs))))
+                Err(LoxError::TypeError(format!(
+                    "cannot subtract {} from number",
+                    LoxValueType::from(rhs)
+                )))
             }
         } else {
             Err(LoxError::TypeError(format!(
@@ -423,7 +426,10 @@ impl Mul for LoxValue {
             if let Self::Num(num2) = rhs {
                 Ok(LoxValue::from(num1 * num2))
             } else {
-                Err(LoxError::TypeError(format!("cannot multiply number by {}", LoxValueType::from(rhs))))
+                Err(LoxError::TypeError(format!(
+                    "cannot multiply number by {}",
+                    LoxValueType::from(rhs)
+                )))
             }
         } else {
             Err(LoxError::TypeError(format!(
@@ -443,7 +449,10 @@ impl Div for LoxValue {
             if let Self::Num(num2) = rhs {
                 Ok(LoxValue::from(num1 / num2))
             } else {
-                Err(LoxError::TypeError(format!("cannot divide number by {}", LoxValueType::from(rhs))))
+                Err(LoxError::TypeError(format!(
+                    "cannot divide number by {}",
+                    LoxValueType::from(rhs)
+                )))
             }
         } else {
             Err(LoxError::TypeError(format!(
@@ -461,7 +470,10 @@ impl Neg for LoxValue {
     fn neg(self) -> Self::Output {
         match self {
             Self::Num(num) => Ok(Self::from(-num)),
-            _ => Err(LoxError::TypeError(format!("cannot negate {}", LoxValueType::from(self))))
+            _ => Err(LoxError::TypeError(format!(
+                "cannot negate {}",
+                LoxValueType::from(self)
+            ))),
         }
     }
 }
@@ -472,7 +484,10 @@ impl Not for LoxValue {
     fn not(self) -> Self::Output {
         match self {
             Self::Bool(b) => Ok(Self::from(!b)),
-            _ => Err(LoxError::TypeError(format!("cannot take logical not of {}", LoxValueType::from(self))))
+            _ => Err(LoxError::TypeError(format!(
+                "cannot take logical not of {}",
+                LoxValueType::from(self)
+            ))),
         }
     }
 }
@@ -485,10 +500,17 @@ impl BitOr for LoxValue {
             if let Self::Bool(b2) = rhs {
                 Ok(LoxValue::from(b1 || b2))
             } else {
-                Err(LoxError::TypeError(format!("invalid operands for 'or': bool and {}", LoxValueType::from(rhs))))
+                Err(LoxError::TypeError(format!(
+                    "invalid operands for 'or': bool and {}",
+                    LoxValueType::from(rhs)
+                )))
             }
         } else {
-            Err(LoxError::TypeError(format!("invalid operands for 'or': {} and {}", LoxValueType::from(self), LoxValueType::from(rhs))))
+            Err(LoxError::TypeError(format!(
+                "invalid operands for 'or': {} and {}",
+                LoxValueType::from(self),
+                LoxValueType::from(rhs)
+            )))
         }
     }
 }
@@ -509,10 +531,17 @@ impl BitAnd for LoxValue {
             if let Self::Bool(b2) = rhs {
                 Ok(LoxValue::from(b1 && b2))
             } else {
-                Err(LoxError::TypeError(format!("invalid operands for 'and': bool and {}", LoxValueType::from(rhs))))
+                Err(LoxError::TypeError(format!(
+                    "invalid operands for 'and': bool and {}",
+                    LoxValueType::from(rhs)
+                )))
             }
         } else {
-            Err(LoxError::TypeError(format!("invalid operands for 'and': {} and {}", LoxValueType::from(self), LoxValueType::from(rhs))))
+            Err(LoxError::TypeError(format!(
+                "invalid operands for 'and': {} and {}",
+                LoxValueType::from(self),
+                LoxValueType::from(rhs)
+            )))
         }
     }
 }
@@ -550,7 +579,7 @@ impl ToTokens for LoxValue {
 }
 
 pub mod prelude {
-    pub use super::{LoxValue, extract};
+    pub use super::{extract, LoxValue};
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ use rulox_types::LoxValue;
 use syn::bracketed;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::{parenthesized, token, BinOp, Ident, Token, UnOp, spanned::Spanned};
+use syn::{parenthesized, spanned::Spanned, token, BinOp, Ident, Token, UnOp};
 
 mod kw {
     syn::custom_keyword!(nil);
@@ -18,7 +18,7 @@ mod kw {
 }
 
 pub struct LoxProgram {
-    pub statements: Vec<Stmt>
+    pub statements: Vec<Stmt>,
 }
 
 impl Parse for LoxProgram {
@@ -159,7 +159,9 @@ impl ToTokens for Expr {
             } => {
                 let left: &Expr = &*left;
                 let right: &Expr = &*right;
-                tokens.append_all(quote! { extract(LoxValue::from(#left) #operator LoxValue::from(#right)) });
+                tokens.append_all(
+                    quote! { extract(LoxValue::from(#left) #operator LoxValue::from(#right)) },
+                );
             }
             Self::Assign { name, value } => {
                 let value: &Expr = &*value;
@@ -204,7 +206,11 @@ impl Expr {
             let span = input.parse::<kw::or>()?.span();
             let right = Self::and(input)?;
             let operator = BinOp::BitOr(Token![|](span));
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+            expr = Expr::Binary {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            }
         }
 
         Ok(expr)
@@ -217,7 +223,11 @@ impl Expr {
             let span = input.parse::<kw::and>()?.span();
             let right = Self::equality(input)?;
             let operator = BinOp::BitAnd(Token![&](span));
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+            expr = Expr::Binary {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            }
         }
 
         Ok(expr)

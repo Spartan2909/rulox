@@ -1,0 +1,15 @@
+name: CI
+on:
+  push:
+    branches: [main]
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Test
+        run: cargo test --workspace --verbose

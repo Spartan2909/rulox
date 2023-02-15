@@ -125,3 +125,16 @@ fn return_test() {
 
     assert_eq!(add_one(LoxValue::Num(3.0)), LoxValue::Num(4.0))
 }
+
+#[test]
+fn index_arr() {
+    lox! {
+        var list = [true, false];
+    }
+
+    let b1: bool = list[0].clone().try_into().unwrap();
+    let b2: bool = list[1].clone().try_into().unwrap();
+
+    assert!(b1);
+    assert!(!b2);
+}

@@ -54,6 +54,20 @@ fn main() {
 }
 ```
 
+```rust
+use rulox::*;
+
+fn main() {
+    lox! {
+        var people = ["Bob", "Alice", "John"];
+
+        for (person in people) {
+            print "Hello " + person + "!";
+        }
+    }
+}
+```
+
 # Features
 
 - [x] Variable declarations

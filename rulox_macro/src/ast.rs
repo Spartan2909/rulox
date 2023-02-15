@@ -105,7 +105,7 @@ impl ToTokens for Stmt {
                 tokens.append_all(quote! { (#inner) -> LoxValue });
 
                 let mut inner = TokenStream::new();
-                inner.append_separated(body, Punct::new(',', Spacing::Alone));
+                inner.append_all(body);
 
                 tokens.append_all(quote! { { #inner #[allow(unreachable_code)] LoxValue::Nil } });
             }
@@ -424,7 +424,7 @@ impl ToTokens for Expr {
                 let right: &Expr = &*right;
                 if *comparision {
                     tokens.append_all(
-                        quote! { (LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
+                        quote! { LoxValue::from(LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
                     );
                 } else {
                     tokens.append_all(
@@ -514,7 +514,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false,
+                comparision: true,
             };
         }
 

@@ -5,7 +5,7 @@
 [![docs.rs](https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs)](https://docs.rs/rulox/latest) <br>
 
 `rulox` is a lightweight scripting language embedded in Rust. 
-It is based on the Lox language from [Crafting Interpreters](http://craftinginterpreters.com/). 
+It is based on the Lox language from [Crafting Interpreters](https://craftinginterpreters.com/). 
 
 # Examples
 ```rust

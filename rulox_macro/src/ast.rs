@@ -60,8 +60,8 @@ pub enum Stmt {
     For {
         name: Ident,
         iterable: Expr,
-        body: Box<Stmt>
-    }
+        body: Box<Stmt>,
+    },
 }
 
 impl ToTokens for Stmt {
@@ -136,7 +136,11 @@ impl ToTokens for Stmt {
 
                 tokens.append_all(quote! { while extract(#condition.try_into()) { #body } });
             }
-            Self::For { name, iterable, body } => {
+            Self::For {
+                name,
+                iterable,
+                body,
+            } => {
                 let body: &Stmt = &*body;
 
                 tokens.append_all(quote! { for #name in #iterable.into_iter() { #body } });
@@ -293,7 +297,11 @@ impl Stmt {
 
             let body: Stmt = input.parse()?;
 
-            return Ok(Self::For { name, iterable, body: Box::new(body) });
+            return Ok(Self::For {
+                name,
+                iterable,
+                body: Box::new(body),
+            });
         }
 
         let initializer = if content.peek(Token![;]) {

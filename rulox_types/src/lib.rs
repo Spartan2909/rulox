@@ -736,20 +736,22 @@ impl IntoIterator for LoxValue {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            Self::Arr(arr) => {
-                LoxIterator { values: arr, position: 0 }
-            }
-            Self::Str(chars) => {
-                LoxIterator { values: chars, position: 0 }
-            }
-            _ => panic!("cannot convert {} into iterator", LoxValueType::from(self))
+            Self::Arr(arr) => LoxIterator {
+                values: arr,
+                position: 0,
+            },
+            Self::Str(chars) => LoxIterator {
+                values: chars,
+                position: 0,
+            },
+            _ => panic!("cannot convert {} into iterator", LoxValueType::from(self)),
         }
     }
 }
 
 pub struct LoxIterator {
     values: Vec<LoxValue>,
-    position: usize
+    position: usize,
 }
 
 impl Iterator for LoxIterator {

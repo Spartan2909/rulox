@@ -60,8 +60,8 @@ fn main() {
 - [x] Print statements
 - [x] Control flow statements
 - [x] Loops
-- [ ] `for ... in ...` loops
-- [ ] Indefinite loops and `break`
+- [x] `for ... in ...` loops
+- [x] Indefinite loops and `break`
 - [x] Functions
 
 # Possible future features

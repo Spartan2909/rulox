@@ -65,6 +65,6 @@ fn main() {
 
 # Possible future features
 
-- [ ] First-class functions and closures
-- [ ] Object orientation
-- [ ] Macros
+- First-class functions and closures
+- Object orientation
+- Macros

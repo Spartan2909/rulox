@@ -730,6 +730,44 @@ where
     }
 }
 
+impl IntoIterator for LoxValue {
+    type Item = Self;
+    type IntoIter = LoxIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Self::Arr(arr) => {
+                LoxIterator { values: arr, position: 0 }
+            }
+            Self::Str(chars) => {
+                LoxIterator { values: chars, position: 0 }
+            }
+            _ => panic!("cannot convert {} into iterator", LoxValueType::from(self))
+        }
+    }
+}
+
+pub struct LoxIterator {
+    values: Vec<LoxValue>,
+    position: usize
+}
+
+impl Iterator for LoxIterator {
+    type Item = LoxValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.position >= self.values.len() {
+            return None;
+        }
+
+        let value = self.values[self.position].clone();
+
+        self.position += 1;
+
+        Some(value)
+    }
+}
+
 impl ToTokens for LoxValue {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {

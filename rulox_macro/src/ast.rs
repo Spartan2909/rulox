@@ -57,6 +57,11 @@ pub enum Stmt {
         condition: Expr,
         body: Box<Stmt>,
     },
+    For {
+        name: Ident,
+        iterable: Expr,
+        body: Box<Stmt>
+    }
 }
 
 impl ToTokens for Stmt {
@@ -130,6 +135,11 @@ impl ToTokens for Stmt {
                 let body: &Stmt = &*body;
 
                 tokens.append_all(quote! { while extract(#condition.try_into()) { #body } });
+            }
+            Self::For { name, iterable, body } => {
+                let body: &Stmt = &*body;
+
+                tokens.append_all(quote! { for #name in #iterable.into_iter() { #body } });
             }
         }
     }
@@ -273,6 +283,18 @@ impl Stmt {
 
         let content;
         parenthesized!(content in input);
+
+        if content.peek2(Token![in]) {
+            let name: Ident = content.parse()?;
+
+            content.parse::<Token![in]>()?;
+
+            let iterable: Expr = content.parse()?;
+
+            let body: Stmt = input.parse()?;
+
+            return Ok(Self::For { name, iterable, body: Box::new(body) });
+        }
 
         let initializer = if content.peek(Token![;]) {
             Self::Expr(Expr::Literal(rulox_types::LoxValue::Nil))

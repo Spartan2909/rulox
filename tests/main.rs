@@ -138,3 +138,14 @@ fn index_arr() {
     assert!(b1);
     assert!(!b2);
 }
+
+#[test]
+fn for_in() {
+    lox! {
+        var list = [1, 2, 3];
+
+        for (value in list) {
+            print value;
+        }
+    }
+}

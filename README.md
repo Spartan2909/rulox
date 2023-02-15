@@ -61,6 +61,7 @@ fn main() {
 - [x] Control flow statements
 - [x] Loops
 - [ ] `for ... in ...` loops
+- [ ] Indefinite loops and `break`
 - [x] Functions
 
 # Possible future features

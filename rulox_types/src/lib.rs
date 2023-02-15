@@ -6,7 +6,7 @@ use std::{
     error::Error,
     fmt,
     mem::size_of,
-    ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub},
+    ops::{Add, BitAnd, BitOr, Div, Index, Mul, Neg, Not, Sub},
 };
 
 use proc_macro2::{Punct, Spacing, TokenStream};
@@ -66,6 +66,7 @@ where
 #[derive(Debug, Clone, Copy)]
 pub enum LoxValueType {
     Bool,
+    Char,
     Str,
     Num,
     Arr,
@@ -77,6 +78,7 @@ impl fmt::Display for LoxValueType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Bool => write!(f, "bool"),
+            Self::Char => write!(f, "char"),
             Self::Str => write!(f, "string"),
             Self::Num => write!(f, "number"),
             Self::Arr => write!(f, "array"),
@@ -90,6 +92,21 @@ impl From<LoxValue> for LoxValueType {
     fn from(value: LoxValue) -> Self {
         match value {
             LoxValue::Bool(_) => Self::Bool,
+            LoxValue::Char(_) => Self::Char,
+            LoxValue::Str(_) => Self::Str,
+            LoxValue::Num(_) => Self::Num,
+            LoxValue::Arr(_) => Self::Arr,
+            LoxValue::Instance(_) => Self::Instance,
+            LoxValue::Nil => Self::Nil,
+        }
+    }
+}
+
+impl From<&LoxValue> for LoxValueType {
+    fn from(value: &LoxValue) -> Self {
+        match value {
+            LoxValue::Bool(_) => Self::Bool,
+            LoxValue::Char(_) => Self::Char,
             LoxValue::Str(_) => Self::Str,
             LoxValue::Num(_) => Self::Num,
             LoxValue::Arr(_) => Self::Arr,
@@ -103,9 +120,10 @@ impl From<LoxValue> for LoxValueType {
 #[derive(Debug, Clone)]
 pub enum LoxValue {
     Bool(bool),
-    Str(String),
+    Char(char),
+    Str(Vec<Self>),
     Num(f64),
-    Arr(Vec<LoxValue>),
+    Arr(Vec<Self>),
     Instance(LoxInstance),
     Nil,
 }
@@ -129,6 +147,13 @@ where
             Self::Bool(b1) => {
                 if let Self::Bool(b2) = other {
                     b1 == &b2
+                } else {
+                    false
+                }
+            }
+            Self::Char(c1) => {
+                if let Self::Char(c2) = other {
+                    c1 == &c2
                 } else {
                     false
                 }
@@ -172,8 +197,17 @@ impl fmt::Display for LoxValue {
             Self::Bool(value) => {
                 write!(f, "{}", value)
             }
-            Self::Str(value) => {
-                write!(f, "\"{}\"", value)
+            Self::Char(value) => {
+                write!(f, "{}", value)
+            }
+            Self::Str(chars) => {
+                let mut value = "".to_string();
+
+                for c in chars {
+                    value.push(c.clone().try_into().unwrap())
+                }
+
+                write!(f, "{}", value)
             }
             Self::Num(value) => {
                 write!(f, "{}", value)
@@ -216,9 +250,25 @@ impl From<bool> for LoxValue {
     }
 }
 
+impl From<char> for LoxValue {
+    fn from(value: char) -> Self {
+        Self::Char(value)
+    }
+}
+
+impl From<Vec<char>> for LoxValue {
+    fn from(chars: Vec<char>) -> Self {
+        let mut values = vec![];
+        for c in chars {
+            values.push(LoxValue::Char(c));
+        }
+        Self::Str(values)
+    }
+}
+
 impl From<String> for LoxValue {
     fn from(value: String) -> Self {
-        Self::Str(value)
+        Self::from(Vec::from_iter(value.chars()))
     }
 }
 
@@ -263,12 +313,33 @@ impl TryFrom<&LoxValue> for bool {
     }
 }
 
+impl TryFrom<LoxValue> for char {
+    type Error = LoxError;
+
+    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
+        if let LoxValue::Char(c) = value {
+            Ok(c)
+        } else {
+            Err(LoxError::TypeError(format!(
+                "expected bool, found {}",
+                LoxValueType::from(value)
+            )))
+        }
+    }
+}
+
 impl TryFrom<LoxValue> for String {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        if let LoxValue::Str(s) = value {
-            Ok(s)
+        if let LoxValue::Str(chars) = value {
+            let mut value = "".to_string();
+
+            for c in chars {
+                value.push(c.try_into().unwrap());
+            }
+
+            Ok(value)
         } else {
             Err(LoxError::TypeError(format!(
                 "expected string, found {}",
@@ -311,7 +382,7 @@ macro_rules! impl_numeric {
 
             fn add(self, rhs: $t) -> Self::Output {
                 match self {
-                    Self::Num(num) => Ok(Self::from(num + rhs as f64)),
+                    Self::Num(num) => Ok(Self::Num(num + rhs as f64)),
                     _ => Err(LoxError::TypeError(format!("cannot add number to {}", LoxValueType::from(self)))),
                 }
             }
@@ -322,7 +393,7 @@ macro_rules! impl_numeric {
 
             fn sub(self, rhs: $t) -> Self::Output {
                 match self {
-                    Self::Num(num) => Ok(Self::from(num - rhs as f64)),
+                    Self::Num(num) => Ok(Self::Num(num - rhs as f64)),
                     _ => Err(LoxError::TypeError(format!("cannot subtract number from {}", LoxValueType::from(self)))),
                 }
             }
@@ -333,7 +404,7 @@ macro_rules! impl_numeric {
 
             fn mul(self, rhs: $t) -> Self::Output {
                 match self {
-                    Self::Num(num) => Ok(Self::from(num * rhs as f64)),
+                    Self::Num(num) => Ok(Self::Num(num * rhs as f64)),
                     _ => Err(LoxError::TypeError(format!("cannot multiply {} by number", LoxValueType::from(self)))),
                 }
             }
@@ -344,7 +415,7 @@ macro_rules! impl_numeric {
 
             fn div(self, rhs: $t) -> Self::Output {
                 match self {
-                    Self::Num(num) => Ok(Self::from(num / rhs as f64)),
+                    Self::Num(num) => Ok(Self::Num(num / rhs as f64)),
                     _ => Err(LoxError::TypeError(format!("cannot divide {} by number", LoxValueType::from(self)))),
                 }
             }
@@ -362,7 +433,9 @@ impl Add for LoxValue {
         match self {
             LoxValue::Str(s) => {
                 if let LoxValue::Str(other) = rhs {
-                    Ok(LoxValue::from(s + &other))
+                    let mut result = s.clone();
+                    result.extend(other);
+                    Ok(LoxValue::Str(result))
                 } else {
                     Err(LoxError::TypeError(format!(
                         "cannot add {} to string",
@@ -484,7 +557,7 @@ impl Neg for LoxValue {
 
     fn neg(self) -> Self::Output {
         match self {
-            Self::Num(num) => Ok(Self::from(-num)),
+            Self::Num(num) => Ok(Self::Num(-num)),
             _ => Err(LoxError::TypeError(format!(
                 "cannot negate {}",
                 LoxValueType::from(self)
@@ -498,7 +571,7 @@ impl Not for LoxValue {
 
     fn not(self) -> Self::Output {
         match self {
-            Self::Bool(b) => Ok(Self::from(!b)),
+            Self::Bool(b) => Ok(Self::Bool(!b)),
             _ => Err(LoxError::TypeError(format!(
                 "cannot take logical not of {}",
                 LoxValueType::from(self)
@@ -534,7 +607,7 @@ impl BitOr<bool> for LoxValue {
     type Output = LoxResult<Self>;
 
     fn bitor(self, rhs: bool) -> Self::Output {
-        self | Self::from(rhs)
+        self | Self::Bool(rhs)
     }
 }
 
@@ -565,7 +638,47 @@ impl BitAnd<bool> for LoxValue {
     type Output = LoxResult<Self>;
 
     fn bitand(self, rhs: bool) -> Self::Output {
-        self | Self::from(rhs)
+        self | Self::Bool(rhs)
+    }
+}
+
+impl Index<usize> for LoxValue {
+    type Output = Self;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match self {
+            Self::Arr(arr) => &arr[index],
+            Self::Str(s) => &(s[index..index + 1][0]),
+            _ => {
+                panic!("cannot index {} with number", LoxValueType::from(self))
+            }
+        }
+    }
+}
+
+impl Index<LoxValue> for LoxValue {
+    type Output = Self;
+
+    fn index(&self, value: LoxValue) -> &Self::Output {
+        if let Self::Arr(arr) = self {
+            if let Self::Num(num) = value {
+                let index = num as usize;
+
+                if index as f64 == num {
+                    &arr[index]
+                } else {
+                    panic!("invalid base for index: {}", num);
+                }
+            } else {
+                panic!("cannot index array with {}", LoxValueType::from(value));
+            }
+        } else {
+            panic!(
+                "cannot index {} with {}",
+                LoxValueType::from(self),
+                LoxValueType::from(value)
+            );
+        }
     }
 }
 
@@ -579,6 +692,13 @@ where
             Self::Bool(b1) => {
                 if let Self::Bool(b2) = other {
                     b1.partial_cmp(&b2)
+                } else {
+                    None
+                }
+            }
+            Self::Char(c1) => {
+                if let Self::Char(c2) = other {
+                    c1.partial_cmp(&c2)
                 } else {
                     None
                 }
@@ -614,7 +734,12 @@ impl ToTokens for LoxValue {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Bool(b) => tokens.append_all(quote! { LoxValue::from(#b) }),
-            Self::Str(s) => tokens.append_all(quote! { LoxValue::from(#s) }),
+            Self::Char(c) => tokens.append_all(quote! { LoxValue::from(#c) }),
+            Self::Str(_) => {
+                let s = self.to_string();
+
+                tokens.append_all(quote! { LoxValue::from(#s) });
+            }
             Self::Num(n) => tokens.append_all(quote! { LoxValue::from(#n) }),
             Self::Arr(arr) => {
                 tokens.append_all(quote! { LoxValue::from });

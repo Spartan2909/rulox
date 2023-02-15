@@ -4,13 +4,13 @@ use super::*;
 fn display() {
     let value = LoxValue::Arr(vec![
         LoxValue::Bool(true),
-        LoxValue::Str("a value".to_string()),
+        LoxValue::from("a value".to_string()),
         LoxValue::Num(1.0),
         LoxValue::Num(-2.5),
         LoxValue::Nil,
     ]);
 
-    assert_eq!(value.to_string(), "[true, \"a value\", 1, -2.5, nil]");
+    assert_eq!(value.to_string(), "[true, a value, 1, -2.5, nil]");
 }
 
 #[test]

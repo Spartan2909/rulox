@@ -184,7 +184,11 @@ impl Stmt {
 
         let body = Self::block(input)?;
 
-        Ok(Self::Function { name, params: Vec::from_iter(parameters), body })
+        Ok(Self::Function {
+            name,
+            params: Vec::from_iter(parameters),
+            body,
+        })
     }
 
     fn statement(input: ParseStream) -> syn::Result<Self> {
@@ -571,7 +575,10 @@ impl Expr {
 
         let arguments: Punctuated<Expr, Token![,]> = content.parse_terminated(Expr::parse)?;
 
-        Ok(Self::Call { callee: Box::new(callee), arguments: Vec::from_iter(arguments) })
+        Ok(Self::Call {
+            callee: Box::new(callee),
+            arguments: Vec::from_iter(arguments),
+        })
     }
 
     fn primary(input: ParseStream) -> syn::Result<Self> {
@@ -582,7 +589,7 @@ impl Expr {
             Ok(Self::Literal(LoxValue::Nil))
         } else if input.peek(syn::LitStr) {
             let value: syn::LitStr = input.parse()?;
-            Ok(Self::Literal(LoxValue::from(value.value())))
+            Ok(Self::Literal(LoxValue::from(&value.value())))
         } else if input.peek(syn::LitInt) {
             let value: syn::LitInt = input.parse()?;
             Ok(Self::Literal(LoxValue::from(value.base10_parse::<f64>()?)))

@@ -1,6 +1,6 @@
 [package]
 name = "rulox"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 description = "A lightweight scripting language embedded in Rust."
 documentation = "https://docs.rs/rulox/latest"

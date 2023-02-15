@@ -62,5 +62,9 @@ fn main() {
 - [x] Loops
 - [ ] `for ... in ...` loops
 - [x] Functions
-- [ ] Closures
-- [ ] Object orientation (possibly)
+
+# Possible future features
+
+- [ ] First-class functions and closures
+- [ ] Object orientation
+- [ ] Macros

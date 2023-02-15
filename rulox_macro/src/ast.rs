@@ -36,6 +36,7 @@ impl Parse for LoxProgram {
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),
+    Break,
     Var {
         name: Ident,
         initializer: Expr,
@@ -62,6 +63,9 @@ pub enum Stmt {
         iterable: Expr,
         body: Box<Stmt>,
     },
+    Loop {
+        body: Box<Stmt>
+    }
 }
 
 impl ToTokens for Stmt {
@@ -74,6 +78,9 @@ impl ToTokens for Stmt {
             Self::Print(expr) => {
                 tokens.append_all(quote! { println!("{}", #expr); });
                 tokens.append(Punct::new(';', Spacing::Alone));
+            }
+            Self::Break => {
+                tokens.append_all(quote! { break; });
             }
             Self::Var {
                 name,
@@ -145,6 +152,11 @@ impl ToTokens for Stmt {
 
                 tokens.append_all(quote! { for #name in #iterable.into_iter() { #body } });
             }
+            Self::Loop { body } => {
+                let body: &Stmt = &*body;
+
+                tokens.append_all(quote! { loop { #body } });
+            }
         }
     }
 }
@@ -210,12 +222,16 @@ impl Stmt {
             Self::if_statement(input)
         } else if input.peek(kw::print) {
             Self::print_statement(input)
+        } else if input.peek(Token![break]) {
+            Self::break_statement(input)
         } else if input.peek(Token![return]) {
             Self::return_statement(input)
         } else if input.peek(Token![while]) {
             Self::while_statement(input)
         } else if input.peek(Token![for]) {
             Self::for_statement(input)
+        } else if input.peek(Token![loop]) {
+            Self::loop_statement(input)
         } else if input.peek(token::Brace) {
             Ok(Self::Block(Self::block(input)?))
         } else {
@@ -254,6 +270,12 @@ impl Stmt {
         let expr: Expr = input.parse()?;
         input.parse::<Token![;]>()?;
         Ok(Self::Print(expr))
+    }
+
+    fn break_statement(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![break]>()?;
+        input.parse::<Token![;]>()?;
+        Ok(Self::Break)
     }
 
     fn return_statement(input: ParseStream) -> syn::Result<Self> {
@@ -335,6 +357,14 @@ impl Stmt {
         let body = Self::Block(vec![initializer, while_loop]);
 
         Ok(body)
+    }
+
+    fn loop_statement(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![loop]>()?;
+
+        let body: Stmt = input.parse()?;
+
+        Ok(Self::Loop { body: Box::new(body) })
     }
 
     fn block(input: ParseStream) -> syn::Result<Vec<Stmt>> {

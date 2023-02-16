@@ -90,7 +90,7 @@
 /// If an operation is attemped between two unsupported types.
 pub use rulox_macro::lox;
 
-/// Generates a rulox binding for a rust function.
+/// Generates a rulox binding for a Rust function.
 /// # Examples
 /// ```
 /// use rulox::*;

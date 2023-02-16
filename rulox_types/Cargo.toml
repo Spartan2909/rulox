@@ -1,6 +1,6 @@
 [package]
 name = "rulox_types"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Helper types for the rulox crate."
 readme = "README.md"

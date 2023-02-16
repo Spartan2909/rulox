@@ -177,3 +177,16 @@ fn closure() {
         }
     }
 }*/
+
+fn hello(name: String) -> String {
+    "Hello ".to_string() + &name
+}
+
+#[test]
+fn bindgen_test() {
+    lox_bindgen!(fn hello(name));
+
+    lox! {
+        print lox_hello("Alice");
+    }
+}

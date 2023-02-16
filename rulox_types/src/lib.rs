@@ -811,10 +811,8 @@ impl FnOnce<(Vec<LoxValue>,)> for LoxValue {
 
     extern "rust-call" fn call_once(self, args: (Vec<LoxValue>,)) -> Self::Output {
         match self {
-            Self::Function(func, _) => {
-                func(args.0)
-            }
-            _ => panic!("cannot call value of type {}", LoxValueType::from(self))
+            Self::Function(func, _) => func(args.0),
+            _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
 }
@@ -822,10 +820,8 @@ impl FnOnce<(Vec<LoxValue>,)> for LoxValue {
 impl FnMut<(Vec<LoxValue>,)> for LoxValue {
     extern "rust-call" fn call_mut(&mut self, args: (Vec<LoxValue>,)) -> Self::Output {
         match self {
-            Self::Function(func, _) => {
-                func(args.0)
-            }
-            _ => panic!("cannot call value of type {}", LoxValueType::from(self))
+            Self::Function(func, _) => func(args.0),
+            _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
 }
@@ -833,10 +829,8 @@ impl FnMut<(Vec<LoxValue>,)> for LoxValue {
 impl Fn<(Vec<LoxValue>,)> for LoxValue {
     extern "rust-call" fn call(&self, args: (Vec<LoxValue>,)) -> Self::Output {
         match self {
-            Self::Function(func, _) => {
-                func(args.0)
-            }
-            _ => panic!("cannot call value of type {}", LoxValueType::from(self))
+            Self::Function(func, _) => func(args.0),
+            _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
 }

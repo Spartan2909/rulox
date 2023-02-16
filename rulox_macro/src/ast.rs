@@ -108,7 +108,8 @@ impl ToTokens for Stmt {
 
                 body.to_tokens(&mut expr_body);
 
-                tokens.append_all(quote! { { #expr_body #[allow(unreachable_code)] LoxValue::Nil } });
+                tokens
+                    .append_all(quote! { { #expr_body #[allow(unreachable_code)] LoxValue::Nil } });
 
                 let mut params_tokens = TokenStream::new();
                 for param in params {
@@ -236,7 +237,11 @@ impl Stmt {
 
         let body = Self::block(input)?;
 
-        Ok(Self::Function { name, params: Vec::from_iter(parameters), body: Box::new(body) })
+        Ok(Self::Function {
+            name,
+            params: Vec::from_iter(parameters),
+            body: Box::new(body),
+        })
     }
 
     fn statement(input: ParseStream) -> syn::Result<Self> {

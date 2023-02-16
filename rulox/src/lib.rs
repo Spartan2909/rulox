@@ -72,14 +72,17 @@
 /// # Examples
 /// ```
 /// use rulox::*;
-/// lox! {
-///     var hello = "hello ";
-/// }
 ///
-/// let world = "world";
+/// fn main () {
+///     lox! {
+///         var hello = "hello ";
+///     }
 ///
-/// lox! {
-///     print hello + world;
+///     let world = "world";
+///
+///     lox! {
+///         print hello + world;
+///     }
 /// }
 /// ```
 ///
@@ -87,4 +90,23 @@
 /// If an operation is attemped between two unsupported types.
 pub use rulox_macro::lox;
 
-pub use rulox_types::*;
+/// Generates a rulox binding for a rust function.
+/// # Examples
+/// ```
+/// use rulox::*;
+///
+/// fn hello(name: String) -> String {
+///     "Hello ".to_string() + &name
+/// }
+///
+/// fn main() {
+///     lox_bindgen!(fn hello(name));
+///
+///     lox! {
+///         print lox_hello("Alice");
+///     }
+/// }
+/// ```
+pub use rulox_macro::lox_bindgen;
+
+pub use rulox_types::{extract, LoxValue};

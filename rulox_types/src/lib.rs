@@ -53,7 +53,7 @@ pub type LoxResult<T> = Result<T, LoxError>;
 /// assert_eq!(extract(v), LoxValue::from(8));
 /// ```
 /// # Panics
-/// If the contained value is an error
+/// If the contained value is an error.
 pub fn extract<T, E>(result: Result<T, E>) -> T
 where
     E: ToString,

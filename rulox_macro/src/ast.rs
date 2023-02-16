@@ -64,8 +64,8 @@ pub enum Stmt {
         body: Box<Stmt>,
     },
     Loop {
-        body: Box<Stmt>
-    }
+        body: Box<Stmt>,
+    },
 }
 
 impl ToTokens for Stmt {
@@ -364,7 +364,9 @@ impl Stmt {
 
         let body: Stmt = input.parse()?;
 
-        Ok(Self::Loop { body: Box::new(body) })
+        Ok(Self::Loop {
+            body: Box::new(body),
+        })
     }
 
     fn block(input: ParseStream) -> syn::Result<Vec<Stmt>> {

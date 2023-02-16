@@ -53,14 +53,14 @@
 //!     assert_eq!(add_one(LoxValue::from(3)), LoxValue::from(4));
 //! }
 //! ```
-//! 
+//!
 //! ```
 //! use rulox::*;
 //!
 //! fn main() {
 //!     lox! {
 //!         var people = ["Bob", "Alice", "John"];
-//! 
+//!
 //!         for (person in people) {
 //!             print "Hello " + person + "!";
 //!         }

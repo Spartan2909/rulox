@@ -48,9 +48,9 @@
 //!         }
 //!     }
 //!
-//!     hello(LoxValue::from("Alice"));
+//!     hello(vec![LoxValue::from("Alice")]);
 //!
-//!     assert_eq!(add_one(LoxValue::from(3)), LoxValue::from(4));
+//!     assert_eq!(add_one(vec![LoxValue::from(3)]), LoxValue::from(4));
 //! }
 //! ```
 //!

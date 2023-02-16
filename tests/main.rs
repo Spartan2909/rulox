@@ -109,10 +109,16 @@ fn function() {
             print "Hello " + name + "! :)";
         }
 
+        fun goodbye(name) {
+            print "Goodbye " + name + " :(";
+        }
+
+        goodbye("Alice");
+
         hello("Bob");
     }
 
-    hello(LoxValue::from("Alice"));
+    hello(vec![LoxValue::from("Alice")]);
 }
 
 #[test]
@@ -123,7 +129,7 @@ fn return_test() {
         }
     }
 
-    assert_eq!(add_one(LoxValue::Num(3.0)), LoxValue::Num(4.0))
+    assert_eq!(add_one(vec![LoxValue::Num(3.0)]), LoxValue::Num(4.0))
 }
 
 #[test]
@@ -160,5 +166,14 @@ fn fibonacci() {
         }
     }
 
-    assert_eq!(fib(LoxValue::Num(5.0)), 8)
+    assert_eq!(fib(vec![LoxValue::Num(5.0)]), 8)
 }
+
+/*#[test]
+fn closure() {
+    lox! {
+        fun adder(n) {
+            return fun (x) return x + n;;
+        }
+    }
+}*/

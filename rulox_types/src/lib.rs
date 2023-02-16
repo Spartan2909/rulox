@@ -1,3 +1,5 @@
+#![feature(fn_traits, unboxed_closures)]
+
 //! `rulox_types` is a collection of types used by the `rulox` crate
 //! to represent dynamically typed values.
 
@@ -63,14 +65,15 @@ where
 }
 
 /// An enum used for error reporting.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum LoxValueType {
     Bool,
     Char,
     Str,
     Num,
     Arr,
-    Instance,
+    Function(Vec<String>),
+    Instance(String),
     Nil,
 }
 
@@ -82,12 +85,14 @@ impl fmt::Display for LoxValueType {
             Self::Str => write!(f, "string"),
             Self::Num => write!(f, "number"),
             Self::Arr => write!(f, "array"),
-            Self::Instance => write!(f, "instance"),
+            Self::Function(params) => write!(f, "function({:#?})", params),
+            Self::Instance(class) => write!(f, "instance of {class}"),
             Self::Nil => write!(f, "nil"),
         }
     }
 }
 
+/*
 impl From<LoxValue> for LoxValueType {
     fn from(value: LoxValue) -> Self {
         match value {
@@ -96,7 +101,8 @@ impl From<LoxValue> for LoxValueType {
             LoxValue::Str(_) => Self::Str,
             LoxValue::Num(_) => Self::Num,
             LoxValue::Arr(_) => Self::Arr,
-            LoxValue::Instance(_) => Self::Instance,
+            LoxValue::Function(_, params) => Self::Function(params),
+            LoxValue::Instance(instance) => Self::Instance(instance.class),
             LoxValue::Nil => Self::Nil,
         }
     }
@@ -110,11 +116,34 @@ impl From<&LoxValue> for LoxValueType {
             LoxValue::Str(_) => Self::Str,
             LoxValue::Num(_) => Self::Num,
             LoxValue::Arr(_) => Self::Arr,
-            LoxValue::Instance(_) => Self::Instance,
+            LoxValue::Function(_, params) => Self::Function(params.to_vec()),
+            LoxValue::Instance(instance) => Self::Instance(instance.class.clone()),
             LoxValue::Nil => Self::Nil,
         }
     }
 }
+*/
+
+macro_rules! loxvalue_to_loxvaluetype {
+    ( $($t:ty),* ) => { $(
+        impl From<$t> for LoxValueType {
+            fn from(value: $t) -> Self {
+                match value {
+                    LoxValue::Bool(_) => Self::Bool,
+                    LoxValue::Char(_) => Self::Char,
+                    LoxValue::Str(_) => Self::Str,
+                    LoxValue::Num(_) => Self::Num,
+                    LoxValue::Arr(_) => Self::Arr,
+                    LoxValue::Function(_, params) => Self::Function(params.to_vec()),
+                    LoxValue::Instance(instance) => Self::Instance(instance.class.clone()),
+                    LoxValue::Nil => Self::Nil,
+                }
+            }
+        }) *
+    };
+}
+
+loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }
 
 /// A dynamically typed value used by Lox programs.
 #[derive(Debug, Clone)]
@@ -124,6 +153,8 @@ pub enum LoxValue {
     Str(Vec<Self>),
     Num(f64),
     Arr(Vec<Self>),
+    Function(fn(Vec<LoxValue>) -> LoxValue, Vec<String>),
+    //Function(Box<dyn LoxFn(Vec<LoxValue>) -> LoxValue>, Vec<String>),
     Instance(LoxInstance),
     Nil,
 }
@@ -179,6 +210,7 @@ where
                     false
                 }
             }
+            Self::Function(..) => false,
             Self::Instance(i1) => {
                 if let Self::Instance(i2) = other {
                     i1 == &i2
@@ -224,6 +256,9 @@ impl fmt::Display for LoxValue {
 
                 buf += "]";
                 write!(f, "{}", buf)
+            }
+            Self::Function(..) => {
+                write!(f, "function")
             }
             Self::Instance(instance) => {
                 write!(f, "<Instance of {}>", instance.class)
@@ -724,6 +759,7 @@ where
                     None
                 }
             }
+            Self::Function(..) => None,
             Self::Instance(_) => None,
             Self::Nil => None,
         }
@@ -770,6 +806,41 @@ impl Iterator for LoxIterator {
     }
 }
 
+impl FnOnce<(Vec<LoxValue>,)> for LoxValue {
+    type Output = LoxValue;
+
+    extern "rust-call" fn call_once(self, args: (Vec<LoxValue>,)) -> Self::Output {
+        match self {
+            Self::Function(func, _) => {
+                func(args.0)
+            }
+            _ => panic!("cannot call value of type {}", LoxValueType::from(self))
+        }
+    }
+}
+
+impl FnMut<(Vec<LoxValue>,)> for LoxValue {
+    extern "rust-call" fn call_mut(&mut self, args: (Vec<LoxValue>,)) -> Self::Output {
+        match self {
+            Self::Function(func, _) => {
+                func(args.0)
+            }
+            _ => panic!("cannot call value of type {}", LoxValueType::from(self))
+        }
+    }
+}
+
+impl Fn<(Vec<LoxValue>,)> for LoxValue {
+    extern "rust-call" fn call(&self, args: (Vec<LoxValue>,)) -> Self::Output {
+        match self {
+            Self::Function(func, _) => {
+                func(args.0)
+            }
+            _ => panic!("cannot call value of type {}", LoxValueType::from(self))
+        }
+    }
+}
+
 impl ToTokens for LoxValue {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
@@ -793,6 +864,9 @@ impl ToTokens for LoxValue {
                 tokens.append(Punct::new(']', Spacing::Joint));
                 tokens.append(Punct::new(')', Spacing::Alone));
             }
+            Self::Function(..) => unimplemented!(
+                "Lox functions can only be converted to tokens when in a function expression"
+            ),
             Self::Instance(_) => todo!(),
             Self::Nil => tokens.append_all(quote! { LoxValue::Nil }),
         }

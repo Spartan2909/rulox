@@ -169,14 +169,16 @@ fn fibonacci() {
     assert_eq!(fib(vec![LoxValue::Num(5.0)]), 8)
 }
 
-/*#[test]
+/*
+#[test]
 fn closure() {
     lox! {
         fun adder(n) {
-            return fun (x) return x + n;;
+            return fun (x) return x + n; ;
         }
     }
-}*/
+}
+*/
 
 fn hello(name: String) -> String {
     "Hello ".to_string() + &name

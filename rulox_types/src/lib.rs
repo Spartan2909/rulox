@@ -92,38 +92,6 @@ impl fmt::Display for LoxValueType {
     }
 }
 
-/*
-impl From<LoxValue> for LoxValueType {
-    fn from(value: LoxValue) -> Self {
-        match value {
-            LoxValue::Bool(_) => Self::Bool,
-            LoxValue::Char(_) => Self::Char,
-            LoxValue::Str(_) => Self::Str,
-            LoxValue::Num(_) => Self::Num,
-            LoxValue::Arr(_) => Self::Arr,
-            LoxValue::Function(_, params) => Self::Function(params),
-            LoxValue::Instance(instance) => Self::Instance(instance.class),
-            LoxValue::Nil => Self::Nil,
-        }
-    }
-}
-
-impl From<&LoxValue> for LoxValueType {
-    fn from(value: &LoxValue) -> Self {
-        match value {
-            LoxValue::Bool(_) => Self::Bool,
-            LoxValue::Char(_) => Self::Char,
-            LoxValue::Str(_) => Self::Str,
-            LoxValue::Num(_) => Self::Num,
-            LoxValue::Arr(_) => Self::Arr,
-            LoxValue::Function(_, params) => Self::Function(params.to_vec()),
-            LoxValue::Instance(instance) => Self::Instance(instance.class.clone()),
-            LoxValue::Nil => Self::Nil,
-        }
-    }
-}
-*/
-
 macro_rules! loxvalue_to_loxvaluetype {
     ( $($t:ty),* ) => { $(
         impl From<$t> for LoxValueType {

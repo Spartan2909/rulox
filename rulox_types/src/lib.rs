@@ -114,7 +114,7 @@ macro_rules! loxvalue_to_loxvaluetype {
 loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }
 
 /// A dynamically typed value used by Lox programs.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum LoxValue {
     Bool(bool),
     Char(char),
@@ -133,6 +133,29 @@ pub struct LoxInstance {
     class: String,
     attributes: HashMap<String, LoxValue>,
     methods: Vec<String>,
+}
+
+impl fmt::Debug for LoxValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Bool(b) => write!(f, "Bool({b})"),
+            Self::Char(c) => write!(f, "Char({c}"),
+            Self::Str(s) => {
+                let mut text = String::new();
+
+                for character in s {
+                    text.push(character.try_into().unwrap())
+                }
+
+                write!(f, "Str({text})")
+            }
+            Self::Num(n) => write!(f, "Num({n})"),
+            Self::Arr(a) => write!(f, "Arr({:#?})", a),
+            Self::Function(_, params) => write!(f, "Function({:#?})", params),
+            Self::Instance(_) => todo!(),
+            Self::Nil => write!(f, "Nil"),
+        }
+    }
 }
 
 impl<T> PartialEq<T> for LoxValue
@@ -308,14 +331,6 @@ impl TryFrom<LoxValue> for bool {
     }
 }
 
-impl TryFrom<&LoxValue> for bool {
-    type Error = LoxError;
-
-    fn try_from(value: &LoxValue) -> Result<Self, Self::Error> {
-        Self::try_from(value.clone())
-    }
-}
-
 impl TryFrom<LoxValue> for char {
     type Error = LoxError;
 
@@ -351,6 +366,21 @@ impl TryFrom<LoxValue> for String {
         }
     }
 }
+
+macro_rules! impl_tryfrom_borrowed_loxvalue {
+    ( $($t:ty),* ) => { $(
+        impl TryFrom<&LoxValue> for $t {
+            type Error = LoxError;
+
+            fn try_from(value: &LoxValue) -> Result<Self, Self::Error> {
+                value.clone().try_into()
+            }
+        }
+    ) *
+    };
+}
+
+impl_tryfrom_borrowed_loxvalue! { bool, char, String, f32, f64, u8, u16, u32, u64, u128, i8, i16, i32, i64, i128 }
 
 macro_rules! impl_numeric {
     ( $($t:ty),* ) => {

@@ -102,7 +102,7 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Str(_) => Self::Str,
                     LoxValue::Num(_) => Self::Num,
                     LoxValue::Arr(_) => Self::Arr,
-                    LoxValue::Function(_, params) => Self::Function(params.to_vec()),
+                    LoxValue::Function(f) => Self::Function(f.params.to_vec()),
                     LoxValue::Instance(instance) => Self::Instance(instance.class.clone()),
                     LoxValue::Nil => Self::Nil,
                 }
@@ -121,10 +121,22 @@ pub enum LoxValue {
     Str(Vec<Self>),
     Num(f64),
     Arr(Vec<Self>),
-    Function(fn(Vec<LoxValue>) -> LoxValue, Vec<String>),
+    Function(LoxFn),
     //Function(Box<dyn LoxFn(Vec<LoxValue>) -> LoxValue>, Vec<String>),
     Instance(LoxInstance),
     Nil,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoxFn {
+    ptr: fn(Vec<LoxValue>) -> LoxValue,
+    params: Vec<String>,
+}
+
+impl LoxFn {
+    pub fn new(ptr: fn(Vec<LoxValue>) -> LoxValue, params: Vec<String>) -> Self {
+        Self { ptr, params }
+    }
 }
 
 /// An instance of a Lox class.
@@ -151,7 +163,7 @@ impl fmt::Debug for LoxValue {
             }
             Self::Num(n) => write!(f, "Num({n})"),
             Self::Arr(a) => write!(f, "Arr({:#?})", a),
-            Self::Function(_, params) => write!(f, "Function({:#?})", params),
+            Self::Function(func) => write!(f, "Function({:#?})", func.params),
             Self::Instance(_) => todo!(),
             Self::Nil => write!(f, "Nil"),
         }
@@ -809,7 +821,7 @@ impl FnOnce<(Vec<LoxValue>,)> for LoxValue {
 
     extern "rust-call" fn call_once(self, args: (Vec<LoxValue>,)) -> Self::Output {
         match self {
-            Self::Function(func, _) => func(args.0),
+            Self::Function(func) => (func.ptr)(args.0),
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
@@ -818,7 +830,7 @@ impl FnOnce<(Vec<LoxValue>,)> for LoxValue {
 impl FnMut<(Vec<LoxValue>,)> for LoxValue {
     extern "rust-call" fn call_mut(&mut self, args: (Vec<LoxValue>,)) -> Self::Output {
         match self {
-            Self::Function(func, _) => func(args.0),
+            Self::Function(func) => (func.ptr)(args.0),
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
@@ -827,7 +839,7 @@ impl FnMut<(Vec<LoxValue>,)> for LoxValue {
 impl Fn<(Vec<LoxValue>,)> for LoxValue {
     extern "rust-call" fn call(&self, args: (Vec<LoxValue>,)) -> Self::Output {
         match self {
-            Self::Function(func, _) => func(args.0),
+            Self::Function(func) => (func.ptr)(args.0),
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }

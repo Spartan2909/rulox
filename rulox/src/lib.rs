@@ -109,4 +109,4 @@ pub use rulox_macro::lox;
 /// ```
 pub use rulox_macro::lox_bindgen;
 
-pub use rulox_types::{extract, LoxValue};
+pub use rulox_types::{extract, LoxFn, LoxValue};

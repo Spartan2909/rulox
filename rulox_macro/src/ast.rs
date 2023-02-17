@@ -118,7 +118,7 @@ impl ToTokens for Stmt {
                     params_tokens.append_all(quote! { .to_string(), });
                 }
 
-                tokens.append_all(quote! { #[allow(unused_mut)] let mut #name = LoxValue::Function(#name, vec![#params_tokens]); });
+                tokens.append_all(quote! { #[allow(unused_mut)] let mut #name = LoxValue::Function(LoxFn::new(#name, vec![#params_tokens])); });
 
                 /*
                 let rust_name = String::from("rust_") + &name.to_string();

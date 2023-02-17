@@ -110,17 +110,7 @@ impl ToTokens for Stmt {
 
                 tokens
                     .append_all(quote! { { #expr_body #[allow(unreachable_code)] LoxValue::Nil } });
-
-                let mut params_tokens = TokenStream::new();
-                for param in params {
-                    let name = param.to_string();
-                    syn::LitStr::new(&name, param.span()).to_tokens(&mut params_tokens);
-                    params_tokens.append_all(quote! { .to_string(), });
-                }
-
-                tokens.append_all(quote! { #[allow(unused_mut)] let mut #name = LoxValue::Function(LoxFn::new(#name, vec![#params_tokens])); });
-
-                /*
+                
                 let rust_name = String::from("rust_") + &name.to_string();
                 let rust_name = Ident::new(&rust_name, proc_macro2::Span::call_site());
 
@@ -137,7 +127,15 @@ impl ToTokens for Stmt {
                         #name(vec![#args])
                     }
                 });
-                */
+                
+                let mut params_tokens = TokenStream::new();
+                for param in params {
+                    let name = param.to_string();
+                    syn::LitStr::new(&name, param.span()).to_tokens(&mut params_tokens);
+                    params_tokens.append_all(quote! { .to_string(), });
+                }
+
+                tokens.append_all(quote! { #[allow(unused_mut, unused_variables)] let mut #name = LoxValue::Function(LoxFn::new(#name, vec![#params_tokens])); });
             }
             Self::Block(block) => {
                 let mut inner = TokenStream::new();

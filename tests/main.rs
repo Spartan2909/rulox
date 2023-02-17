@@ -129,7 +129,7 @@ fn return_test() {
         }
     }
 
-    assert_eq!(add_one(vec![LoxValue::Num(3.0)]), LoxValue::Num(4.0))
+    assert_eq!(rust_add_one(LoxValue::Num(3.0)), LoxValue::Num(4.0))
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn fibonacci() {
         }
     }
 
-    assert_eq!(fib(vec![LoxValue::Num(5.0)]), 8)
+    assert_eq!(rust_fib(LoxValue::Num(5.0)), 8)
 }
 
 /*

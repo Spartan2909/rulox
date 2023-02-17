@@ -52,7 +52,7 @@ pub enum Stmt {
     If {
         condition: Expr,
         then_branch: Box<Stmt>,
-        else_branch: Box<Option<Stmt>>,
+        else_branch: Option<Box<Stmt>>,
     },
     While {
         condition: Expr,
@@ -154,7 +154,6 @@ impl ToTokens for Stmt {
                 else_branch,
             } => {
                 let then_branch: &Stmt = &*then_branch;
-                let else_branch: &Option<Stmt> = &*else_branch;
 
                 tokens.append_all(quote! { if extract(#condition.try_into()) { #then_branch } });
                 if let Some(branch) = else_branch {
@@ -278,12 +277,10 @@ impl Stmt {
         let else_branch = if input.peek(Token![else]) {
             input.parse::<Token![else]>()?;
 
-            Some(Self::statement(input)?)
+            Some(Box::new(Self::statement(input)?))
         } else {
             None
         };
-
-        let else_branch = Box::new(else_branch);
 
         Ok(Self::If {
             condition,

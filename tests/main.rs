@@ -185,10 +185,19 @@ fn hello(name: String) -> String {
 }
 
 #[test]
-fn bindgen_test() {
+fn bindgen() {
     lox_bindgen!(fn hello(name));
 
     lox! {
         print lox_hello("Alice");
     }
+}
+
+#[test]
+fn inline_function() {
+    lox! {
+        var add_one = fun(num) return num + 1; ;
+    }
+
+    assert_eq!(add_one(vec![LoxValue::Num(1.5)]), LoxValue::Num(2.5));
 }

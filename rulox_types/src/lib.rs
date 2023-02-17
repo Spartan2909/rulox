@@ -131,11 +131,12 @@ pub enum LoxValue {
 pub struct LoxFn {
     ptr: fn(Vec<LoxValue>) -> LoxValue,
     params: Vec<String>,
+    method: bool,
 }
 
 impl LoxFn {
-    pub fn new(ptr: fn(Vec<LoxValue>) -> LoxValue, params: Vec<String>) -> Self {
-        Self { ptr, params }
+    pub fn new(ptr: fn(Vec<LoxValue>) -> LoxValue, params: Vec<String>, method:bool) -> Self {
+        Self { ptr, params, method }
     }
 }
 

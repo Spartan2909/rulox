@@ -135,7 +135,7 @@ impl ToTokens for Stmt {
                     params_tokens.append_all(quote! { .to_string(), });
                 }
 
-                tokens.append_all(quote! { #[allow(unused_mut, unused_variables)] let mut #name = LoxValue::Function(LoxFn::new(#name, vec![#params_tokens])); });
+                tokens.append_all(quote! { #[allow(unused_mut, unused_variables)] let mut #name = LoxValue::Function(LoxFn::new(#name, vec![#params_tokens], false)); });
             }
             Self::Block(block) => {
                 let mut inner = TokenStream::new();
@@ -463,7 +463,7 @@ impl ToTokens for Expr {
 
                 let mut expr_body = TokenStream::new();
                 for (i, param) in params.iter().enumerate() {
-                    expr_body.append_all(quote! { let #param = _args[#i]; });
+                    expr_body.append_all(quote! { let #param = _args[#i].clone(); });
                 }
 
                 body.to_tokens(&mut expr_body);
@@ -478,7 +478,7 @@ impl ToTokens for Expr {
                     params_tokens.append_all(quote! { .to_string(), });
                 }
 
-                tokens.append_all(quote! { LoxValue::Function(#inner, vec![#params_tokens]) });
+                tokens.append_all(quote! { LoxValue::Function(LoxFn::new(#inner, vec![#params_tokens], false)) });
             }
             Self::Variable(var) => {
                 tokens.append(var.clone());

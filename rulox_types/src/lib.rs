@@ -868,8 +868,8 @@ impl ToTokens for LoxValue {
                 tokens.append(Punct::new(']', Spacing::Joint));
                 tokens.append(Punct::new(')', Spacing::Alone));
             }
-            Self::Function(..) => unimplemented!(
-                "Lox functions can only be converted to tokens when in a function expression"
+            Self::Function(_) => unimplemented!(
+                "tokens produced by Lox functions differ for statements and expressions, and so must be converted manually"
             ),
             Self::Instance(_) => todo!(),
             Self::Nil => tokens.append_all(quote! { LoxValue::Nil }),

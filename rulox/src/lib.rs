@@ -46,11 +46,13 @@
 //!         fun add_one(num) {
 //!             return num + 1;
 //!         }
+//! 
+//!         hello("Alice");
 //!     }
 //!
-//!     hello(vec![LoxValue::from("Alice")]);
+//!     rust_hello(LoxValue::from("Bob"));
 //!
-//!     assert_eq!(add_one(vec![LoxValue::from(3)]), LoxValue::from(4));
+//!     assert_eq!(rust_add_one(LoxValue::from(3)), LoxValue::from(4));
 //! }
 //! ```
 //!

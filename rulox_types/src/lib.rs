@@ -135,8 +135,12 @@ pub struct LoxFn {
 }
 
 impl LoxFn {
-    pub fn new(ptr: fn(Vec<LoxValue>) -> LoxValue, params: Vec<String>, method:bool) -> Self {
-        Self { ptr, params, method }
+    pub fn new(ptr: fn(Vec<LoxValue>) -> LoxValue, params: Vec<String>, method: bool) -> Self {
+        Self {
+            ptr,
+            params,
+            method,
+        }
     }
 }
 

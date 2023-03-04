@@ -110,7 +110,7 @@ impl ToTokens for Stmt {
 
                 tokens
                     .append_all(quote! { { #expr_body #[allow(unreachable_code)] LoxValue::Nil } });
-                
+
                 let rust_name = String::from("rust_") + &name.to_string();
                 let rust_name = Ident::new(&rust_name, proc_macro2::Span::call_site());
 
@@ -127,7 +127,7 @@ impl ToTokens for Stmt {
                         #name(vec![#args])
                     }
                 });
-                
+
                 let mut params_tokens = TokenStream::new();
                 for param in params {
                     let name = param.to_string();
@@ -478,7 +478,9 @@ impl ToTokens for Expr {
                     params_tokens.append_all(quote! { .to_string(), });
                 }
 
-                tokens.append_all(quote! { LoxValue::Function(LoxFn::new(#inner, vec![#params_tokens], false)) });
+                tokens.append_all(
+                    quote! { LoxValue::Function(LoxFn::new(#inner, vec![#params_tokens], false)) },
+                );
             }
             Self::Variable(var) => {
                 tokens.append(var.clone());

@@ -9,7 +9,7 @@
 //!
 //! # Examples
 //! ```
-//! use rulox::*;
+//! use rulox::transpiler::*;
 //!
 //! fn main() {
 //!     lox! {
@@ -25,7 +25,7 @@
 //! ```
 //!
 //! ```
-//! use rulox::*;
+//! use rulox::transpiler::*;
 //!
 //! fn main() {
 //!     lox! {
@@ -35,7 +35,7 @@
 //! ```
 //!
 //! ```
-//! use rulox::*;
+//! use rulox::transpiler::*;
 //!
 //! fn main() {
 //!     lox! {
@@ -57,7 +57,7 @@
 //! ```
 //!
 //! ```
-//! use rulox::*;
+//! use rulox::transpiler::*;
 //!
 //! fn main() {
 //!     lox! {
@@ -70,45 +70,47 @@
 //! }
 //! ```
 
-/// Parses Lox code and converts it to Rust.
-/// # Examples
-/// ```
-/// use rulox::*;
-///
-/// fn main () {
-///     lox! {
-///         var hello = "hello ";
-///     }
-///
-///     let world = "world";
-///
-///     lox! {
-///         print hello + world;
-///     }
-/// }
-/// ```
-///
-/// # Panics
-/// If an operation is attemped between two unsupported types.
-pub use rulox_macro::lox;
+pub mod transpiler {
+    /// Parses Lox code and converts it to Rust.
+    /// # Examples
+    /// ```
+    /// use rulox::*;
+    ///
+    /// fn main () {
+    ///     lox! {
+    ///         var hello = "hello ";
+    ///     }
+    ///
+    ///     let world = "world";
+    ///
+    ///     lox! {
+    ///         print hello + world;
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Panics
+    /// If an operation is attemped between two unsupported types.
+    pub use rulox_macro::lox;
 
-/// Generates a rulox binding for a Rust function.
-/// # Examples
-/// ```
-/// use rulox::*;
-///
-/// fn hello(name: String) -> String {
-///     "Hello ".to_string() + &name
-/// }
-///
-/// fn main() {
-///     lox_bindgen!(fn hello(name));
-///
-///     lox! {
-///         print lox_hello("Alice");
-///     }
-/// }
-/// ```
-pub use rulox_macro::lox_bindgen;
+    /// Generates a rulox binding for a Rust function.
+    /// # Examples
+    /// ```
+    /// use rulox::*;
+    ///
+    /// fn hello(name: String) -> String {
+    ///     "Hello ".to_string() + &name
+    /// }
+    ///
+    /// fn main() {
+    ///     lox_bindgen!(fn hello(name));
+    ///
+    ///     lox! {
+    ///         print lox_hello("Alice");
+    ///     }
+    /// }
+    /// ```
+    pub use rulox_macro::lox_bindgen;
 
-pub use rulox_types::{extract, LoxFn, LoxValue};
+    pub use rulox_types::{extract, LoxFn, LoxValue};
+}

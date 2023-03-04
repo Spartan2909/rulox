@@ -1,4 +1,4 @@
-use rulox::*;
+use rulox::transpiler::*;
 
 #[test]
 fn var_declaration() {

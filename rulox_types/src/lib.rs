@@ -3,12 +3,17 @@
 //! `rulox_types` is a collection of types used by the `rulox` crate
 //! to represent dynamically typed values.
 
+#[cfg_attr(feature = "sync", path = "sync.rs")]
+#[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
+mod shared;
+use shared::Shared;
+
 use std::{
     collections::HashMap,
     error::Error,
     fmt,
     mem::size_of,
-    ops::{Add, BitAnd, BitOr, Div, Index, Mul, Neg, Not, Sub},
+    ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub},
     vec,
 };
 
@@ -101,7 +106,7 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Num(_) => Self::Num,
                     LoxValue::Arr(_) => Self::Arr,
                     LoxValue::Function(f) => Self::Function(f.params.to_vec()),
-                    LoxValue::Instance(instance) => Self::Instance(instance.class.clone()),
+                    LoxValue::Instance(instance) => Self::Instance(instance.read().class.clone()),
                     LoxValue::Nil => Self::Nil,
                 }
             }
@@ -117,11 +122,47 @@ pub enum LoxValue {
     Bool(bool),
     Str(String),
     Num(f64),
-    Arr(Vec<Self>),
+    Arr(Shared<Vec<Self>>),
     Function(LoxFn),
     //Function(Box<dyn LoxFn(Vec<LoxValue>) -> LoxValue>, Vec<String>),
-    Instance(LoxInstance),
+    Instance(Shared<LoxInstance>),
     Nil,
+}
+
+impl LoxValue {
+    #[inline(always)]
+    fn index_internal<T: TryInto<f64> + Into<LoxValue>>(&self, value: T) -> Option<LoxValue> {
+        let num: f64 = value.try_into().ok()?;
+        let output = match self {
+            LoxValue::Arr(arr) => {
+                let index = num as usize;
+
+                if index as f64 == num {
+                    arr.read()[index].clone()
+                } else {
+                    panic!("invalid base for index: {}", num);
+                }
+            }
+            _ => {
+                return None;
+            }
+        };
+
+        Some(output)
+    }
+
+    pub fn index<T: TryInto<f64> + Into<LoxValue> + Clone>(&self, value: T) -> LoxValue {
+        if let Some(value) = self.index_internal(value.clone()) {
+            value
+        } else {
+            let other: LoxValue = value.into();
+            panic!(
+                "cannot index {} with {}",
+                LoxValueType::from(self),
+                LoxValueType::from(other),
+            )
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -171,44 +212,13 @@ where
     fn eq(&self, rhs: &T) -> bool {
         let other: Self = rhs.clone().into();
 
-        match self {
-            Self::Bool(b1) => {
-                if let Self::Bool(b2) = other {
-                    b1 == &b2
-                } else {
-                    false
-                }
-            }
-            Self::Str(s1) => {
-                if let Self::Str(s2) = other {
-                    s1 == &s2
-                } else {
-                    false
-                }
-            }
-            Self::Num(n1) => {
-                if let Self::Num(n2) = other {
-                    n1 == &n2
-                } else {
-                    false
-                }
-            }
-            Self::Arr(a1) => {
-                if let Self::Arr(a2) = other {
-                    a1 == &a2
-                } else {
-                    false
-                }
-            }
-            Self::Function(..) => false,
-            Self::Instance(i1) => {
-                if let Self::Instance(i2) = other {
-                    i1 == &i2
-                } else {
-                    false
-                }
-            }
-            Self::Nil => false,
+        match (self, other) {
+            (&Self::Bool(b1), Self::Bool(b2)) => b1 == b2,
+            (Self::Str(s1), Self::Str(s2)) => s1 == &s2,
+            (&Self::Num(n1), Self::Num(n2)) => n1 == n2,
+            (Self::Arr(a1), Self::Arr(a2)) => a1 == &a2,
+            (Self::Instance(i1), Self::Instance(i2)) => i1 == &i2,
+            _ => false,
         }
     }
 }
@@ -225,7 +235,7 @@ impl fmt::Display for LoxValue {
             }
             Self::Arr(values) => {
                 let mut buf = "[".to_string();
-                for value in values {
+                for value in values.read().iter() {
                     buf += &(value.to_string() + ", ");
                 }
 
@@ -240,7 +250,7 @@ impl fmt::Display for LoxValue {
                 write!(f, "function")
             }
             Self::Instance(instance) => {
-                write!(f, "<Instance of {}>", instance.class)
+                write!(f, "<Instance of {}>", instance.read().class)
             }
             Self::Nil => {
                 write!(f, "nil")
@@ -290,13 +300,13 @@ impl From<&str> for LoxValue {
 
 impl From<Vec<LoxValue>> for LoxValue {
     fn from(values: Vec<LoxValue>) -> Self {
-        Self::Arr(values)
+        Self::Arr(values.into())
     }
 }
 
 impl<const N: usize> From<[LoxValue; N]> for LoxValue {
     fn from(values: [LoxValue; N]) -> Self {
-        Self::Arr(Vec::from(values))
+        Self::from(Vec::from(values))
     }
 }
 
@@ -425,13 +435,13 @@ impl_numeric! { f32, f64, u8, u16, u32, u64, u128, i8, i16, i32, i64, i128 }
 impl Add for LoxValue {
     type Output = LoxResult<Self>;
 
-    fn add(self, mut rhs: Self) -> Self::Output {
+    fn add(self, rhs: Self) -> Self::Output {
         let self_type = LoxValueType::from(&self);
-        match (self, &mut rhs) {
+        match (self, &rhs) {
             (LoxValue::Str(s1), LoxValue::Str(s2)) => Ok(LoxValue::Str(s1 + &s2)),
-            (LoxValue::Num(n1), &mut LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
-            (LoxValue::Arr(mut arr1), LoxValue::Arr(ref mut arr2)) => {
-                arr1.append(arr2);
+            (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
+            (LoxValue::Arr(arr1), LoxValue::Arr(ref arr2)) => {
+                arr1.write().append(&mut arr2.write());
                 Ok(LoxValue::Arr(arr1))
             }
             _ => Err(LoxError::TypeError(format!(
@@ -590,41 +600,6 @@ impl BitAnd<bool> for LoxValue {
     }
 }
 
-impl Index<usize> for LoxValue {
-    type Output = Self;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        match self {
-            Self::Arr(arr) => &arr[index],
-            _ => {
-                panic!("cannot index {} with number", LoxValueType::from(self))
-            }
-        }
-    }
-}
-
-impl Index<LoxValue> for LoxValue {
-    type Output = Self;
-
-    fn index(&self, value: LoxValue) -> &Self::Output {
-        if let (Self::Arr(arr), &Self::Num(num)) = (self, &value) {
-            let index = num as usize;
-
-            if index as f64 == num {
-                &arr[index]
-            } else {
-                panic!("invalid base for index: {}", num);
-            }
-        } else {
-            panic!(
-                "cannot index {} with {}",
-                LoxValueType::from(self),
-                LoxValueType::from(value)
-            );
-        }
-    }
-}
-
 impl<T> PartialOrd<T> for LoxValue
 where
     T: Into<LoxValue> + Clone,
@@ -673,7 +648,7 @@ impl IntoIterator for LoxValue {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            Self::Arr(arr) => LoxIterator::Array(arr.into_iter()),
+            Self::Arr(arr) => LoxIterator::Array(arr.read().clone().into_iter()),
             Self::Str(string) => LoxIterator::String(string.into_bytes().into_iter()),
             _ => panic!("cannot convert {} into iterator", LoxValueType::from(self)),
         }
@@ -786,7 +761,7 @@ impl ToTokens for LoxValue {
                 tokens.append(Punct::new('(', Spacing::Alone));
                 tokens.append_all(quote! { vec! });
                 tokens.append(Punct::new('[', Spacing::Alone));
-                for value in arr {
+                for value in arr.read().iter() {
                     tokens.append_all(quote! { #value, });
                 }
                 tokens.append(Punct::new(']', Spacing::Joint));

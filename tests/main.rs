@@ -138,8 +138,8 @@ fn index_arr() {
         var list = [true, false];
     }
 
-    let b1: bool = list[0].clone().try_into().unwrap();
-    let b2: bool = list[1].clone().try_into().unwrap();
+    let b1: bool = list.index(0).try_into().unwrap();
+    let b2: bool = list.index(LoxValue::Num(1.0)).clone().try_into().unwrap();
 
     assert!(b1);
     assert!(!b2);

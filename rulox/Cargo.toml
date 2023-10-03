@@ -16,3 +16,7 @@ license.workspace = true
 [dependencies]
 "rulox_macro" = { path = "../rulox_macro", version = "0.7" }
 "rulox_types" = { path ="../rulox_types", version = "0.4" }
+
+[features]
+default = ["sync"]
+sync = ["rulox_types/sync"]

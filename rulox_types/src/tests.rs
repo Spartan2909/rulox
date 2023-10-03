@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn display() {
-    let value = LoxValue::Arr(vec![
+    let value = LoxValue::from(vec![
         LoxValue::Bool(true),
         LoxValue::from("a value".to_string()),
         LoxValue::Num(1.0),

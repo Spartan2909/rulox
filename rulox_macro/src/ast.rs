@@ -13,7 +13,6 @@ use syn::bracketed;
 use syn::parenthesized;
 use syn::parse::Parse;
 use syn::parse::ParseStream;
-use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token;
 use syn::BinOp;
@@ -238,7 +237,7 @@ impl Stmt {
 
         let content;
         parenthesized!(content in input);
-        let parameters: Punctuated<Ident, Token![,]> = content.parse_terminated(Ident::parse)?;
+        let parameters = content.parse_terminated(Ident::parse, Token![,])?;
 
         let body = Self::block(input)?;
 
@@ -715,7 +714,7 @@ impl Expr {
         let content;
         parenthesized!(content in input);
 
-        let arguments: Punctuated<Expr, Token![,]> = content.parse_terminated(Expr::parse)?;
+        let arguments = content.parse_terminated(Expr::parse, Token![,])?;
 
         Ok(Self::Call {
             callee: Box::new(callee),
@@ -744,7 +743,7 @@ impl Expr {
             let content;
             bracketed!(content in input);
 
-            let items: Punctuated<Expr, Token![,]> = content.parse_terminated(Expr::parse)?;
+            let items = content.parse_terminated(Expr::parse, Token![,])?;
             let items = Vec::from_iter(items);
 
             Ok(Self::Array(items))
@@ -764,7 +763,7 @@ impl Expr {
         let content;
         parenthesized!(content in input);
 
-        let params: Punctuated<Ident, Token![,]> = content.parse_terminated(Ident::parse)?;
+        let params = content.parse_terminated(Ident::parse, Token![,])?;
 
         let body: Stmt = input.parse()?;
 

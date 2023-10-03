@@ -72,7 +72,7 @@ pub fn lox_bindgen(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
         body = quote! { unsafe { #body } };
     }
 
-    output.append_all(quote! { { #body}  });
+    output.append_all(quote! { { #body }  });
 
     output.into()
 }

@@ -8,12 +8,17 @@
 mod shared;
 use shared::Shared;
 
+#[cfg(feature = "sync")]
+use std::sync::Arc as LoxRc;
+#[cfg(not(feature = "sync"))]
+use std::rc::Rc as LoxRc;
+
 use std::{
     collections::HashMap,
     error::Error,
     fmt,
     mem::size_of,
-    ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub},
+    ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub, Deref},
     vec,
 };
 
@@ -120,10 +125,10 @@ loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }
 #[derive(Clone)]
 pub enum LoxValue {
     Bool(bool),
-    Str(String),
+    Str(Shared<String>),
     Num(f64),
     Arr(Shared<Vec<Self>>),
-    Function(LoxFn),
+    Function(LoxRc<LoxFn>),
     //Function(Box<dyn LoxFn(Vec<LoxValue>) -> LoxValue>, Vec<String>),
     Instance(Shared<LoxInstance>),
     Nil,
@@ -171,9 +176,13 @@ impl LoxValue {
             _ => true,
         }
     }
+
+    pub fn function(func: LoxFn) -> LoxValue {
+        LoxValue::Function(LoxRc::new(func))
+    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct LoxFn {
     ptr: fn(Vec<LoxValue>) -> LoxValue,
     params: Vec<String>,
@@ -202,7 +211,7 @@ impl fmt::Debug for LoxValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Bool(b) => write!(f, "Bool({b})"),
-            Self::Str(s) => write!(f, "Str({s})"),
+            Self::Str(s) => write!(f, "Str({})", s.read().deref()),
 
             Self::Num(n) => write!(f, "Num({n})"),
             Self::Arr(a) => write!(f, "Arr({:#?})", a),
@@ -237,7 +246,7 @@ impl fmt::Display for LoxValue {
             Self::Bool(value) => {
                 write!(f, "{}", value)
             }
-            Self::Str(string) => f.write_str(string),
+            Self::Str(string) => f.write_str(&string.read()),
             Self::Num(value) => {
                 write!(f, "{}", value)
             }
@@ -284,13 +293,13 @@ impl From<bool> for LoxValue {
 
 impl From<char> for LoxValue {
     fn from(value: char) -> Self {
-        Self::Str(value.into())
+        Self::Str(value.to_string().into())
     }
 }
 
 impl From<Vec<char>> for LoxValue {
     fn from(chars: Vec<char>) -> Self {
-        Self::Str(chars.into_iter().collect())
+        Self::Str(chars.into_iter().collect::<String>().into())
     }
 }
 
@@ -338,7 +347,7 @@ impl TryFrom<LoxValue> for String {
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
         if let LoxValue::Str(string) = value {
-            Ok(string)
+            Ok(string.read().clone())
         } else {
             Err(LoxError::TypeError(format!(
                 "expected string, found {}",
@@ -446,7 +455,10 @@ impl Add for LoxValue {
     fn add(self, rhs: Self) -> Self::Output {
         let self_type = LoxValueType::from(&self);
         match (self, &rhs) {
-            (LoxValue::Str(s1), LoxValue::Str(s2)) => Ok(LoxValue::Str(s1 + &s2)),
+            (LoxValue::Str(s1), LoxValue::Str(s2)) => {
+                s1.write().push_str(&s2.read());
+                Ok(LoxValue::Str(s1))
+            },
             (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
             (LoxValue::Arr(arr1), LoxValue::Arr(ref arr2)) => {
                 arr1.write().append(&mut arr2.write());
@@ -657,7 +669,7 @@ impl IntoIterator for LoxValue {
     fn into_iter(self) -> Self::IntoIter {
         match self {
             Self::Arr(arr) => LoxIterator::Array(arr.read().clone().into_iter()),
-            Self::Str(string) => LoxIterator::String(string.into_bytes().into_iter()),
+            Self::Str(string) => LoxIterator::String(string.read().clone().into_bytes().into_iter()),
             _ => panic!("cannot convert {} into iterator", LoxValueType::from(self)),
         }
     }
@@ -719,7 +731,7 @@ impl Iterator for LoxIterator {
         match self {
             LoxIterator::Array(iter) => iter.next(),
             LoxIterator::String(bytes) => Some(LoxValue::Str(
-                char::from_u32(next_code_point(bytes)?).unwrap().to_string(),
+                char::from_u32(next_code_point(bytes)?).unwrap().to_string().into(),
             )),
         }
     }

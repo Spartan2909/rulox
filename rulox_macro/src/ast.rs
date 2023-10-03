@@ -137,7 +137,7 @@ impl ToTokens for Stmt {
 
                 tokens.append_all(quote! {
                     #[allow(unused_mut, unused_variables)]
-                    let mut #name = LoxValue::Function(LoxFn::new(#name, vec![#params_tokens], false));
+                    let mut #name = LoxValue::function(LoxFn::new(#name, vec![#params_tokens], false));
                 });
             }
             Self::Block(block) => {
@@ -458,7 +458,7 @@ impl ToTokens for Expr {
                 let mut inner = TokenStream::new();
                 inner.append_separated(arr, Punct::new(',', Spacing::Alone));
 
-                tokens.append_all(quote! { LoxValue::from([#inner]) })
+                tokens.append_all(quote! { LoxValue::from(vec![#inner]) })
             }
             Self::Function { params, body } => {
                 let mut inner = TokenStream::new();
@@ -482,11 +482,11 @@ impl ToTokens for Expr {
                 }
 
                 tokens.append_all(
-                    quote! { LoxValue::Function(LoxFn::new(#inner, vec![#params_tokens], false)) },
+                    quote! { LoxValue::function(LoxFn::new(#inner, vec![#params_tokens], false)) },
                 );
             }
             Self::Variable(var) => {
-                tokens.append(var.clone());
+                tokens.append_all(quote! { #var.clone() });
             }
             Self::Grouping(expr) => {
                 expr.to_tokens(tokens);
@@ -510,19 +510,19 @@ impl ToTokens for Expr {
                 match kind {
                     BinaryKind::Simple => {
                         tokens.append_all(
-                            quote! { extract(LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
+                            quote! { extract(#left #operator #right) },
                         );
                     }
                     BinaryKind::Comparison => {
                         tokens.append_all(
-                            quote! { LoxValue::from(LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
+                            quote! { LoxValue::from(#left #operator #right) },
                         );
                     }
                     BinaryKind::And => {
                         tokens.append_all(quote! { {
-                            let _left = LoxValue::from(&#left);
+                            let _left = #left;
                             if _left.is_truthy() {
-                                LoxValue::from(&#right)
+                                #right
                             } else {
                                 _left
                             }
@@ -530,11 +530,11 @@ impl ToTokens for Expr {
                     }
                     BinaryKind::Or => {
                         tokens.append_all(quote! { {
-                            let _left = LoxValue::from(&#left);
+                            let _left = #left;
                             if _left.is_truthy() {
                                 _left
                             } else {
-                                LoxValue::from(&#right)
+                                #right
                             }
                         } });
                     }

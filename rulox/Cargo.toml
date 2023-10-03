@@ -14,9 +14,5 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-"rulox_macro" = { path = "../rulox_macro", version = "0.7", optional = true }
-"rulox_types" = { path ="../rulox_types", version = "0.4", optional = true }
-
-[features]
-default = ["transpiler"]
-transpiler = ["dep:rulox_macro", "dep:rulox_types"]
+"rulox_macro" = { path = "../rulox_macro", version = "0.7" }
+"rulox_types" = { path ="../rulox_types", version = "0.4" }

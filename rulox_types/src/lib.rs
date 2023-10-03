@@ -8,22 +8,21 @@
 mod shared;
 use shared::Shared;
 
+mod to_tokens;
+
 #[cfg(not(feature = "sync"))]
 use std::rc::Rc as LoxRc;
 #[cfg(feature = "sync")]
 use std::sync::Arc as LoxRc;
 
-use std::{
-    collections::HashMap,
-    error::Error,
-    fmt,
-    mem::size_of,
-    ops::{Add, BitAnd, BitOr, Deref, Div, Mul, Neg, Not, Sub},
-    vec,
-};
-
-use proc_macro2::{Punct, Spacing, TokenStream};
-use quote::{quote, ToTokens, TokenStreamExt};
+use std::cmp;
+use std::collections::HashMap;
+use std::error::Error;
+use std::fmt;
+use std::mem;
+use std::ops;
+use std::ops::Deref as _;
+use std::vec;
 
 /// An error that occurred when attempting to use a LoxValue in an invalid location.
 #[derive(Debug, Clone)]
@@ -385,7 +384,7 @@ macro_rules! impl_numeric {
                     LoxValue::Num(ref num) => {
                         if *num > Self::MAX as f64 {
                             Err(LoxError::SizeError{
-                                found: size_of::<Self>()
+                                found: mem::size_of::<Self>()
                             })
                         } else {
                             Ok(*num as Self)
@@ -396,7 +395,7 @@ macro_rules! impl_numeric {
             }
         }
 
-        impl Add<$t> for LoxValue {
+        impl ops::Add<$t> for LoxValue {
             type Output = LoxResult<Self>;
 
             fn add(self, rhs: $t) -> Self::Output {
@@ -407,7 +406,7 @@ macro_rules! impl_numeric {
             }
         }
 
-        impl Sub<$t> for LoxValue {
+        impl ops::Sub<$t> for LoxValue {
             type Output = LoxResult<Self>;
 
             fn sub(self, rhs: $t) -> Self::Output {
@@ -418,7 +417,7 @@ macro_rules! impl_numeric {
             }
         }
 
-        impl Mul<$t> for LoxValue {
+        impl ops::Mul<$t> for LoxValue {
             type Output = LoxResult<Self>;
 
             fn mul(self, rhs: $t) -> Self::Output {
@@ -429,7 +428,7 @@ macro_rules! impl_numeric {
             }
         }
 
-        impl Div<$t> for LoxValue {
+        impl ops::Div<$t> for LoxValue {
             type Output = LoxResult<Self>;
 
             fn div(self, rhs: $t) -> Self::Output {
@@ -445,7 +444,7 @@ macro_rules! impl_numeric {
 
 impl_numeric! { f32, f64, u8, u16, u32, u64, u128, i8, i16, i32, i64, i128 }
 
-impl Add for LoxValue {
+impl ops::Add for LoxValue {
     type Output = LoxResult<Self>;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -469,7 +468,7 @@ impl Add for LoxValue {
     }
 }
 
-impl Add<&str> for LoxValue {
+impl ops::Add<&str> for LoxValue {
     type Output = LoxResult<Self>;
 
     fn add(self, rhs: &str) -> Self::Output {
@@ -478,7 +477,7 @@ impl Add<&str> for LoxValue {
     }
 }
 
-impl Sub for LoxValue {
+impl ops::Sub for LoxValue {
     type Output = LoxResult<Self>;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -494,7 +493,7 @@ impl Sub for LoxValue {
     }
 }
 
-impl Mul for LoxValue {
+impl ops::Mul for LoxValue {
     type Output = LoxResult<Self>;
 
     fn mul(self, rhs: Self) -> Self::Output {
@@ -510,7 +509,7 @@ impl Mul for LoxValue {
     }
 }
 
-impl Div for LoxValue {
+impl ops::Div for LoxValue {
     type Output = LoxResult<Self>;
 
     fn div(self, rhs: Self) -> Self::Output {
@@ -526,7 +525,7 @@ impl Div for LoxValue {
     }
 }
 
-impl Neg for LoxValue {
+impl ops::Neg for LoxValue {
     type Output = LoxResult<Self>;
 
     fn neg(self) -> Self::Output {
@@ -540,7 +539,7 @@ impl Neg for LoxValue {
     }
 }
 
-impl Not for LoxValue {
+impl ops::Not for LoxValue {
     type Output = LoxResult<Self>;
 
     fn not(self) -> Self::Output {
@@ -558,7 +557,7 @@ impl<T> PartialOrd<T> for LoxValue
 where
     T: Into<LoxValue> + Clone,
 {
-    fn partial_cmp(&self, other: &T) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &T) -> Option<cmp::Ordering> {
         let other: Self = other.clone().into();
         match self {
             Self::Bool(b1) => {
@@ -701,36 +700,6 @@ impl Fn<(Vec<LoxValue>,)> for LoxValue {
         match self {
             Self::Function(func) => (func.ptr)(args.0),
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
-        }
-    }
-}
-
-impl ToTokens for LoxValue {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::Bool(b) => tokens.append_all(quote! { LoxValue::from(#b) }),
-            Self::Str(_) => {
-                let s = self.to_string();
-
-                tokens.append_all(quote! { LoxValue::from(#s) });
-            }
-            Self::Num(n) => tokens.append_all(quote! { LoxValue::from(#n) }),
-            Self::Arr(arr) => {
-                tokens.append_all(quote! { LoxValue::from });
-                tokens.append(Punct::new('(', Spacing::Alone));
-                tokens.append_all(quote! { vec! });
-                tokens.append(Punct::new('[', Spacing::Alone));
-                for value in arr.read().iter() {
-                    tokens.append_all(quote! { #value, });
-                }
-                tokens.append(Punct::new(']', Spacing::Joint));
-                tokens.append(Punct::new(')', Spacing::Alone));
-            }
-            Self::Function(_) => unimplemented!(
-                "tokens produced by Lox functions differ for statements and expressions, and so must be converted manually"
-            ),
-            Self::Instance(_) => todo!(),
-            Self::Nil => tokens.append_all(quote! { LoxValue::Nil }),
         }
     }
 }

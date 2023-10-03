@@ -109,4 +109,6 @@ macro_rules! lox_bindgen {
     };
 }
 
-pub use rulox_types::{extract, LoxFn, LoxValue};
+pub use rulox_types::extract;
+pub use rulox_types::LoxFn;
+pub use rulox_types::LoxValue;

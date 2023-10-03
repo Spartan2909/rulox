@@ -1,12 +1,25 @@
-use proc_macro2::{Punct, Spacing, TokenStream};
+use proc_macro2::Punct;
+use proc_macro2::Spacing;
+use proc_macro2::TokenStream;
 
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::quote;
+use quote::ToTokens;
+use quote::TokenStreamExt;
 
 use rulox_types::LoxValue;
 
-use syn::parse::{Parse, ParseStream};
+use syn::braced;
+use syn::bracketed;
+use syn::parenthesized;
+use syn::parse::Parse;
+use syn::parse::ParseStream;
 use syn::punctuated::Punctuated;
-use syn::{braced, bracketed, parenthesized, spanned::Spanned, token, BinOp, Ident, Token, UnOp};
+use syn::spanned::Spanned;
+use syn::token;
+use syn::BinOp;
+use syn::Ident;
+use syn::Token;
+use syn::UnOp;
 
 mod kw {
     syn::custom_keyword!(nil);

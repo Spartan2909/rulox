@@ -554,68 +554,6 @@ impl Not for LoxValue {
     }
 }
 
-impl BitOr for LoxValue {
-    type Output = LoxResult<Self>;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        if let Self::Bool(b1) = self {
-            if let Self::Bool(b2) = rhs {
-                Ok(LoxValue::from(b1 || b2))
-            } else {
-                Err(LoxError::TypeError(format!(
-                    "invalid operands for 'or': bool and {}",
-                    LoxValueType::from(rhs)
-                )))
-            }
-        } else {
-            Err(LoxError::TypeError(format!(
-                "invalid operands for 'or': {} and {}",
-                LoxValueType::from(self),
-                LoxValueType::from(rhs)
-            )))
-        }
-    }
-}
-
-impl BitOr<bool> for LoxValue {
-    type Output = LoxResult<Self>;
-
-    fn bitor(self, rhs: bool) -> Self::Output {
-        self | Self::Bool(rhs)
-    }
-}
-
-impl BitAnd for LoxValue {
-    type Output = LoxResult<Self>;
-
-    fn bitand(self, rhs: Self) -> Self::Output {
-        if let Self::Bool(b1) = self {
-            if let Self::Bool(b2) = rhs {
-                Ok(LoxValue::from(b1 && b2))
-            } else {
-                Err(LoxError::TypeError(format!(
-                    "invalid operands for 'and': bool and {}",
-                    LoxValueType::from(rhs)
-                )))
-            }
-        } else {
-            Err(LoxError::TypeError(format!(
-                "invalid operands for 'and': {} and {}",
-                LoxValueType::from(self),
-                LoxValueType::from(rhs)
-            )))
-        }
-    }
-}
-
-impl BitAnd<bool> for LoxValue {
-    type Output = LoxResult<Self>;
-
-    fn bitand(self, rhs: bool) -> Self::Output {
-        self & Self::Bool(rhs)
-    }
-}
-
 impl<T> PartialOrd<T> for LoxValue
 where
     T: Into<LoxValue> + Clone,

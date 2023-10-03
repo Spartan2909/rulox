@@ -406,6 +406,14 @@ impl Stmt {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum BinaryKind {
+    Simple,
+    Comparison,
+    And,
+    Or,
+}
+
 pub enum Expr {
     Literal(rulox_types::LoxValue),
     Array(Vec<Expr>),
@@ -428,7 +436,7 @@ pub enum Expr {
         left: Box<Expr>,
         operator: BinOp,
         right: Box<Expr>,
-        comparision: bool,
+        kind: BinaryKind,
     },
     Assign {
         name: Ident,
@@ -497,16 +505,39 @@ impl ToTokens for Expr {
                 left,
                 operator,
                 right,
-                comparision,
+                kind,
             } => {
-                if *comparision {
-                    tokens.append_all(
-                        quote! { LoxValue::from(LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
-                    );
-                } else {
-                    tokens.append_all(
-                        quote! { extract(LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
-                    );
+                match kind {
+                    BinaryKind::Simple => {
+                        tokens.append_all(
+                            quote! { extract(LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
+                        );
+                    }
+                    BinaryKind::Comparison => {
+                        tokens.append_all(
+                            quote! { LoxValue::from(LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
+                        );
+                    }
+                    BinaryKind::And => {
+                        tokens.append_all(quote! { {
+                            let _left = LoxValue::from(&#left);
+                            if _left.is_truthy() {
+                                LoxValue::from(&#right)
+                            } else {
+                                _left
+                            }
+                        } });
+                    }
+                    BinaryKind::Or => {
+                        tokens.append_all(quote! { {
+                            let _left = LoxValue::from(&#left);
+                            if _left.is_truthy() {
+                                _left
+                            } else {
+                                LoxValue::from(&#right)
+                            }
+                        } });
+                    }
                 }
             }
             Self::Assign { name, value } => tokens.append_all(quote! { #name = #value }),
@@ -548,12 +579,12 @@ impl Expr {
         while input.peek(kw::or) {
             let span = input.parse::<kw::or>()?.span();
             let right = Self::and(input)?;
-            let operator = BinOp::BitOr(Token![|](span));
+            let operator = BinOp::Or(Token![||](span));
             expr = Expr::Binary {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false,
+                kind: BinaryKind::Or
             }
         }
 
@@ -566,12 +597,12 @@ impl Expr {
         while input.peek(kw::and) {
             let span = input.parse::<kw::and>()?.span();
             let right = Self::equality(input)?;
-            let operator = BinOp::BitAnd(Token![&](span));
+            let operator = BinOp::And(Token![&&](span));
             expr = Expr::Binary {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false,
+                kind: BinaryKind::And,
             }
         }
 
@@ -588,7 +619,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: true,
+                kind: BinaryKind::Comparison
             };
         }
 
@@ -609,7 +640,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: true,
+                kind: BinaryKind::Comparison
             };
         }
 
@@ -626,7 +657,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false,
+                kind: BinaryKind::Simple
             }
         }
 
@@ -643,7 +674,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                comparision: false,
+                kind: BinaryKind::Simple
             }
         }
 

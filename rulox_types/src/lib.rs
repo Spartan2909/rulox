@@ -163,6 +163,14 @@ impl LoxValue {
             )
         }
     }
+
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            LoxValue::Bool(false) => false,
+            LoxValue::Nil => false,
+            _ => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

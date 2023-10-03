@@ -506,40 +506,34 @@ impl ToTokens for Expr {
                 operator,
                 right,
                 kind,
-            } => {
-                match kind {
-                    BinaryKind::Simple => {
-                        tokens.append_all(
-                            quote! { extract(#left #operator #right) },
-                        );
-                    }
-                    BinaryKind::Comparison => {
-                        tokens.append_all(
-                            quote! { LoxValue::from(#left #operator #right) },
-                        );
-                    }
-                    BinaryKind::And => {
-                        tokens.append_all(quote! { {
-                            let _left = #left;
-                            if _left.is_truthy() {
-                                #right
-                            } else {
-                                _left
-                            }
-                        } });
-                    }
-                    BinaryKind::Or => {
-                        tokens.append_all(quote! { {
-                            let _left = #left;
-                            if _left.is_truthy() {
-                                _left
-                            } else {
-                                #right
-                            }
-                        } });
-                    }
+            } => match kind {
+                BinaryKind::Simple => {
+                    tokens.append_all(quote! { extract(#left #operator #right) });
                 }
-            }
+                BinaryKind::Comparison => {
+                    tokens.append_all(quote! { LoxValue::from(#left #operator #right) });
+                }
+                BinaryKind::And => {
+                    tokens.append_all(quote! { {
+                        let _left = #left;
+                        if _left.is_truthy() {
+                            #right
+                        } else {
+                            _left
+                        }
+                    } });
+                }
+                BinaryKind::Or => {
+                    tokens.append_all(quote! { {
+                        let _left = #left;
+                        if _left.is_truthy() {
+                            _left
+                        } else {
+                            #right
+                        }
+                    } });
+                }
+            },
             Self::Assign { name, value } => tokens.append_all(quote! { #name = #value }),
         }
     }
@@ -584,7 +578,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Or
+                kind: BinaryKind::Or,
             }
         }
 
@@ -619,7 +613,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Comparison
+                kind: BinaryKind::Comparison,
             };
         }
 
@@ -640,7 +634,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Comparison
+                kind: BinaryKind::Comparison,
             };
         }
 
@@ -657,7 +651,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Simple
+                kind: BinaryKind::Simple,
             }
         }
 
@@ -674,7 +668,7 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Simple
+                kind: BinaryKind::Simple,
             }
         }
 

@@ -8,17 +8,17 @@
 mod shared;
 use shared::Shared;
 
-#[cfg(feature = "sync")]
-use std::sync::Arc as LoxRc;
 #[cfg(not(feature = "sync"))]
 use std::rc::Rc as LoxRc;
+#[cfg(feature = "sync")]
+use std::sync::Arc as LoxRc;
 
 use std::{
     collections::HashMap,
     error::Error,
     fmt,
     mem::size_of,
-    ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub, Deref},
+    ops::{Add, BitAnd, BitOr, Deref, Div, Mul, Neg, Not, Sub},
     vec,
 };
 
@@ -170,11 +170,7 @@ impl LoxValue {
     }
 
     pub fn is_truthy(&self) -> bool {
-        match self {
-            LoxValue::Bool(false) => false,
-            LoxValue::Nil => false,
-            _ => true,
-        }
+        !matches!(self, LoxValue::Bool(false) | LoxValue::Nil)
     }
 
     pub fn function(func: LoxFn) -> LoxValue {
@@ -458,7 +454,7 @@ impl Add for LoxValue {
             (LoxValue::Str(s1), LoxValue::Str(s2)) => {
                 s1.write().push_str(&s2.read());
                 Ok(LoxValue::Str(s1))
-            },
+            }
             (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
             (LoxValue::Arr(arr1), LoxValue::Arr(ref arr2)) => {
                 arr1.write().append(&mut arr2.write());
@@ -669,7 +665,9 @@ impl IntoIterator for LoxValue {
     fn into_iter(self) -> Self::IntoIter {
         match self {
             Self::Arr(arr) => LoxIterator::Array(arr.read().clone().into_iter()),
-            Self::Str(string) => LoxIterator::String(string.read().clone().into_bytes().into_iter()),
+            Self::Str(string) => {
+                LoxIterator::String(string.read().clone().into_bytes().into_iter())
+            }
             _ => panic!("cannot convert {} into iterator", LoxValueType::from(self)),
         }
     }
@@ -731,7 +729,10 @@ impl Iterator for LoxIterator {
         match self {
             LoxIterator::Array(iter) => iter.next(),
             LoxIterator::String(bytes) => Some(LoxValue::Str(
-                char::from_u32(next_code_point(bytes)?).unwrap().to_string().into(),
+                char::from_u32(next_code_point(bytes)?)
+                    .unwrap()
+                    .to_string()
+                    .into(),
             )),
         }
     }

@@ -11,61 +11,52 @@
 //! ```
 //! use rulox::*;
 //!
-//! fn main() {
-//!     lox! {
-//!         var a = 5;
+//! lox! {
+//!     var a = 5;
 //!
-//!         print a + 2;
-//!     }
+//!     print a + 2;
+//! }
 //!
-//!     let b: f64 = a.try_into().unwrap();
+//! let b: f64 = a.try_into().unwrap();
 //!
-//!     println!("{}", b);
+//! println!("{}", b);
+//! ```
+//!
+//! ```
+//! use rulox::*;
+//! lox! {
+//!     for (var i = 5; i > 0; i = i - 1) print i;
 //! }
 //! ```
 //!
 //! ```
 //! use rulox::*;
 //!
-//! fn main() {
-//!     lox! {
-//!         for (var i = 5; i > 0; i = i - 1) print i;
+//! lox! {
+//!     fun hello(name) {
+//!         print "Hello " + name + "! :)";
 //!     }
+//!
+//!     fun add_one(num) {
+//!         return num + 1;
+//!     }
+//!
+//!     hello("Alice");
 //! }
+//!
+//! rust_hello(LoxValue::from("Bob"));
+//!
+//! assert_eq!(rust_add_one(LoxValue::from(3)), LoxValue::from(4));
 //! ```
 //!
 //! ```
 //! use rulox::*;
 //!
-//! fn main() {
-//!     lox! {
-//!         fun hello(name) {
-//!             print "Hello " + name + "! :)";
-//!         }
+//! lox! {
+//!     var people = ["Bob", "Alice", "John"];
 //!
-//!         fun add_one(num) {
-//!             return num + 1;
-//!         }
-//!
-//!         hello("Alice");
-//!     }
-//!
-//!     rust_hello(LoxValue::from("Bob"));
-//!
-//!     assert_eq!(rust_add_one(LoxValue::from(3)), LoxValue::from(4));
-//! }
-//! ```
-//!
-//! ```
-//! use rulox::*;
-//!
-//! fn main() {
-//!     lox! {
-//!         var people = ["Bob", "Alice", "John"];
-//!
-//!         for (person in people) {
-//!             print "Hello " + person + "!";
-//!         }
+//!     for (person in people) {
+//!         print "Hello " + person + "!";
 //!     }
 //! }
 //! ```
@@ -75,16 +66,14 @@
 /// ```
 /// use rulox::*;
 ///
-/// fn main () {
-///     lox! {
-///         var hello = "hello ";
-///     }
+/// lox! {
+///     var hello = "hello ";
+/// }
 ///
-///     let world = "world";
+/// let world = "world";
 ///
-///     lox! {
-///         print hello + world;
-///     }
+/// lox! {
+///     print hello + world;
 /// }
 /// ```
 ///
@@ -101,12 +90,10 @@ pub use rulox_macro::lox;
 ///     "Hello ".to_string() + &name
 /// }
 ///
-/// fn main() {
-///     lox_bindgen!(fn hello(name) = lox_hello);
+/// lox_bindgen!(fn hello(name) = lox_hello);
 ///
-///     lox! {
-///         print lox_hello("Alice");
-///     }
+/// lox! {
+///     print lox_hello("Alice");
 /// }
 /// ```
 #[macro_export]

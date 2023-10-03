@@ -154,16 +154,12 @@ impl ToTokens for Stmt {
                 then_branch,
                 else_branch,
             } => {
-                let then_branch: &Stmt = &*then_branch;
-
                 tokens.append_all(quote! { if extract(#condition.try_into()) { #then_branch } });
                 if let Some(branch) = else_branch {
                     tokens.append_all(quote! { else { #branch } });
                 }
             }
             Self::While { condition, body } => {
-                let body: &Stmt = &*body;
-
                 tokens.append_all(quote! { while extract(#condition.try_into()) { #body } });
             }
             Self::For {
@@ -171,13 +167,9 @@ impl ToTokens for Stmt {
                 iterable,
                 body,
             } => {
-                let body: &Stmt = &*body;
-
                 tokens.append_all(quote! { for #name in #iterable.into_iter() { #body } });
             }
             Self::Loop { body } => {
-                let body: &Stmt = &*body;
-
                 tokens.append_all(quote! { loop { #body } });
             }
         }
@@ -489,12 +481,9 @@ impl ToTokens for Expr {
                 tokens.append(var.clone());
             }
             Self::Grouping(expr) => {
-                let expr: &Expr = &*expr;
                 expr.to_tokens(tokens);
             }
             Self::Call { callee, arguments } => {
-                let callee: &Expr = &*callee;
-
                 let mut inner = TokenStream::new();
                 inner.append_separated(arguments, Punct::new(',', Spacing::Alone));
 
@@ -502,7 +491,6 @@ impl ToTokens for Expr {
             }
             Self::Unary { operator, expr } => {
                 operator.to_tokens(tokens);
-                let expr: &Expr = &*expr;
                 expr.to_tokens(tokens);
             }
             Self::Binary {
@@ -511,8 +499,6 @@ impl ToTokens for Expr {
                 right,
                 comparision,
             } => {
-                let left: &Expr = &*left;
-                let right: &Expr = &*right;
                 if *comparision {
                     tokens.append_all(
                         quote! { LoxValue::from(LoxValue::from(&#left) #operator LoxValue::from(&#right)) },
@@ -523,10 +509,7 @@ impl ToTokens for Expr {
                     );
                 }
             }
-            Self::Assign { name, value } => {
-                let value: &Expr = &*value;
-                tokens.append_all(quote! { #name = #value })
-            }
+            Self::Assign { name, value } => tokens.append_all(quote! { #name = #value }),
         }
     }
 }
@@ -724,7 +707,7 @@ impl Expr {
             bracketed!(content in input);
 
             let items: Punctuated<Expr, Token![,]> = content.parse_terminated(Expr::parse)?;
-            let items = Vec::from_iter(items.into_iter());
+            let items = Vec::from_iter(items);
 
             Ok(Self::Array(items))
         } else if input.peek(token::Paren) {

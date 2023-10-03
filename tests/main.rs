@@ -1,4 +1,4 @@
-use rulox::transpiler::*;
+use rulox::*;
 
 #[test]
 fn var_declaration() {
@@ -186,7 +186,7 @@ fn hello(name: String) -> String {
 
 #[test]
 fn bindgen() {
-    lox_bindgen!(fn hello(name));
+    lox_bindgen!(fn hello(name) = lox_hello);
 
     lox! {
         print lox_hello("Alice");

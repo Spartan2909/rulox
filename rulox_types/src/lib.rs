@@ -23,6 +23,8 @@ use std::mem;
 use std::ops;
 use std::ops::Deref as _;
 use std::vec;
+use std::process::Termination;
+use std::process::ExitCode;
 
 /// An error that occurred when attempting to use a LoxValue in an invalid location.
 #[derive(Debug, Clone)]
@@ -591,6 +593,15 @@ where
             Self::Function(..) => None,
             Self::Instance(_) => None,
             Self::Nil => None,
+        }
+    }
+}
+
+impl Termination for LoxValue {
+    fn report(self) -> ExitCode {
+        match self {
+            Self::Num(n) => ExitCode::from(n as u8),
+            _ => ExitCode::SUCCESS,
         }
     }
 }

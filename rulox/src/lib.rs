@@ -9,7 +9,7 @@
 //!
 //! # Examples
 //! ```
-//! use rulox::*;
+//! use rulox::prelude::*;
 //!
 //! lox! {
 //!     var a = 5;
@@ -17,20 +17,20 @@
 //!     print a + 2;
 //! }
 //!
-//! let b: f64 = a.try_into().unwrap();
+//! let b: f64 = a.get().try_into().unwrap();
 //!
 //! println!("{}", b);
 //! ```
 //!
 //! ```
-//! use rulox::*;
+//! use rulox::prelude::*;
 //! lox! {
 //!     for (var i = 5; i > 0; i = i - 1) print i;
 //! }
 //! ```
 //!
 //! ```
-//! use rulox::*;
+//! use rulox::prelude::*;
 //!
 //! lox! {
 //!     fun hello(name) {
@@ -44,13 +44,13 @@
 //!     hello("Alice");
 //! }
 //!
-//! rust_hello(LoxValue::from("Bob"));
+//! hello.get().lox_call(vec![LoxValue::from("Bob")]);
 //!
-//! assert_eq!(rust_add_one(LoxValue::from(3)), LoxValue::from(4));
+//! assert_eq!(add_one.get().lox_call(vec![LoxValue::from(3)]), LoxValue::from(4));
 //! ```
 //!
 //! ```
-//! use rulox::*;
+//! use rulox::prelude::*;
 //!
 //! lox! {
 //!     var people = ["Bob", "Alice", "John"];
@@ -64,13 +64,13 @@
 /// Parses Lox code and converts it to Rust.
 /// # Examples
 /// ```
-/// use rulox::*;
+/// use rulox::prelude::*;
 ///
 /// lox! {
 ///     var hello = "hello ";
 /// }
 ///
-/// let world = "world";
+/// let world = LoxVariable::new("world");
 ///
 /// lox! {
 ///     print hello + world;
@@ -84,13 +84,14 @@ pub use rulox_macro::lox;
 /// Generates a rulox binding for a Rust function.
 /// # Examples
 /// ```
-/// use rulox::*;
+/// use rulox::prelude::*;
+/// use rulox::lox_bindgen;
 ///
 /// fn hello(name: String) -> String {
 ///     "Hello ".to_string() + &name
 /// }
 ///
-/// lox_bindgen!(fn hello(name) = lox_hello);
+/// lox_bindgen!(fn hello(name) as lox_hello);
 ///
 /// lox! {
 ///     print lox_hello("Alice");
@@ -98,17 +99,32 @@ pub use rulox_macro::lox;
 /// ```
 #[macro_export]
 macro_rules! lox_bindgen {
-    ( fn $rust_name:ident ( $( $arg:ident ),* ) = $lox_name:ident ) => {
-        fn $lox_name(mut args: Vec<$crate::LoxValue>) -> LoxValue {
-            let mut _drain = args.drain(..);
-            $(
-                let $arg = _drain.next().unwrap();
-            )*
-            $rust_name( $( $arg.try_into().unwrap() )* ).into()
-        }
+    ( fn $rust_name:ident ( $( $arg:ident ),* ) as $lox_name:ident ) => {
+        let $lox_name = LoxVariable::new(
+            LoxValue::function(LoxFn::new(|mut args: Vec<$crate::LoxValue>| -> LoxValue {
+                let mut _drain = args.drain(..);
+                $(
+                    let $arg = _drain.next().unwrap();
+                )*
+                $rust_name( $( $arg.try_into().unwrap() )* ).into()
+                },
+                vec![$( stringify!($arg) ),*]
+            ))
+        );
     };
 }
 
 pub use rulox_types::extract;
+pub use rulox_types::LoxCallable;
 pub use rulox_types::LoxFn;
 pub use rulox_types::LoxValue;
+pub use rulox_types::LoxVariable;
+
+pub mod prelude {
+    pub use crate::extract;
+    pub use crate::lox;
+    pub use crate::LoxCallable as _;
+    pub use crate::LoxFn;
+    pub use crate::LoxValue;
+    pub use crate::LoxVariable;
+}

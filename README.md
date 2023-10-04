@@ -9,7 +9,7 @@ It is based on the Lox language from [Crafting Interpreters](https://craftingint
 
 # Examples
 ```rust
-use rulox::*;
+use rulox::prelude::*;
 
 fn main() {
     lox! {
@@ -25,7 +25,7 @@ fn main() {
 ```
 
 ```rust
-use rulox::*;
+use rulox::prelude::*;
 
 fn main() {
     lox! {
@@ -35,7 +35,7 @@ fn main() {
 ```
 
 ```rust
-use rulox::*;
+use rulox::prelude::*;
 
 fn main() {
     lox! {
@@ -55,7 +55,7 @@ fn main() {
 ```
 
 ```rust
-use rulox::*;
+use rulox::prelude::*;
 
 fn main() {
     lox! {

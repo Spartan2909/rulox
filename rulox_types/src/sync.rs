@@ -1,5 +1,7 @@
 mod impls;
 
+use crate::LoxValue;
+
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
@@ -33,3 +35,25 @@ pub struct ReadGuard<'a, T>(RwLockReadGuard<'a, T>);
 
 #[derive(Debug)]
 pub struct WriteGuard<'a, T>(RwLockWriteGuard<'a, T>);
+
+pub struct LoxVariable(Shared<LoxValue>);
+
+impl LoxVariable {
+    pub fn new<T: Into<LoxValue>>(value: T) -> LoxVariable {
+        LoxVariable(Shared::new(value.into()))
+    }
+
+    pub fn get(&self) -> LoxValue {
+        self.0.read().clone()
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn overwrite(&self, value: LoxValue) {
+        *self.0.write() = value;
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn close_over(&self) -> LoxVariable {
+        LoxVariable(self.0.clone())
+    }
+}

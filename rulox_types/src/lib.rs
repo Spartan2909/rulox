@@ -1,19 +1,15 @@
-#![feature(fn_traits, unboxed_closures)]
-
 //! `rulox_types` is a collection of types used by the `rulox` crate
 //! to represent dynamically typed values.
 
 #[cfg_attr(feature = "sync", path = "sync.rs")]
 #[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
 mod shared;
+pub use shared::LoxVariable;
 use shared::Shared;
 
 mod to_tokens;
 
-#[cfg(not(feature = "sync"))]
-use std::rc::Rc as LoxRc;
-#[cfg(feature = "sync")]
-use std::sync::Arc as LoxRc;
+use std::rc::Rc;
 
 use std::cmp;
 use std::collections::HashMap;
@@ -22,9 +18,10 @@ use std::fmt;
 use std::mem;
 use std::ops;
 use std::ops::Deref as _;
-use std::vec;
-use std::process::Termination;
 use std::process::ExitCode;
+use std::process::Termination;
+use std::ptr;
+use std::vec;
 
 /// An error that occurred when attempting to use a LoxValue in an invalid location.
 #[derive(Debug, Clone)]
@@ -83,7 +80,8 @@ pub enum LoxValueType {
     Str,
     Num,
     Arr,
-    Function(Vec<String>),
+    Function(Vec<&'static str>),
+    Class,
     Instance(String),
     Nil,
 }
@@ -96,6 +94,7 @@ impl fmt::Display for LoxValueType {
             Self::Num => write!(f, "number"),
             Self::Arr => write!(f, "array"),
             Self::Function(params) => write!(f, "function({:#?})", params),
+            Self::Class => write!(f, "class"),
             Self::Instance(class) => write!(f, "instance of {class}"),
             Self::Nil => write!(f, "nil"),
         }
@@ -112,7 +111,9 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Num(_) => Self::Num,
                     LoxValue::Arr(_) => Self::Arr,
                     LoxValue::Function(f) => Self::Function(f.params.to_vec()),
-                    LoxValue::Instance(instance) => Self::Instance(instance.read().class.clone()),
+                    LoxValue::BoundMethod(f, _) => Self::Function(f.params.to_vec()),
+                    LoxValue::Class(_) => Self::Class,
+                    LoxValue::Instance(instance) => Self::Instance(instance.read().class.name.clone()),
                     LoxValue::Nil => Self::Nil,
                 }
             }
@@ -129,8 +130,9 @@ pub enum LoxValue {
     Str(Shared<String>),
     Num(f64),
     Arr(Shared<Vec<Self>>),
-    Function(LoxRc<LoxFn>),
-    //Function(Box<dyn LoxFn(Vec<LoxValue>) -> LoxValue>, Vec<String>),
+    Function(Rc<LoxFn>),
+    BoundMethod(Rc<LoxFn>, Shared<LoxInstance>),
+    Class(Rc<LoxClass>),
     Instance(Shared<LoxInstance>),
     Nil,
 }
@@ -175,33 +177,39 @@ impl LoxValue {
     }
 
     pub fn function(func: LoxFn) -> LoxValue {
-        LoxValue::Function(LoxRc::new(func))
+        LoxValue::Function(Rc::new(func))
     }
-}
 
-#[derive(Debug, PartialEq)]
-pub struct LoxFn {
-    ptr: fn(Vec<LoxValue>) -> LoxValue,
-    params: Vec<String>,
-    method: bool,
-}
-
-impl LoxFn {
-    pub fn new(ptr: fn(Vec<LoxValue>) -> LoxValue, params: Vec<String>, method: bool) -> Self {
-        Self {
-            ptr,
-            params,
-            method,
+    fn get_impl(&self, key: &str) -> Option<LoxValue> {
+        if let LoxValue::Instance(instance) = self {
+            if let Some(attr) = instance.read().attributes.get(key) {
+                Some(attr.clone())
+            } else {
+                instance
+                    .read()
+                    .class
+                    .methods
+                    .get(key)
+                    .map(|func| LoxValue::BoundMethod(Rc::clone(func), instance.clone()))
+            }
+        } else {
+            None
         }
     }
-}
 
-/// An instance of a Lox class.
-#[derive(Debug, Clone, PartialEq)]
-pub struct LoxInstance {
-    class: String,
-    attributes: HashMap<String, LoxValue>,
-    methods: Vec<String>,
+    pub fn get(&self, key: &str) -> LoxValue {
+        self.get_impl(key)
+            .unwrap_or_else(|| panic!("{self} has no attribute '{key}'"))
+    }
+
+    pub fn set(&self, key: String, value: LoxValue) -> LoxValue {
+        if let LoxValue::Instance(instance) = self {
+            instance.write().attributes.insert(key, value.clone());
+            value
+        } else {
+            panic!("cannot set attribute of {self}")
+        }
+    }
 }
 
 impl fmt::Debug for LoxValue {
@@ -209,10 +217,13 @@ impl fmt::Debug for LoxValue {
         match self {
             Self::Bool(b) => write!(f, "Bool({b})"),
             Self::Str(s) => write!(f, "Str({})", s.read().deref()),
-
             Self::Num(n) => write!(f, "Num({n})"),
             Self::Arr(a) => write!(f, "Arr({:#?})", a),
             Self::Function(func) => write!(f, "Function({:#?})", func.params),
+            Self::BoundMethod(func, instance) => {
+                write!(f, "BoundMethod({:#?}, {:#?}", func.params, instance)
+            }
+            Self::Class(class) => write!(f, "Class({:#?})", class),
             Self::Instance(_) => todo!(),
             Self::Nil => write!(f, "Nil"),
         }
@@ -249,22 +260,23 @@ impl fmt::Display for LoxValue {
             }
             Self::Arr(values) => {
                 let mut buf = "[".to_string();
-                for value in values.read().iter() {
+                for value in values.read().iter().take(values.read().len() - 1) {
                     buf += &(value.to_string() + ", ");
                 }
-
-                // Find a better way of doing this
-                buf.pop();
-                buf.pop();
+                if let Some(value) = values.read().last() {
+                    buf += &value.to_string();
+                }
 
                 buf += "]";
                 write!(f, "{}", buf)
             }
-            Self::Function(..) => {
-                write!(f, "function")
+            Self::Function(_) => {
+                write!(f, "<function>")
             }
+            Self::BoundMethod(_, _) => write!(f, "<bound method>"),
+            Self::Class(_) => write!(f, "<class>"),
             Self::Instance(instance) => {
-                write!(f, "<Instance of {}>", instance.read().class)
+                write!(f, "<instance of {}>", instance.read().class.name)
             }
             Self::Nil => {
                 write!(f, "nil")
@@ -590,7 +602,9 @@ where
                     None
                 }
             }
-            Self::Function(..) => None,
+            Self::Function(_) => None,
+            Self::BoundMethod(_, _) => None,
+            Self::Class(_) => None,
             Self::Instance(_) => None,
             Self::Nil => None,
         }
@@ -686,32 +700,71 @@ impl Iterator for LoxIterator {
     }
 }
 
-impl FnOnce<(Vec<LoxValue>,)> for LoxValue {
-    type Output = LoxValue;
+pub struct LoxFn {
+    fun: Box<dyn Fn(Vec<LoxValue>) -> LoxValue>,
+    params: Vec<&'static str>,
+}
 
-    extern "rust-call" fn call_once(self, args: (Vec<LoxValue>,)) -> Self::Output {
+impl LoxFn {
+    #[doc(hidden)]
+    pub fn new<F: Fn(Vec<LoxValue>) -> LoxValue + 'static>(
+        fun: F,
+        params: Vec<&'static str>,
+    ) -> Self {
+        Self {
+            fun: Box::new(fun),
+            params,
+        }
+    }
+}
+
+impl fmt::Debug for LoxFn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LoxFn")
+            .field("params", &self.params)
+            .finish()
+    }
+}
+
+impl PartialEq for LoxFn {
+    fn eq(&self, other: &Self) -> bool {
+        let ptr1: *const _ = self.fun.as_ref();
+        let ptr2: *const _ = other.fun.as_ref();
+        ptr::eq(ptr1 as *const (), ptr2 as *const ()) && self.params == other.params
+    }
+}
+
+/// An instance of a Lox class.
+#[derive(Debug, PartialEq)]
+pub struct LoxInstance {
+    class: Rc<LoxClass>,
+    attributes: HashMap<String, LoxValue>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct LoxClass {
+    name: String,
+    initialiser: Option<Rc<LoxFn>>,
+    methods: HashMap<String, Rc<LoxFn>>,
+    superclass: Option<Shared<LoxClass>>,
+}
+
+pub trait LoxCallable {
+    fn lox_call(&self, args: Vec<LoxValue>) -> LoxValue;
+}
+
+impl LoxCallable for LoxValue {
+    fn lox_call(&self, args: Vec<LoxValue>) -> LoxValue {
         match self {
-            Self::Function(func) => (func.ptr)(args.0),
+            Self::Function(func) => (func.fun)(args),
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
 }
 
-impl FnMut<(Vec<LoxValue>,)> for LoxValue {
-    extern "rust-call" fn call_mut(&mut self, args: (Vec<LoxValue>,)) -> Self::Output {
-        match self {
-            Self::Function(func) => (func.ptr)(args.0),
-            _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
-        }
-    }
-}
-
-impl Fn<(Vec<LoxValue>,)> for LoxValue {
-    extern "rust-call" fn call(&self, args: (Vec<LoxValue>,)) -> Self::Output {
-        match self {
-            Self::Function(func) => (func.ptr)(args.0),
-            _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
-        }
+impl<F: Fn(Vec<LoxValue>) -> LoxValue> LoxCallable for F {
+    fn lox_call(&self, args: Vec<LoxValue>) -> LoxValue {
+        self(args)
     }
 }
 

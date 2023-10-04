@@ -1,11 +1,3 @@
-use proc_macro2::Punct;
-use proc_macro2::Spacing;
-use proc_macro2::TokenStream;
-
-use quote::quote;
-use quote::ToTokens;
-use quote::TokenStreamExt;
-
 use rulox_types::LoxValue;
 
 use syn::braced;
@@ -27,6 +19,7 @@ mod kw {
     syn::custom_keyword!(and);
     syn::custom_keyword!(or);
     syn::custom_keyword!(fun);
+    syn::custom_keyword!(class);
 }
 
 pub struct LoxProgram {
@@ -45,21 +38,40 @@ impl Parse for LoxProgram {
     }
 }
 
+pub struct Function {
+    pub name: Ident,
+    pub params: Vec<Ident>,
+    pub body: Box<Stmt>,
+}
+
+impl Parse for Function {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let name: Ident = input.parse()?;
+
+        let content;
+        parenthesized!(content in input);
+        let parameters = content.parse_terminated(Ident::parse, Token![,])?;
+
+        let body = Stmt::block(input)?;
+
+        Ok(Function {
+            name,
+            params: parameters.into_iter().collect(),
+            body: Box::new(body),
+        })
+    }
+}
+
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),
     Break,
     Var {
         name: Ident,
-        initializer: Expr,
-        implicit_nil: bool,
+        initialiser: Option<Expr>,
     },
     Return(Expr),
-    Function {
-        name: Ident,
-        params: Vec<Ident>,
-        body: Box<Stmt>,
-    },
+    Function(Function),
     Block(Vec<Stmt>),
     If {
         condition: Expr,
@@ -78,114 +90,11 @@ pub enum Stmt {
     Loop {
         body: Box<Stmt>,
     },
-}
-
-impl ToTokens for Stmt {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::Expr(expr) => {
-                expr.to_tokens(tokens);
-                tokens.append(Punct::new(';', Spacing::Alone));
-            }
-            Self::Print(expr) => {
-                tokens.append_all(quote! { println!("{}", #expr); });
-                tokens.append(Punct::new(';', Spacing::Alone));
-            }
-            Self::Break => {
-                tokens.append_all(quote! { break; });
-            }
-            Self::Var {
-                name,
-                initializer,
-                implicit_nil,
-            } => {
-                if *implicit_nil {
-                    tokens.append_all(quote! { #[allow(unused_assignments, unused_mut)] });
-                } else {
-                    tokens.append_all(quote! { #[allow(unused_mut)] });
-                }
-
-                tokens.append_all(quote! { let mut #name = #initializer; });
-            }
-            Self::Return(expr) => {
-                tokens.append_all(quote! { return #expr; });
-            }
-            Self::Function { name, params, body } => {
-                tokens.append_all(quote! { fn #name(_args: Vec<LoxValue>) -> LoxValue });
-
-                let mut expr_body = TokenStream::new();
-                for (i, param) in params.iter().enumerate() {
-                    expr_body.append_all(quote! { let #param = _args[#i].clone(); });
-                }
-
-                body.to_tokens(&mut expr_body);
-
-                tokens
-                    .append_all(quote! { { #expr_body #[allow(unreachable_code)] LoxValue::Nil } });
-
-                let rust_name = String::from("rust_") + &name.to_string();
-                let rust_name = Ident::new(&rust_name, proc_macro2::Span::call_site());
-
-                let mut params_tokens = TokenStream::new();
-                for param in params {
-                    params_tokens.append_all(quote! { #param: LoxValue, });
-                }
-
-                let mut args = TokenStream::new();
-                args.append_separated(params, Punct::new(',', Spacing::Alone));
-
-                tokens.append_all(quote! {
-                    fn #rust_name(#params_tokens) -> LoxValue {
-                        #name(vec![#args])
-                    }
-                });
-
-                let mut params_tokens = TokenStream::new();
-                for param in params {
-                    let name = param.to_string();
-                    syn::LitStr::new(&name, param.span()).to_tokens(&mut params_tokens);
-                    params_tokens.append_all(quote! { .to_string(), });
-                }
-
-                tokens.append_all(quote! {
-                    #[allow(unused_mut, unused_variables)]
-                    let mut #name = LoxValue::function(LoxFn::new(#name, vec![#params_tokens], false));
-                });
-            }
-            Self::Block(block) => {
-                let mut inner = TokenStream::new();
-
-                for stmt in block {
-                    stmt.to_tokens(&mut inner);
-                }
-
-                tokens.append_all(quote! { { #inner } })
-            }
-            Self::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                tokens.append_all(quote! { if extract(#condition.try_into()) { #then_branch } });
-                if let Some(branch) = else_branch {
-                    tokens.append_all(quote! { else { #branch } });
-                }
-            }
-            Self::While { condition, body } => {
-                tokens.append_all(quote! { while extract(#condition.try_into()) { #body } });
-            }
-            Self::For {
-                name,
-                iterable,
-                body,
-            } => {
-                tokens.append_all(quote! { for #name in #iterable.into_iter() { #body } });
-            }
-            Self::Loop { body } => {
-                tokens.append_all(quote! { loop { #body } });
-            }
-        }
-    }
+    Class {
+        name: Ident,
+        methods: Vec<Function>,
+        superclass: Option<Ident>,
+    },
 }
 
 impl Parse for Stmt {
@@ -200,6 +109,8 @@ impl Stmt {
             Self::var_declaration(input)
         } else if input.peek(kw::fun) {
             Self::function(input)
+        } else if input.peek(kw::class) {
+            Self::class(input)
         } else {
             Self::statement(input)
         }
@@ -210,20 +121,16 @@ impl Stmt {
 
         let name: Ident = input.parse()?;
 
-        let (initializer, implicit_nil) = if input.peek(Token![=]) {
+        let initialiser = if input.peek(Token![=]) {
             input.parse::<Token![=]>()?;
-            (input.parse()?, false)
+            Some(input.parse()?)
         } else {
-            (Expr::Literal(LoxValue::Nil), true)
+            None
         };
 
         input.parse::<Token![;]>()?;
 
-        Ok(Self::Var {
-            name,
-            initializer,
-            implicit_nil,
-        })
+        Ok(Self::Var { name, initialiser })
     }
 
     fn function(input: ParseStream) -> syn::Result<Self> {
@@ -233,18 +140,24 @@ impl Stmt {
 
         input.parse::<kw::fun>()?;
 
+        Ok(Self::Function(input.parse()?))
+    }
+
+    fn class(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<kw::fun>()?;
         let name: Ident = input.parse()?;
 
+        let mut methods = vec![];
         let content;
-        parenthesized!(content in input);
-        let parameters = content.parse_terminated(Ident::parse, Token![,])?;
+        braced!(content in input);
+        while !content.is_empty() {
+            methods.push(input.parse()?);
+        }
 
-        let body = Self::block(input)?;
-
-        Ok(Self::Function {
+        Ok(Self::Class {
             name,
-            params: Vec::from_iter(parameters),
-            body: Box::new(body),
+            methods,
+            superclass: None,
         })
     }
 
@@ -418,24 +331,14 @@ impl Stmt {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum BinaryKind {
-    Simple,
-    Comparison,
-    And,
-    Or,
-}
-
 pub enum Expr {
     Literal(rulox_types::LoxValue),
     Array(Vec<Expr>),
-    #[allow(dead_code)]
     Function {
         params: Vec<Ident>,
         body: Box<Stmt>,
     },
     Variable(Ident),
-    Grouping(Box<Expr>),
     Call {
         callee: Box<Expr>,
         arguments: Vec<Expr>,
@@ -448,107 +351,11 @@ pub enum Expr {
         left: Box<Expr>,
         operator: BinOp,
         right: Box<Expr>,
-        kind: BinaryKind,
     },
     Assign {
         name: Ident,
         value: Box<Expr>,
     },
-}
-
-impl ToTokens for Expr {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::Literal(value) => {
-                if let LoxValue::Function(..) = value {
-                    todo!()
-                } else {
-                    value.to_tokens(tokens);
-                }
-            }
-            Self::Array(arr) => {
-                let mut inner = TokenStream::new();
-                inner.append_separated(arr, Punct::new(',', Spacing::Alone));
-
-                tokens.append_all(quote! { LoxValue::from(vec![#inner]) })
-            }
-            Self::Function { params, body } => {
-                let mut inner = TokenStream::new();
-                inner.append_all(quote! { |_args: Vec<LoxValue>| -> LoxValue });
-
-                let mut expr_body = TokenStream::new();
-                for (i, param) in params.iter().enumerate() {
-                    expr_body.append_all(quote! { let #param = _args[#i].clone(); });
-                }
-
-                body.to_tokens(&mut expr_body);
-
-                inner
-                    .append_all(quote! { { #expr_body #[allow(unreachable_code)] LoxValue::Nil } });
-
-                let mut params_tokens = TokenStream::new();
-                for param in params {
-                    let name = param.to_string();
-                    syn::LitStr::new(&name, param.span()).to_tokens(&mut params_tokens);
-                    params_tokens.append_all(quote! { .to_string(), });
-                }
-
-                tokens.append_all(
-                    quote! { LoxValue::function(LoxFn::new(#inner, vec![#params_tokens], false)) },
-                );
-            }
-            Self::Variable(var) => {
-                tokens.append_all(quote! { #var.clone() });
-            }
-            Self::Grouping(expr) => {
-                expr.to_tokens(tokens);
-            }
-            Self::Call { callee, arguments } => {
-                let mut inner = TokenStream::new();
-                inner.append_separated(arguments, Punct::new(',', Spacing::Alone));
-
-                tokens.append_all(quote! { #callee(vec![#inner]) });
-            }
-            Self::Unary { operator, expr } => {
-                operator.to_tokens(tokens);
-                expr.to_tokens(tokens);
-            }
-            Self::Binary {
-                left,
-                operator,
-                right,
-                kind,
-            } => match kind {
-                BinaryKind::Simple => {
-                    tokens.append_all(quote! { extract(#left #operator #right) });
-                }
-                BinaryKind::Comparison => {
-                    tokens.append_all(quote! { LoxValue::from(#left #operator #right) });
-                }
-                BinaryKind::And => {
-                    tokens.append_all(quote! { {
-                        let _left = #left;
-                        if _left.is_truthy() {
-                            #right
-                        } else {
-                            _left
-                        }
-                    } });
-                }
-                BinaryKind::Or => {
-                    tokens.append_all(quote! { {
-                        let _left = #left;
-                        if _left.is_truthy() {
-                            _left
-                        } else {
-                            #right
-                        }
-                    } });
-                }
-            },
-            Self::Assign { name, value } => tokens.append_all(quote! { #name = #value }),
-        }
-    }
 }
 
 impl Parse for Expr {
@@ -590,7 +397,6 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Or,
             }
         }
 
@@ -608,7 +414,6 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::And,
             }
         }
 
@@ -625,7 +430,6 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Comparison,
             };
         }
 
@@ -646,7 +450,6 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Comparison,
             };
         }
 
@@ -663,7 +466,6 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Simple,
             }
         }
 
@@ -680,7 +482,6 @@ impl Expr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                kind: BinaryKind::Simple,
             }
         }
 
@@ -750,8 +551,7 @@ impl Expr {
         } else if input.peek(token::Paren) {
             let content;
             parenthesized!(content in input);
-            let expr = Self::parse(&content)?;
-            Ok(Self::Grouping(Box::new(expr)))
+            Self::parse(&content)
         } else {
             Ok(Self::Variable(input.parse()?))
         }

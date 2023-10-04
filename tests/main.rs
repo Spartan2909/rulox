@@ -1,4 +1,5 @@
-use rulox::*;
+use rulox::lox_bindgen;
+use rulox::prelude::*;
 
 #[test]
 fn var_declaration() {
@@ -15,7 +16,7 @@ fn var_access() {
         var value = 5;
     }
 
-    let _: f64 = value.try_into().unwrap();
+    assert_eq!(value.get(), 5);
 }
 
 #[test]
@@ -31,7 +32,7 @@ fn bools() {
         var b = true or false;
     }
 
-    let value: bool = b.try_into().unwrap();
+    let value: bool = b.get().try_into().unwrap();
 
     assert!(value);
 }
@@ -72,7 +73,7 @@ fn if_statement() {
         }
     }
 
-    assert_eq!(a, LoxValue::Num(5.0))
+    assert_eq!(a.get(), 5)
 }
 
 #[test]
@@ -86,7 +87,7 @@ fn while_loop() {
         }
     }
 
-    assert_eq!(a, 0);
+    assert_eq!(a.get(), 0);
 }
 
 #[test]
@@ -99,7 +100,7 @@ fn for_loop() {
         }
     }
 
-    assert_eq!(a, -4);
+    assert_eq!(a.get(), -4);
 }
 
 #[test]
@@ -118,7 +119,7 @@ fn function() {
         hello("Bob");
     }
 
-    hello(vec![LoxValue::from("Alice")]);
+    hello.get().lox_call(vec![LoxValue::from("Alice")].into());
 }
 
 #[test]
@@ -129,7 +130,10 @@ fn return_test() {
         }
     }
 
-    assert_eq!(rust_add_one(LoxValue::Num(3.0)), LoxValue::Num(4.0))
+    assert_eq!(
+        add_one.get().lox_call(vec![LoxValue::Num(3.0)]),
+        LoxValue::Num(4.0)
+    )
 }
 
 #[test]
@@ -138,8 +142,8 @@ fn index_arr() {
         var list = [true, false];
     }
 
-    let b1: bool = list.index(0).try_into().unwrap();
-    let b2: bool = list.index(LoxValue::Num(1.0)).clone().try_into().unwrap();
+    let b1: bool = list.get().index(0).try_into().unwrap();
+    let b2: bool = list.get().index(LoxValue::Num(1.0)).try_into().unwrap();
 
     assert!(b1);
     assert!(!b2);
@@ -166,7 +170,30 @@ fn fibonacci() {
         }
     }
 
-    assert_eq!(rust_fib(LoxValue::Num(5.0)), 8)
+    assert_eq!(fib.get().lox_call(vec![LoxValue::Num(5.0)]), 8)
+}
+
+#[test]
+fn mutual_recursion() {
+    lox! {
+        fun a(n) {
+            if (n > 0) {
+                b(n - 1);
+            } else {
+                print "Ended on 'a'";
+            }
+        }
+
+        fun b(n) {
+            if (n > 0) {
+                a(n - 1);
+            } else {
+                print "Ended on 'b'";
+            }
+        }
+    }
+
+    a.get().lox_call(vec![LoxValue::Num(4.0)]);
 }
 
 /*
@@ -186,7 +213,7 @@ fn hello(name: String) -> String {
 
 #[test]
 fn bindgen() {
-    lox_bindgen!(fn hello(name) = lox_hello);
+    lox_bindgen!(fn hello(name) as lox_hello);
 
     lox! {
         print lox_hello("Alice");
@@ -199,5 +226,8 @@ fn inline_function() {
         var add_one = fun(num) return num + 1; ;
     }
 
-    assert_eq!(add_one(vec![LoxValue::Num(1.5)]), LoxValue::Num(2.5));
+    assert_eq!(
+        add_one.get().lox_call(vec![LoxValue::Num(1.5)]),
+        LoxValue::Num(2.5)
+    );
 }

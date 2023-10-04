@@ -17,7 +17,6 @@ use std::error::Error;
 use std::fmt;
 use std::mem;
 use std::ops;
-use std::ops::Deref as _;
 use std::process::ExitCode;
 use std::process::Termination;
 use std::ptr;
@@ -127,7 +126,7 @@ loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }
 #[derive(Clone)]
 pub enum LoxValue {
     Bool(bool),
-    Str(Shared<String>),
+    Str(Rc<String>),
     Num(f64),
     Arr(Shared<Vec<Self>>),
     Function(Rc<LoxFn>),
@@ -216,7 +215,7 @@ impl fmt::Debug for LoxValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Bool(b) => write!(f, "Bool({b})"),
-            Self::Str(s) => write!(f, "Str({})", s.read().deref()),
+            Self::Str(s) => write!(f, "Str({})", s),
             Self::Num(n) => write!(f, "Num({n})"),
             Self::Arr(a) => write!(f, "Arr({:#?})", a),
             Self::Function(func) => write!(f, "Function({:#?})", func.params),
@@ -254,7 +253,7 @@ impl fmt::Display for LoxValue {
             Self::Bool(value) => {
                 write!(f, "{}", value)
             }
-            Self::Str(string) => f.write_str(&string.read()),
+            Self::Str(string) => f.write_str(&string),
             Self::Num(value) => {
                 write!(f, "{}", value)
             }
@@ -356,7 +355,7 @@ impl TryFrom<LoxValue> for String {
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
         if let LoxValue::Str(string) = value {
-            Ok(string.read().clone())
+            Ok(string.to_string())
         } else {
             Err(LoxError::TypeError(format!(
                 "expected string, found {}",
@@ -465,8 +464,7 @@ impl ops::Add for LoxValue {
         let self_type = LoxValueType::from(&self);
         match (self, &rhs) {
             (LoxValue::Str(s1), LoxValue::Str(s2)) => {
-                s1.write().push_str(&s2.read());
-                Ok(LoxValue::Str(s1))
+                Ok(LoxValue::Str(Rc::new(s1.to_string() + &s2)))
             }
             (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
             (LoxValue::Arr(arr1), LoxValue::Arr(ref arr2)) => {
@@ -627,9 +625,7 @@ impl IntoIterator for LoxValue {
     fn into_iter(self) -> Self::IntoIter {
         match self {
             Self::Arr(arr) => LoxIterator::Array(arr.read().clone().into_iter()),
-            Self::Str(string) => {
-                LoxIterator::String(string.read().clone().into_bytes().into_iter())
-            }
+            Self::Str(string) => LoxIterator::String(string.to_string().into_bytes().into_iter()),
             _ => panic!("cannot convert {} into iterator", LoxValueType::from(self)),
         }
     }

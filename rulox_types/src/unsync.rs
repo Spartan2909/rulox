@@ -1,10 +1,8 @@
-mod helper;
+mod impls;
 
 use core::cell::Ref;
 use core::cell::RefCell;
 use core::cell::RefMut;
-use core::ops::Deref;
-use core::ops::DerefMut;
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -33,27 +31,5 @@ impl<T> Clone for Shared<T> {
 #[derive(Debug)]
 pub struct ReadGuard<'a, T>(Ref<'a, T>);
 
-impl<'a, T> Deref for ReadGuard<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 #[derive(Debug)]
 pub struct WriteGuard<'a, T>(RefMut<'a, T>);
-
-impl<'a, T> Deref for WriteGuard<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'a, T> DerefMut for WriteGuard<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}

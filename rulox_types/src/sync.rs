@@ -1,7 +1,5 @@
-mod helper;
+mod impls;
 
-use std::ops::Deref;
-use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
@@ -33,27 +31,5 @@ impl<T> Clone for Shared<T> {
 #[derive(Debug)]
 pub struct ReadGuard<'a, T>(RwLockReadGuard<'a, T>);
 
-impl<'a, T> Deref for ReadGuard<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 #[derive(Debug)]
 pub struct WriteGuard<'a, T>(RwLockWriteGuard<'a, T>);
-
-impl<'a, T> Deref for WriteGuard<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'a, T> DerefMut for WriteGuard<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}

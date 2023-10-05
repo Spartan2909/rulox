@@ -229,8 +229,17 @@ impl LoxValue {
         }
     }
 
-    #[doc(hidden)] // Not public API.
     pub fn super_fn(&self, name: &str) -> Option<Rc<LoxFn>> {
+        let instance = self.as_instance()?;
+        let mut class = &instance.read().class;
+        while class.methods.get(name).is_none() {
+            class = class.superclass.as_ref()?;
+        }
+        Some(Rc::clone(class.superclass.as_ref()?.methods.get(name)?))
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn super_fn_old(&self, name: &str) -> Option<Rc<LoxFn>> {
         if let LoxValue::BoundMethod(_, instance) = self {
             instance
                 .read()

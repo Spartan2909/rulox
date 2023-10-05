@@ -963,7 +963,7 @@ fn function_expr_to_tokens(
     if let Some(name) = insert_super_fn {
         expr_body.append_all(quote! {
             let __super = |args: __rulox_helpers::LoxArgs| -> LoxValue {
-                let fun = this.get().get(stringify!(#name)).super_fn(stringify!(#name)).unwrap();
+                let fun = this.get().super_fn(stringify!(#name)).unwrap();
                 let bound = LoxValue::bind(fun, this.get());
                 bound.lox_call(args)
             };

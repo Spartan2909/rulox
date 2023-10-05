@@ -290,3 +290,26 @@ fn inheritance() {
         alice.lift(10);
     }
 }
+
+#[test]
+fn super_call() {
+    lox! {
+        class A {
+            do_thing() {
+                print "A";
+            }
+        }
+
+        class B > A {
+            do_thing() {
+                print "B";
+                super();
+            }
+        }
+
+        class C > B {}
+
+        var c = C();
+        c.do_thing();
+    }
+}

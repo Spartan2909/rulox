@@ -34,6 +34,7 @@ impl ToTokens for LoxValue {
             ),
             Self::Class(_) => unimplemented!("classes contain functions, which cannot be converted without context"),
             Self::Instance(_) => unimplemented!("instances cannot directly occur in source code"),
+            Self::Error(_) => unimplemented!("errors cannot directly occur in source code"),
             Self::Nil => tokens.append_all(quote! { LoxValue::Nil }),
         }
     }

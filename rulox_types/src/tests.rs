@@ -17,7 +17,7 @@ fn display() {
 fn add() {
     let num1 = LoxValue::from(1);
 
-    let num2: Result<LoxValue, LoxError> = num1 + 2.5;
+    let num2: LoxResult = num1 + 2.5;
 
     assert_eq!(num2.unwrap(), 3.5);
 }
@@ -26,7 +26,7 @@ fn add() {
 fn sub() {
     let num1 = LoxValue::from(5);
 
-    let num2: Result<LoxValue, LoxError> = num1 - 3;
+    let num2: LoxResult = num1 - 3;
 
     assert_eq!(num2.unwrap(), LoxValue::from(2));
 }
@@ -35,7 +35,7 @@ fn sub() {
 fn mul() {
     let num1 = LoxValue::from(2);
 
-    let num2: Result<LoxValue, LoxError> = num1 * 3;
+    let num2: LoxResult = num1 * 3;
 
     assert_eq!(num2.unwrap(), 6);
 }
@@ -44,7 +44,7 @@ fn mul() {
 fn div() {
     let num1 = LoxValue::from(8);
 
-    let num2: Result<LoxValue, LoxError> = num1 / 2;
+    let num2: LoxResult = num1 / 2;
 
     assert_eq!(num2.unwrap(), LoxValue::from(4));
 }

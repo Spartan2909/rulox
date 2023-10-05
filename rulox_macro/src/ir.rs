@@ -469,7 +469,7 @@ impl ToTokens for Stmt {
                 } else {
                     quote! { LoxValue::Nil }
                 };
-                tokens.append_all(quote! { return #expr; });
+                tokens.append_all(quote! { return Ok(#expr); });
             }
             Stmt::Function(Function {
                 name,
@@ -951,7 +951,7 @@ fn function_expr_to_tokens(
     let mut tokens = TokenStream::new();
 
     let mut inner = TokenStream::new();
-    inner.append_all(quote! { move |mut __args| -> LoxValue });
+    inner.append_all(quote! { move |mut __args| -> __rulox_helpers::LoxResult });
 
     let mut expr_body = quote! { let mut __drain = __args.drain(); };
     for param in params {
@@ -962,7 +962,7 @@ fn function_expr_to_tokens(
 
     if let Some(name) = insert_super_fn {
         expr_body.append_all(quote! {
-            let __super = |args: __rulox_helpers::LoxArgs| -> LoxValue {
+            let __super = |args: __rulox_helpers::LoxArgs| -> __rulox_helpers::LoxResult {
                 let fun = this.get().super_fn(stringify!(#name)).unwrap();
                 let bound = LoxValue::bind(fun, this.get());
                 bound.lox_call(args)
@@ -973,9 +973,9 @@ fn function_expr_to_tokens(
     expr_body.append_all(quote! { { #body } });
 
     let tail = if is_initialiser {
-        quote! { this.get() }
+        quote! { Ok(this.get()) }
     } else {
-        quote! { LoxValue::Nil }
+        quote! { Ok(LoxValue::Nil) }
     };
 
     inner.append_all(quote! { { #expr_body #[allow(unreachable_code)] #tail } });
@@ -1012,11 +1012,7 @@ impl ToTokens for Expr {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Expr::Literal(value) => {
-                if let LoxValue::Function(..) = value {
-                    todo!()
-                } else {
-                    value.to_tokens(tokens);
-                }
+                value.to_tokens(tokens);
             }
             Expr::Array(arr) => {
                 let mut inner = TokenStream::new();
@@ -1040,18 +1036,17 @@ impl ToTokens for Expr {
                 let mut inner = TokenStream::new();
                 inner.append_separated(arguments, Punct::new(',', Spacing::Alone));
 
-                tokens.append_all(quote! { #callee.lox_call([#inner].into()) });
+                tokens.append_all(quote! { #callee.lox_call([#inner].into())? });
             }
             Expr::Unary { operator, right } => {
-                operator.to_tokens(tokens);
-                right.to_tokens(tokens);
+                tokens.append_all(quote! { (#operator #right)? });
             }
             Expr::Binary {
                 left,
                 operator,
                 right,
             } => {
-                tokens.append_all(quote! { __rulox_helpers::extract(#left #operator #right) });
+                tokens.append_all(quote! { (#left #operator #right)? });
             }
             Expr::Comparison {
                 left,
@@ -1096,7 +1091,7 @@ impl ToTokens for Expr {
                 let mut inner = TokenStream::new();
                 inner.append_separated(arguments, Punct::new(',', Spacing::Alone));
 
-                tokens.append_all(quote! { __super([#inner].into()) });
+                tokens.append_all(quote! { __super([#inner].into())? });
             }
         }
     }

@@ -77,7 +77,7 @@ fn if_statement() {
 }
 
 #[test]
-fn while_loop() {
+fn while_loop() -> Result<(), LoxValue> {
     lox! {
         var a = 5;
 
@@ -88,10 +88,12 @@ fn while_loop() {
     }
 
     assert_eq!(a.get(), 0);
+
+    Ok(())
 }
 
 #[test]
-fn for_loop() {
+fn for_loop() -> Result<(), LoxValue> {
     lox! {
         var a = 1;
 
@@ -101,10 +103,12 @@ fn for_loop() {
     }
 
     assert_eq!(a.get(), -4);
+
+    Ok(())
 }
 
 #[test]
-fn function() {
+fn function() -> Result<(), LoxValue> {
     lox! {
         fun hello(name) {
             print "Hello " + name + "! :)";
@@ -119,7 +123,12 @@ fn function() {
         hello("Bob");
     }
 
-    hello.get().lox_call([LoxValue::from("Alice")].into());
+    hello
+        .get()
+        .lox_call([LoxValue::from("Alice")].into())
+        .unwrap();
+
+    Ok(())
 }
 
 #[test]
@@ -131,7 +140,7 @@ fn return_test() {
     }
 
     assert_eq!(
-        add_one.get().lox_call([LoxValue::Num(3.0)].into()),
+        add_one.get().lox_call([LoxValue::Num(3.0)].into()).unwrap(),
         LoxValue::Num(4.0)
     )
 }
@@ -170,7 +179,7 @@ fn fibonacci() {
         }
     }
 
-    assert_eq!(fib.get().lox_call([LoxValue::Num(5.0)].into()), 8)
+    assert_eq!(fib.get().lox_call([LoxValue::Num(5.0)].into()).unwrap(), 8)
 }
 
 #[test]
@@ -193,16 +202,23 @@ fn mutual_recursion() {
         }
     }
 
-    a.get().lox_call([LoxValue::Num(4.0)].into());
+    a.get().lox_call([LoxValue::Num(4.0)].into()).unwrap();
 }
 
 #[test]
-fn closure() {
+fn closure() -> Result<(), LoxValue> {
     lox! {
-        fun adder(n) {
-            return fun (x) return x + n; ;
-        }
+        var adder = fun(n) return fun(x) return x + n;;;
+
+        var add_2 = adder(2);
     }
+
+    assert_eq!(
+        add_2.get().lox_call([LoxValue::Num(1.0)].into()).unwrap(),
+        3
+    );
+
+    Ok(())
 }
 
 fn hello(name: String) -> String {
@@ -210,28 +226,30 @@ fn hello(name: String) -> String {
 }
 
 #[test]
-fn bindgen() {
+fn bindgen() -> Result<(), LoxValue> {
     lox_bindgen!(fn hello(name) as lox_hello);
 
     lox! {
         print lox_hello("Alice");
     }
+
+    Ok(())
 }
 
 #[test]
 fn inline_function() {
     lox! {
-        var add_one = fun(num) return num + 1; ;
+        var add_one = fun(num) return num + 1;;
     }
 
     assert_eq!(
-        add_one.get().lox_call([LoxValue::Num(1.5)].into()),
+        add_one.get().lox_call([LoxValue::Num(1.5)].into()).unwrap(),
         LoxValue::Num(2.5)
     );
 }
 
 #[test]
-fn class() {
+fn class() -> Result<(), LoxValue> {
     lox! {
         class Person {
             init(name) {
@@ -246,10 +264,12 @@ fn class() {
         var jane = Person("Jane");
         jane.say_hello();
     }
+
+    Ok(())
 }
 
 #[test]
-fn inheritance() {
+fn inheritance() -> Result<(), LoxValue> {
     lox! {
         class Person {
             init(name) {
@@ -289,10 +309,12 @@ fn inheritance() {
         alice.lift(4);
         alice.lift(10);
     }
+
+    Ok(())
 }
 
 #[test]
-fn super_call() {
+fn super_call() -> Result<(), LoxValue> {
     lox! {
         class A {
             do_thing() {
@@ -312,4 +334,6 @@ fn super_call() {
         var c = C();
         c.do_thing();
     }
+
+    Ok(())
 }

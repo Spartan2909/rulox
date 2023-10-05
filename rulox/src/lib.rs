@@ -11,6 +11,7 @@
 //! ```
 //! use rulox::prelude::*;
 //!
+//! # fn main() -> Result<(), LoxValue> {
 //! lox! {
 //!     var a = 5;
 //!
@@ -20,18 +21,24 @@
 //! let b: f64 = a.get().try_into().unwrap();
 //!
 //! println!("{}", b);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ```
 //! use rulox::prelude::*;
+//! # fn main() -> Result<(), LoxValue> {
 //! lox! {
 //!     for (var i = 5; i > 0; i = i - 1) print i;
 //! }
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ```
 //! use rulox::prelude::*;
 //!
+//! # fn main() -> Result<(), LoxValue> {
 //! lox! {
 //!     fun hello(name) {
 //!         print "Hello " + name + "! :)";
@@ -44,14 +51,17 @@
 //!     hello("Alice");
 //! }
 //!
-//! hello.get().lox_call([LoxValue::from("Bob")].into());
+//! hello.get().lox_call([LoxValue::from("Bob")].into())?;
 //!
-//! assert_eq!(add_one.get().lox_call([LoxValue::from(3)].into()), LoxValue::from(4));
+//! assert_eq!(add_one.get().lox_call([LoxValue::from(3)].into())?, LoxValue::from(4));
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ```
 //! use rulox::prelude::*;
 //!
+//! # fn main() -> Result<(), LoxValue> {
 //! lox! {
 //!     var people = ["Bob", "Alice", "John"];
 //!
@@ -59,6 +69,8 @@
 //!         print "Hello " + person + "!";
 //!     }
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 /// Parses Lox code and converts it to Rust.
@@ -67,6 +79,7 @@
 /// use rulox::prelude::*;
 /// use rulox::LoxVariable;
 ///
+/// # fn main() -> Result<(), LoxValue> {
 /// lox! {
 ///     var hello = "hello ";
 /// }
@@ -76,10 +89,9 @@
 /// lox! {
 ///     print hello + world;
 /// }
+/// # Ok(())
+/// # }
 /// ```
-///
-/// # Panics
-/// If an operation is attemped between two unsupported types.
 pub use rulox_macro::lox;
 
 /// Generates a rulox binding for a Rust function.
@@ -92,22 +104,25 @@ pub use rulox_macro::lox;
 ///     "Hello ".to_string() + &name
 /// }
 ///
+/// # fn main() -> Result<(), LoxValue> {
 /// lox_bindgen!(fn hello(name) as lox_hello);
 ///
 /// lox! {
 ///     print lox_hello("Alice");
 /// }
+/// # Ok(())
+/// # }
 /// ```
 #[macro_export]
 macro_rules! lox_bindgen {
     ( fn $rust_name:ident ( $( $arg:ident ),* ) as $lox_name:ident ) => {
         let $lox_name = __rulox_helpers::LoxVariable::new(
-            LoxValue::function(__rulox_helpers::LoxFn::new(|mut args: $crate::LoxArgs| -> LoxValue {
+            LoxValue::function(__rulox_helpers::LoxFn::new(|mut args: $crate::LoxArgs| -> __rulox_helpers::LoxResult {
                 let mut _drain = args.drain();
                 $(
                     let $arg = _drain.next().unwrap();
                 )*
-                $rust_name( $( $arg.try_into().unwrap() )* ).into()
+                Ok($rust_name( $( $arg.try_into().unwrap() )* ).into())
                 },
                 vec![$( stringify!($arg) ),*]
             ))
@@ -120,6 +135,7 @@ pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxCallable;
 pub use rulox_types::LoxClass;
 pub use rulox_types::LoxFn;
+pub use rulox_types::LoxResult;
 pub use rulox_types::LoxValue;
 pub use rulox_types::LoxVariable;
 
@@ -134,6 +150,7 @@ pub mod prelude {
         pub use crate::LoxArgs;
         pub use crate::LoxClass;
         pub use crate::LoxFn;
+        pub use crate::LoxResult;
         pub use crate::LoxVariable;
         pub use std::collections::HashMap;
         pub use std::rc::Rc;

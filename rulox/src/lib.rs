@@ -100,9 +100,9 @@ pub use rulox_macro::lox;
 #[macro_export]
 macro_rules! lox_bindgen {
     ( fn $rust_name:ident ( $( $arg:ident ),* ) as $lox_name:ident ) => {
-        let $lox_name = LoxVariable::new(
-            LoxValue::function(LoxFn::new(|mut args: Vec<$crate::LoxValue>| -> LoxValue {
-                let mut _drain = args.drain(..);
+        let $lox_name = __rulox_helpers::LoxVariable::new(
+            LoxValue::function(__rulox_helpers::LoxFn::new(|mut args: $crate::LoxArgs| -> LoxValue {
+                let mut _drain = args.drain();
                 $(
                     let $arg = _drain.next().unwrap();
                 )*
@@ -115,16 +115,26 @@ macro_rules! lox_bindgen {
 }
 
 pub use rulox_types::extract;
+pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxCallable;
+pub use rulox_types::LoxClass;
 pub use rulox_types::LoxFn;
 pub use rulox_types::LoxValue;
 pub use rulox_types::LoxVariable;
 
 pub mod prelude {
-    pub use crate::extract;
     pub use crate::lox;
     pub use crate::LoxCallable as _;
-    pub use crate::LoxFn;
     pub use crate::LoxValue;
-    pub use crate::LoxVariable;
+
+    #[doc(hidden)] // Not public API.
+    pub mod __rulox_helpers {
+        pub use crate::extract;
+        pub use crate::LoxArgs;
+        pub use crate::LoxClass;
+        pub use crate::LoxFn;
+        pub use crate::LoxVariable;
+        pub use std::collections::HashMap;
+        pub use std::rc::Rc;
+    }
 }

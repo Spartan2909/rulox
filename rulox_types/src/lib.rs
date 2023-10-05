@@ -81,7 +81,7 @@ pub enum LoxValueType {
     Arr,
     Function(Vec<&'static str>),
     Class,
-    Instance(String),
+    Instance(&'static str),
     Nil,
 }
 
@@ -187,9 +187,8 @@ impl LoxValue {
                 instance
                     .read()
                     .class
-                    .methods
                     .get(key)
-                    .map(|func| LoxValue::BoundMethod(Rc::clone(func), instance.clone()))
+                    .map(|func| LoxValue::BoundMethod(func, instance.clone()))
             }
         } else {
             None
@@ -201,13 +200,52 @@ impl LoxValue {
             .unwrap_or_else(|| panic!("{self} has no attribute '{key}'"))
     }
 
-    pub fn set(&self, key: String, value: LoxValue) -> LoxValue {
+    pub fn set(&self, key: &str, value: LoxValue) -> LoxValue {
         if let LoxValue::Instance(instance) = self {
-            instance.write().attributes.insert(key, value.clone());
+            instance
+                .write()
+                .attributes
+                .insert(key.to_string(), value.clone());
             value
         } else {
             panic!("cannot set attribute of {self}")
         }
+    }
+
+    fn as_instance(&self) -> Option<Shared<LoxInstance>> {
+        if let LoxValue::Instance(instance) = self {
+            Some(instance.clone())
+        } else {
+            None
+        }
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn as_class(&self) -> Option<&Rc<LoxClass>> {
+        if let LoxValue::Class(class) = self {
+            Some(class)
+        } else {
+            None
+        }
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn super_fn(&self, name: &str) -> Option<Rc<LoxFn>> {
+        if let LoxValue::BoundMethod(_, instance) = self {
+            instance
+                .read()
+                .class
+                .superclass
+                .as_ref()
+                .and_then(|class| class.get(name))
+        } else {
+            None
+        }
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn bind(fun: Rc<LoxFn>, instance: LoxValue) -> LoxValue {
+        LoxValue::BoundMethod(fun, instance.as_instance().unwrap())
     }
 }
 
@@ -253,7 +291,7 @@ impl fmt::Display for LoxValue {
             Self::Bool(value) => {
                 write!(f, "{}", value)
             }
-            Self::Str(string) => f.write_str(&string),
+            Self::Str(string) => f.write_str(string),
             Self::Num(value) => {
                 write!(f, "{}", value)
             }
@@ -464,7 +502,7 @@ impl ops::Add for LoxValue {
         let self_type = LoxValueType::from(&self);
         match (self, &rhs) {
             (LoxValue::Str(s1), LoxValue::Str(s2)) => {
-                Ok(LoxValue::Str(Rc::new(s1.to_string() + &s2)))
+                Ok(LoxValue::Str(Rc::new(s1.to_string() + s2)))
             }
             (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
             (LoxValue::Arr(arr1), LoxValue::Arr(ref arr2)) => {
@@ -697,16 +735,13 @@ impl Iterator for LoxIterator {
 }
 
 pub struct LoxFn {
-    fun: Box<dyn Fn(Vec<LoxValue>) -> LoxValue>,
+    fun: Box<dyn Fn(LoxArgs) -> LoxValue>,
     params: Vec<&'static str>,
 }
 
 impl LoxFn {
-    #[doc(hidden)]
-    pub fn new<F: Fn(Vec<LoxValue>) -> LoxValue + 'static>(
-        fun: F,
-        params: Vec<&'static str>,
-    ) -> Self {
+    #[doc(hidden)] // Not public API.
+    pub fn new<F: Fn(LoxArgs) -> LoxValue + 'static>(fun: F, params: Vec<&'static str>) -> Self {
         Self {
             fun: Box::new(fun),
             params,
@@ -739,28 +774,122 @@ pub struct LoxInstance {
 
 #[derive(Debug, PartialEq)]
 pub struct LoxClass {
-    name: String,
+    name: &'static str,
     initialiser: Option<Rc<LoxFn>>,
-    methods: HashMap<String, Rc<LoxFn>>,
-    superclass: Option<Shared<LoxClass>>,
+    methods: HashMap<&'static str, Rc<LoxFn>>,
+    superclass: Option<Rc<LoxClass>>,
 }
 
-pub trait LoxCallable {
-    fn lox_call(&self, args: Vec<LoxValue>) -> LoxValue;
-}
+impl LoxClass {
+    #[doc(hidden)] // Not public API.
+    pub fn new(
+        name: &'static str,
+        methods: HashMap<&'static str, Rc<LoxFn>>,
+        superclass: Option<Rc<LoxClass>>,
+    ) -> LoxClass {
+        let mut class = LoxClass {
+            name,
+            initialiser: methods.get("init").cloned(),
+            methods,
+            superclass,
+        };
 
-impl LoxCallable for LoxValue {
-    fn lox_call(&self, args: Vec<LoxValue>) -> LoxValue {
-        match self {
-            Self::Function(func) => (func.fun)(args),
-            _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
+        if class.initialiser.is_none() {
+            class.initialiser = class.get("init");
+        }
+
+        class
+    }
+
+    fn get(&self, key: &str) -> Option<Rc<LoxFn>> {
+        if let Some(method) = self.methods.get(key) {
+            Some(Rc::clone(method))
+        } else {
+            self.superclass
+                .as_ref()
+                .and_then(|superclass| superclass.get(key))
         }
     }
 }
 
-impl<F: Fn(Vec<LoxValue>) -> LoxValue> LoxCallable for F {
-    fn lox_call(&self, args: Vec<LoxValue>) -> LoxValue {
-        self(args)
+pub struct LoxArgs {
+    head: Option<LoxValue>,
+    main: Vec<LoxValue>,
+}
+
+impl LoxArgs {
+    pub fn new(values: Vec<LoxValue>) -> LoxArgs {
+        LoxArgs {
+            head: None,
+            main: values,
+        }
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn drain(&mut self) -> Drain {
+        Drain {
+            head: &mut self.head,
+            main: self.main.drain(..),
+        }
+    }
+}
+
+impl From<Vec<LoxValue>> for LoxArgs {
+    fn from(value: Vec<LoxValue>) -> Self {
+        LoxArgs::new(value)
+    }
+}
+
+impl<const N: usize> From<[LoxValue; N]> for LoxArgs {
+    fn from(value: [LoxValue; N]) -> Self {
+        value.to_vec().into()
+    }
+}
+
+#[doc(hidden)] // Not public API.
+pub struct Drain<'a> {
+    head: &'a mut Option<LoxValue>,
+    main: vec::Drain<'a, LoxValue>,
+}
+
+impl Iterator for Drain<'_> {
+    type Item = LoxValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.head.is_some() {
+            self.head.take()
+        } else {
+            self.main.next()
+        }
+    }
+}
+
+pub trait LoxCallable {
+    fn lox_call(&self, args: LoxArgs) -> LoxValue;
+}
+
+impl LoxCallable for LoxValue {
+    fn lox_call(&self, mut args: LoxArgs) -> LoxValue {
+        match self {
+            Self::Function(func) => (func.fun)(args),
+            Self::BoundMethod(func, instance) => {
+                args.head = Some(LoxValue::Instance(instance.clone()));
+                (func.fun)(args)
+            }
+            Self::Class(class) => {
+                let instance = LoxValue::Instance(Shared::new(LoxInstance {
+                    class: Rc::clone(class),
+                    attributes: HashMap::new(),
+                }));
+                if let Some(initialiser) = &class.initialiser {
+                    args.head = Some(instance.clone());
+                    (initialiser.fun)(args)
+                } else {
+                    instance
+                }
+            }
+            _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
+        }
     }
 }
 

@@ -20,6 +20,7 @@ mod kw {
     syn::custom_keyword!(or);
     syn::custom_keyword!(fun);
     syn::custom_keyword!(class);
+    syn::custom_keyword!(this);
 }
 
 pub struct LoxProgram {
@@ -70,7 +71,7 @@ pub enum Stmt {
         name: Ident,
         initialiser: Option<Expr>,
     },
-    Return(Expr),
+    Return(Option<Expr>),
     Function(Function),
     Block(Vec<Stmt>),
     If {
@@ -144,20 +145,27 @@ impl Stmt {
     }
 
     fn class(input: ParseStream) -> syn::Result<Self> {
-        input.parse::<kw::fun>()?;
+        input.parse::<kw::class>()?;
         let name: Ident = input.parse()?;
+
+        let superclass = if input.peek(Token![>]) {
+            input.parse::<Token![>]>()?;
+            Some(input.parse()?)
+        } else {
+            None
+        };
 
         let mut methods = vec![];
         let content;
         braced!(content in input);
         while !content.is_empty() {
-            methods.push(input.parse()?);
+            methods.push(content.parse()?);
         }
 
         Ok(Self::Class {
             name,
             methods,
-            superclass: None,
+            superclass,
         })
     }
 
@@ -224,9 +232,9 @@ impl Stmt {
         input.parse::<Token![return]>()?;
 
         let value = if input.peek(Token![;]) {
-            Expr::Literal(LoxValue::Nil)
+            None
         } else {
-            input.parse()?
+            Some(input.parse()?)
         };
 
         input.parse::<Token![;]>()?;
@@ -356,6 +364,19 @@ pub enum Expr {
         name: Ident,
         value: Box<Expr>,
     },
+    This,
+    Get {
+        object: Box<Expr>,
+        name: Ident,
+    },
+    Set {
+        object: Box<Expr>,
+        name: Ident,
+        value: Box<Expr>,
+    },
+    Super {
+        arguments: Vec<Expr>,
+    },
 }
 
 impl Parse for Expr {
@@ -378,6 +399,13 @@ impl Expr {
                         name,
                         value: Box::new(value),
                     })
+                }
+                Expr::Get { object, name } => {
+                    return Ok(Self::Set {
+                        object,
+                        name,
+                        value: Box::new(value),
+                    });
                 }
                 _ => Err(input.error("invalid assignment target"))?,
             }
@@ -504,8 +532,18 @@ impl Expr {
     fn call(input: ParseStream) -> syn::Result<Self> {
         let mut expr = Self::primary(input)?;
 
-        while input.peek(token::Paren) {
-            expr = Self::finish_call(input, expr)?
+        loop {
+            if input.peek(token::Paren) {
+                expr = Self::finish_call(input, expr)?;
+            } else if input.peek(Token![.]) {
+                input.parse::<Token![.]>()?;
+                expr = Self::Get {
+                    object: Box::new(expr),
+                    name: input.parse()?,
+                }
+            } else {
+                break;
+            }
         }
 
         Ok(expr)
@@ -524,23 +562,37 @@ impl Expr {
     }
 
     fn primary(input: ParseStream) -> syn::Result<Self> {
-        if input.peek(syn::LitBool) {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::LitBool) {
             let value: syn::LitBool = input.parse()?;
             Ok(Self::Literal(LoxValue::from(value.value)))
-        } else if input.peek(kw::nil) {
+        } else if lookahead.peek(kw::nil) {
             Ok(Self::Literal(LoxValue::Nil))
-        } else if input.peek(syn::LitStr) {
+        } else if lookahead.peek(syn::LitStr) {
             let value: syn::LitStr = input.parse()?;
             Ok(Self::Literal(LoxValue::from(&value.value())))
-        } else if input.peek(syn::LitInt) {
+        } else if lookahead.peek(syn::LitInt) {
             let value: syn::LitInt = input.parse()?;
             Ok(Self::Literal(LoxValue::from(value.base10_parse::<f64>()?)))
-        } else if input.peek(syn::LitFloat) {
+        } else if lookahead.peek(syn::LitFloat) {
             let value: syn::LitFloat = input.parse()?;
             Ok(Self::Literal(LoxValue::from(value.base10_parse::<f64>()?)))
-        } else if input.peek(kw::fun) {
+        } else if lookahead.peek(kw::fun) {
             Self::function(input)
-        } else if input.peek(token::Bracket) {
+        } else if lookahead.peek(kw::this) {
+            input.parse::<kw::this>()?;
+            Ok(Expr::This)
+        } else if lookahead.peek(Token![super]) {
+            input.parse::<Token![super]>()?;
+            let content;
+
+            parenthesized!(content in input);
+            let arguments = content.parse_terminated(Expr::parse, Token![,])?;
+
+            Ok(Self::Super {
+                arguments: arguments.into_iter().collect(),
+            })
+        } else if lookahead.peek(token::Bracket) {
             let content;
             bracketed!(content in input);
 
@@ -548,12 +600,14 @@ impl Expr {
             let items = Vec::from_iter(items);
 
             Ok(Self::Array(items))
-        } else if input.peek(token::Paren) {
+        } else if lookahead.peek(token::Paren) {
             let content;
             parenthesized!(content in input);
             Self::parse(&content)
-        } else {
+        } else if lookahead.peek(Ident) {
             Ok(Self::Variable(input.parse()?))
+        } else {
+            Err(lookahead.error())
         }
     }
 

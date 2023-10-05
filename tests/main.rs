@@ -119,7 +119,7 @@ fn function() {
         hello("Bob");
     }
 
-    hello.get().lox_call(vec![LoxValue::from("Alice")].into());
+    hello.get().lox_call([LoxValue::from("Alice")].into());
 }
 
 #[test]
@@ -131,7 +131,7 @@ fn return_test() {
     }
 
     assert_eq!(
-        add_one.get().lox_call(vec![LoxValue::Num(3.0)]),
+        add_one.get().lox_call([LoxValue::Num(3.0)].into()),
         LoxValue::Num(4.0)
     )
 }
@@ -170,7 +170,7 @@ fn fibonacci() {
         }
     }
 
-    assert_eq!(fib.get().lox_call(vec![LoxValue::Num(5.0)]), 8)
+    assert_eq!(fib.get().lox_call([LoxValue::Num(5.0)].into()), 8)
 }
 
 #[test]
@@ -193,10 +193,9 @@ fn mutual_recursion() {
         }
     }
 
-    a.get().lox_call(vec![LoxValue::Num(4.0)]);
+    a.get().lox_call([LoxValue::Num(4.0)].into());
 }
 
-/*
 #[test]
 fn closure() {
     lox! {
@@ -205,7 +204,6 @@ fn closure() {
         }
     }
 }
-*/
 
 fn hello(name: String) -> String {
     "Hello ".to_string() + &name
@@ -227,7 +225,68 @@ fn inline_function() {
     }
 
     assert_eq!(
-        add_one.get().lox_call(vec![LoxValue::Num(1.5)]),
+        add_one.get().lox_call([LoxValue::Num(1.5)].into()),
         LoxValue::Num(2.5)
     );
+}
+
+#[test]
+fn class() {
+    lox! {
+        class Person {
+            init(name) {
+                this.name = name;
+            }
+
+            say_hello() {
+                print "Hello, my name is " + this.name + "!";
+            }
+        }
+
+        var jane = Person("Jane");
+        jane.say_hello();
+    }
+}
+
+#[test]
+fn inheritance() {
+    lox! {
+        class Person {
+            init(name) {
+                this.name = name;
+            }
+
+            say_hello() {
+                print "Hello, my name is " + this.name + "!";
+            }
+        }
+
+        class Telepath > Person {
+            init(name, power) {
+                super(name);
+                this.power = power;
+            }
+
+            lift(weight) {
+                if (this.power < weight) {
+                    print "It's too heavy!";
+                } else if (this.power == weight) {
+                    print "I can't keep this up for long!";
+                } else {
+                    print "This is child's play.";
+                }
+            }
+        }
+
+        var bob = Person("Bob");
+        bob.say_hello();
+
+        print "";
+
+        var alice = Telepath("Alice", 4);
+        alice.say_hello();
+        alice.lift(1.5);
+        alice.lift(4);
+        alice.lift(10);
+    }
 }

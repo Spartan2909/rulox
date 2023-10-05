@@ -77,10 +77,10 @@ fn main() {
 - [x] `for ... in ...` loops
 - [x] Indefinite loops and `break`
 - [x] Functions as first-class objects
-- [ ] Object orientation
+- [x] Object orientation
+- [x] Closures
 
 # Possible future features
 
-- Closures
 - Error handling
 - Macros

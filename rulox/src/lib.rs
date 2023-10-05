@@ -44,9 +44,9 @@
 //!     hello("Alice");
 //! }
 //!
-//! hello.get().lox_call(vec![LoxValue::from("Bob")]);
+//! hello.get().lox_call([LoxValue::from("Bob")].into());
 //!
-//! assert_eq!(add_one.get().lox_call(vec![LoxValue::from(3)]), LoxValue::from(4));
+//! assert_eq!(add_one.get().lox_call([LoxValue::from(3)].into()), LoxValue::from(4));
 //! ```
 //!
 //! ```
@@ -65,6 +65,7 @@
 /// # Examples
 /// ```
 /// use rulox::prelude::*;
+/// use rulox::LoxVariable;
 ///
 /// lox! {
 ///     var hello = "hello ";

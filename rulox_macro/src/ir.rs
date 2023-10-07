@@ -65,6 +65,7 @@ impl From<ast::LoxProgram> for Ir {
 
 impl ToTokens for Ir {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.append_all(quote! { let __rulox_fn_name = "<script>"; });
         tokens.append_all(block_to_token_stream(
             &self.forward_declarations,
             &self.statements,
@@ -479,7 +480,7 @@ impl ToTokens for Stmt {
                 is_initialiser: _,
             }) => {
                 let function_object =
-                    function_expr_to_tokens(upvalues, params, body, true, false, None);
+                    function_expr_to_tokens(upvalues, params, body, true, false, None, Some(name));
 
                 let mut params_tokens = TokenStream::new();
                 for param in params {
@@ -504,17 +505,15 @@ impl ToTokens for Stmt {
                 then_branch,
                 else_branch,
             } => {
-                tokens.append_all(
-                    quote! { if __rulox_helpers::extract(#condition.try_into()) { #then_branch } },
-                );
+                let condition = wrap_extract(quote! { #condition.try_into() });
+                tokens.append_all(quote! { if #condition { #then_branch } });
                 if let Some(branch) = else_branch {
                     tokens.append_all(quote! { else { #branch } });
                 }
             }
             Stmt::While { condition, body } => {
-                tokens.append_all(
-                    quote! { while __rulox_helpers::extract(#condition.try_into()) { #body } },
-                );
+                let condition = wrap_extract(quote! { #condition.try_into() });
+                tokens.append_all(quote! { while #condition { #body } });
             }
             Stmt::For {
                 name,
@@ -535,7 +534,11 @@ impl ToTokens for Stmt {
                 superclass,
             } => {
                 let superclass = if let Some(superclass) = superclass {
-                    quote! { Some(__rulox_helpers::Rc::clone(#superclass.get().as_class().unwrap())) }
+                    let get = wrap_extract(quote! { #superclass.get() });
+                    let class = wrap_extract(quote! { #get.as_class() });
+                    quote! {
+                        Some(__rulox_helpers::Rc::clone(#class))
+                    }
                 } else {
                     quote! { None }
                 };
@@ -548,6 +551,7 @@ impl ToTokens for Stmt {
                         &method.body,
                         false,
                         method.is_initialiser,
+                        Some(&method.name),
                         Some(&method.name),
                     );
                     let method_name = &method.name;
@@ -947,6 +951,7 @@ fn function_expr_to_tokens(
     value_wrap: bool,
     is_initialiser: bool,
     insert_super_fn: Option<&Ident>,
+    fn_name: Option<&Ident>,
 ) -> TokenStream {
     let mut tokens = TokenStream::new();
 
@@ -961,19 +966,29 @@ fn function_expr_to_tokens(
     }
 
     if let Some(name) = insert_super_fn {
+        let this = wrap_extract(quote! { this.get() });
+        let fun = wrap_extract(quote! { _this.clone().super_fn(stringify!(#name)) });
         expr_body.append_all(quote! {
             let __super = |args: __rulox_helpers::LoxArgs| -> __rulox_helpers::LoxResult {
-                let fun = this.get().super_fn(stringify!(#name)).unwrap();
-                let bound = LoxValue::bind(fun, this.get());
+                let _this = #this;
+                let fun = #fun;
+                let bound = LoxValue::bind(fun, _this);
                 bound.lox_call(args)
             };
         });
     }
 
+    let fn_name = fn_name.map_or(
+        quote! { "<anonymous function>" },
+        |name| quote! { stringify!(#name) },
+    );
+
+    expr_body.append_all(quote! { let __rulox_fn_name = #fn_name; });
+
     expr_body.append_all(quote! { { #body } });
 
     let tail = if is_initialiser {
-        quote! { Ok(this.get()) }
+        quote! { this.get() }
     } else {
         quote! { Ok(LoxValue::Nil) }
     };
@@ -1008,6 +1023,10 @@ fn function_expr_to_tokens(
     tokens
 }
 
+fn wrap_extract(tokens: TokenStream) -> TokenStream {
+    quote! { __rulox_helpers::extract!((#tokens), __rulox_fn_name) }
+}
+
 impl ToTokens for Expr {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
@@ -1026,27 +1045,27 @@ impl ToTokens for Expr {
                 body,
             } => {
                 tokens.append_all(function_expr_to_tokens(
-                    upvalues, params, body, true, false, None,
+                    upvalues, params, body, true, false, None, None,
                 ));
             }
             Expr::Variable(var) => {
-                tokens.append_all(quote! { #var.get() });
+                tokens.append_all(wrap_extract(quote! { #var.get() }));
             }
             Expr::Call { callee, arguments } => {
                 let mut inner = TokenStream::new();
                 inner.append_separated(arguments, Punct::new(',', Spacing::Alone));
 
-                tokens.append_all(quote! { #callee.lox_call([#inner].into())? });
+                tokens.append_all(wrap_extract(quote! { #callee.lox_call([#inner].into()) }));
             }
             Expr::Unary { operator, right } => {
-                tokens.append_all(quote! { (#operator #right)? });
+                tokens.append_all(wrap_extract(quote! { #operator #right }));
             }
             Expr::Binary {
                 left,
                 operator,
                 right,
             } => {
-                tokens.append_all(quote! { (#left #operator #right)? });
+                tokens.append_all(wrap_extract(quote! { #left #operator #right }));
             }
             Expr::Comparison {
                 left,
@@ -1076,16 +1095,18 @@ impl ToTokens for Expr {
                 } });
             }
             Expr::Assign { name, value } => tokens.append_all(quote! { #name.overwrite(#value) }),
-            Expr::This => tokens.append_all(quote! { this.get() }),
+            Expr::This => tokens.append_all(wrap_extract(quote! { this.get() })),
             Expr::Get { object, name } => {
-                tokens.append_all(quote! { (#object).get(stringify!(#name)) });
+                tokens.append_all(wrap_extract(quote! { (#object).get(stringify!(#name)) }));
             }
             Expr::Set {
                 object,
                 name,
                 value,
             } => {
-                tokens.append_all(quote! { (#object).set(stringify!(#name), #value) });
+                tokens.append_all(wrap_extract(
+                    quote! { (#object).set(stringify!(#name), #value) },
+                ));
             }
             Expr::Super { arguments } => {
                 let mut inner = TokenStream::new();

@@ -10,15 +10,16 @@
 //! # Examples
 //! ```
 //! use rulox::prelude::*;
+//! # use rulox::LoxError;
 //!
-//! # fn main() -> Result<(), LoxValue> {
+//! # fn main() -> Result<(), LoxError> {
 //! lox! {
 //!     var a = 5;
 //!
 //!     print a + 2;
 //! }
 //!
-//! let b: f64 = a.get().try_into().unwrap();
+//! let b: f64 = a.get()?.try_into().unwrap();
 //!
 //! println!("{}", b);
 //! # Ok(())
@@ -27,7 +28,9 @@
 //!
 //! ```
 //! use rulox::prelude::*;
-//! # fn main() -> Result<(), LoxValue> {
+//! # use rulox::LoxError;
+//!
+//! # fn main() -> Result<(), LoxError> {
 //! lox! {
 //!     for (var i = 5; i > 0; i = i - 1) print i;
 //! }
@@ -37,8 +40,9 @@
 //!
 //! ```
 //! use rulox::prelude::*;
+//! # use rulox::LoxError;
 //!
-//! # fn main() -> Result<(), LoxValue> {
+//! # fn main() -> Result<(), LoxError> {
 //! lox! {
 //!     fun hello(name) {
 //!         print "Hello " + name + "! :)";
@@ -51,17 +55,18 @@
 //!     hello("Alice");
 //! }
 //!
-//! hello.get().lox_call([LoxValue::from("Bob")].into())?;
+//! hello.get()?.lox_call([LoxValue::from("Bob")].into())?;
 //!
-//! assert_eq!(add_one.get().lox_call([LoxValue::from(3)].into())?, LoxValue::from(4));
+//! assert_eq!(add_one.get()?.lox_call([LoxValue::from(3)].into())?, LoxValue::from(4));
 //! # Ok(())
 //! # }
 //! ```
 //!
 //! ```
 //! use rulox::prelude::*;
+//! # use rulox::LoxError;
 //!
-//! # fn main() -> Result<(), LoxValue> {
+//! # fn main() -> Result<(), LoxError> {
 //! lox! {
 //!     var people = ["Bob", "Alice", "John"];
 //!
@@ -78,8 +83,9 @@
 /// ```
 /// use rulox::prelude::*;
 /// use rulox::LoxVariable;
+/// # use rulox::LoxError;
 ///
-/// # fn main() -> Result<(), LoxValue> {
+/// # fn main() -> Result<(), LoxError> {
 /// lox! {
 ///     var hello = "hello ";
 /// }
@@ -99,12 +105,13 @@ pub use rulox_macro::lox;
 /// ```
 /// use rulox::prelude::*;
 /// use rulox::lox_bindgen;
+/// # use rulox::LoxError;
 ///
 /// fn hello(name: String) -> String {
 ///     "Hello ".to_string() + &name
 /// }
 ///
-/// # fn main() -> Result<(), LoxValue> {
+/// # fn main() -> Result<(), LoxError> {
 /// lox_bindgen!(fn hello(name) as lox_hello);
 ///
 /// lox! {
@@ -130,10 +137,10 @@ macro_rules! lox_bindgen {
     };
 }
 
-pub use rulox_types::extract;
 pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxCallable;
 pub use rulox_types::LoxClass;
+pub use rulox_types::LoxError;
 pub use rulox_types::LoxFn;
 pub use rulox_types::LoxResult;
 pub use rulox_types::LoxValue;
@@ -146,12 +153,12 @@ pub mod prelude {
 
     #[doc(hidden)] // Not public API.
     pub mod __rulox_helpers {
-        pub use crate::extract;
         pub use crate::LoxArgs;
         pub use crate::LoxClass;
         pub use crate::LoxFn;
         pub use crate::LoxResult;
         pub use crate::LoxVariable;
+        pub use rulox_types::extract;
         pub use std::collections::HashMap;
         pub use std::rc::Rc;
     }

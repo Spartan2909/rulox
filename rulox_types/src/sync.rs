@@ -1,7 +1,10 @@
 mod impls;
 
+use crate::LoxError;
+use crate::LoxResult;
 use crate::LoxValue;
 
+use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
@@ -43,8 +46,13 @@ impl LoxVariable {
         LoxVariable(Shared::new(value.into()))
     }
 
-    pub fn get(&self) -> LoxValue {
-        self.0.read().clone()
+    pub fn get(&self) -> LoxResult {
+        let inner = self.0.read();
+        if let &LoxValue::Undefined(name) = inner.deref() {
+            Err(LoxError::undefined_variable(name))
+        } else {
+            Ok(inner.clone())
+        }
     }
 
     #[doc(hidden)] // Not public API.

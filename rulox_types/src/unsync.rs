@@ -1,5 +1,7 @@
 mod impls;
 
+use crate::LoxError;
+use crate::LoxResult;
 use crate::LoxValue;
 
 use core::cell::Ref;
@@ -62,8 +64,13 @@ impl LoxVariable {
         LoxVariable(Rc::new(CloneCell::new(value)))
     }
 
-    pub fn get(&self) -> LoxValue {
-        self.0.get()
+    pub fn get(&self) -> LoxResult {
+        let inner = self.0.get();
+        if let LoxValue::Undefined(name) = inner {
+            Err(LoxError::undefined_variable(name))
+        } else {
+            Ok(inner)
+        }
     }
 
     #[doc(hidden)] // Not public API.

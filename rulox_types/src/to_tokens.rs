@@ -36,6 +36,7 @@ impl ToTokens for LoxValue {
             Self::Instance(_) => unimplemented!("instances cannot directly occur in source code"),
             Self::Error(_) => unimplemented!("errors cannot directly occur in source code"),
             Self::Nil => tokens.append_all(quote! { LoxValue::Nil }),
+            Self::Undefined(_) => unreachable!(),
         }
     }
 }

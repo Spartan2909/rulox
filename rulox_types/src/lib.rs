@@ -1,5 +1,5 @@
-//! `rulox_types` is a collection of types used by the `rulox` crate
-//! to represent dynamically typed values.
+//! `rulox_types` is a collection of types used by the `rulox` crate to
+//! represent dynamically typed values.
 
 #[cfg_attr(feature = "sync", path = "sync.rs")]
 #[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
@@ -22,27 +22,89 @@ use std::process::Termination;
 use std::ptr;
 use std::vec;
 
-/// An error that occurred when attempting to use a LoxValue in an invalid location.
 #[derive(Debug, Clone)]
-pub enum LoxError {
-    /// An error that occurred when attempting to use a LoxValue with an invalid type.
+pub struct LoxError {
+    inner: LoxErrorInner,
+    trace: Vec<&'static str>,
+}
+
+impl LoxError {
+    fn type_error(message: String) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::TypeError(message),
+            trace: vec![],
+        }
+    }
+
+    fn undefined_variable(kind: &'static str) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::UndefinedVariable(kind),
+            trace: vec![],
+        }
+    }
+
+    fn invalid_property(property: &'static str, object: String) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::InvalidProperty { property, object },
+            trace: vec![],
+        }
+    }
+
+    fn non_existent_super(name: &'static str) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::NonExistentSuper(name),
+            trace: vec![],
+        }
+    }
+
+    #[doc(hidden)] // Not public API.
+    #[cold]
+    pub fn push_trace(&mut self, value: &'static str) {
+        self.trace.push(value);
+    }
+}
+
+#[derive(Debug, Clone)]
+enum LoxErrorInner {
+    /// An error that occurs when attempting to use a LoxValue with an invalid type.
     TypeError(String),
-    /// An error that occurred when attempting to convert a LoxValue into a Rust type that is too small.
-    SizeError { found: usize },
+    /// An error that occurs when attempting to convert a LoxValue into a Rust type that is too small.
+    SizeError {
+        found: usize,
+    },
+    /// An error that occurs when variables are accessed without first being defined.
+    UndefinedVariable(&'static str),
+    InvalidProperty {
+        property: &'static str,
+        object: String,
+    },
+    NonExistentSuper(&'static str),
 }
 
 impl fmt::Display for LoxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::TypeError(message) => {
+        writeln!(f, "traceback (most recent call last):")?;
+        for &fun in &self.trace {
+            writeln!(f, "in '{fun}'")?;
+        }
+
+        match &self.inner {
+            LoxErrorInner::TypeError(message) => {
                 write!(f, "{}", message)
             }
-            Self::SizeError { found } => {
+            LoxErrorInner::SizeError { found } => {
                 write!(
                     f,
                     "could not convert LoxValue to value of size {:?} (LoxValue too large)",
                     found
                 )
+            }
+            LoxErrorInner::UndefinedVariable(name) => write!(f, "undefined variable '{name}'"),
+            LoxErrorInner::InvalidProperty { property, object } => {
+                write!(f, "invalid property '{property}' on {object}")
+            }
+            LoxErrorInner::NonExistentSuper(name) => {
+                write!(f, "function '{name}' has no super function")
             }
         }
     }
@@ -50,23 +112,18 @@ impl fmt::Display for LoxError {
 
 impl Error for LoxError {}
 
-/// Gets the value from a LoxResult, and panics if it is an error.
-/// # Examples
-/// ```
-/// # use rulox_types::*;
-/// let v = LoxValue::from(5) + LoxValue::from(3);
-/// assert_eq!(extract(v), LoxValue::from(8));
-/// ```
-/// # Panics
-/// If the contained value is an error.
-pub fn extract<T, E>(result: Result<T, E>) -> T
-where
-    E: ToString,
-{
-    match result {
-        Ok(value) => value,
-        Err(e) => panic!("{}", e.to_string()),
-    }
+#[doc(hidden)] // Not public API.
+#[macro_export]
+macro_rules! extract {
+    ($expr:expr, $var_name:ident) => {
+        match $expr {
+            Ok(expr) => expr,
+            Err(mut err) => {
+                err.push_trace($var_name);
+                return Err(err);
+            }
+        }
+    };
 }
 
 /// An enum used for error reporting.
@@ -114,6 +171,7 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Instance(instance) => Self::Instance(instance.read().class.name.clone()),
                     LoxValue::Error(_) => Self::Error,
                     LoxValue::Nil => Self::Nil,
+                    LoxValue::Undefined(_) => unreachable!(),
                 }
             }
         }) *
@@ -122,7 +180,7 @@ macro_rules! loxvalue_to_loxvaluetype {
 
 loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }
 
-pub type LoxResult = Result<LoxValue, LoxValue>;
+pub type LoxResult = Result<LoxValue, LoxError>;
 
 /// A dynamically typed value used by Lox programs.
 #[derive(Clone)]
@@ -137,12 +195,18 @@ pub enum LoxValue {
     Instance(Shared<LoxInstance>),
     Error(LoxError),
     Nil,
+    Undefined(&'static str),
 }
 
 impl LoxValue {
-    #[inline(always)]
-    fn index_internal<T: TryInto<f64> + Into<LoxValue>>(&self, value: T) -> Option<LoxValue> {
-        let num: f64 = value.try_into().ok()?;
+    pub fn index<T: TryInto<f64> + Into<LoxValue> + Clone + fmt::Display>(
+        &self,
+        value: T,
+    ) -> Result<LoxValue, LoxError> {
+        let num: f64 = value
+            .clone()
+            .try_into()
+            .map_err(|_| LoxError::type_error(format!("invalid base for index: {value}")))?;
         let output = match self {
             LoxValue::Arr(arr) => {
                 let index = num as usize;
@@ -150,28 +214,21 @@ impl LoxValue {
                 if index as f64 == num {
                     arr.read()[index].clone()
                 } else {
-                    panic!("invalid base for index: {}", num);
+                    return Err(LoxError::type_error(format!(
+                        "invalid base for index: {}",
+                        num
+                    )));
                 }
             }
             _ => {
-                return None;
+                return Err(LoxError::type_error(format!(
+                    "cannot index into a value of type {}",
+                    LoxValueType::from(self)
+                )));
             }
         };
 
-        Some(output)
-    }
-
-    pub fn index<T: TryInto<f64> + Into<LoxValue> + Clone>(&self, value: T) -> LoxValue {
-        if let Some(value) = self.index_internal(value.clone()) {
-            value
-        } else {
-            let other: LoxValue = value.into();
-            panic!(
-                "cannot index {} with {}",
-                LoxValueType::from(self),
-                LoxValueType::from(other),
-            )
-        }
+        Ok(output)
     }
 
     pub fn is_truthy(&self) -> bool {
@@ -198,20 +255,20 @@ impl LoxValue {
         }
     }
 
-    pub fn get(&self, key: &str) -> LoxValue {
+    pub fn get(&self, key: &'static str) -> LoxResult {
         self.get_impl(key)
-            .unwrap_or_else(|| panic!("{self} has no attribute '{key}'"))
+            .ok_or(LoxError::invalid_property(key, self.to_string()))
     }
 
-    pub fn set(&self, key: &str, value: LoxValue) -> LoxValue {
+    pub fn set(&self, key: &'static str, value: LoxValue) -> LoxResult {
         if let LoxValue::Instance(instance) = self {
             instance
                 .write()
                 .attributes
                 .insert(key.to_string(), value.clone());
-            value
+            Ok(value)
         } else {
-            panic!("cannot set attribute of {self}")
+            Err(LoxError::invalid_property(key, self.to_string()))
         }
     }
 
@@ -224,15 +281,17 @@ impl LoxValue {
     }
 
     #[doc(hidden)] // Not public API.
-    pub fn as_class(&self) -> Option<&Rc<LoxClass>> {
+    pub fn as_class(&self) -> Result<&Rc<LoxClass>, LoxError> {
         if let LoxValue::Class(class) = self {
-            Some(class)
+            Ok(class)
         } else {
-            None
+            Err(LoxError::type_error(format!(
+                "Cannot use {self} as a superclass"
+            )))
         }
     }
 
-    pub fn super_fn(&self, name: &str) -> Option<Rc<LoxFn>> {
+    fn super_fn_impl(&self, name: &'static str) -> Option<Rc<LoxFn>> {
         let instance = self.as_instance()?;
         let mut class = &instance.read().class;
         while class.methods.get(name).is_none() {
@@ -242,26 +301,14 @@ impl LoxValue {
     }
 
     #[doc(hidden)] // Not public API.
-    pub fn super_fn_old(&self, name: &str) -> Option<Rc<LoxFn>> {
-        if let LoxValue::BoundMethod(_, instance) = self {
-            instance
-                .read()
-                .class
-                .superclass
-                .as_ref()
-                .and_then(|class| class.get(name))
-        } else {
-            None
-        }
+    pub fn super_fn(&self, name: &'static str) -> Result<Rc<LoxFn>, LoxError> {
+        self.super_fn_impl(name)
+            .ok_or(LoxError::non_existent_super(name))
     }
 
     #[doc(hidden)] // Not public API.
     pub fn bind(fun: Rc<LoxFn>, instance: LoxValue) -> LoxValue {
         LoxValue::BoundMethod(fun, instance.as_instance().unwrap())
-    }
-
-    fn type_error(message: String) -> LoxValue {
-        LoxValue::Error(LoxError::TypeError(message))
     }
 }
 
@@ -280,6 +327,7 @@ impl fmt::Debug for LoxValue {
             Self::Instance(instance) => write!(f, "Instance({:#?})", instance.read()),
             Self::Error(error) => write!(f, "Error({:#?})", error),
             Self::Nil => write!(f, "Nil"),
+            Self::Undefined(_) => write!(f, "Undefined"),
         }
     }
 }
@@ -336,6 +384,7 @@ impl fmt::Display for LoxValue {
             Self::Nil => {
                 write!(f, "nil")
             }
+            Self::Undefined(_) => unreachable!(),
         }
     }
 }
@@ -404,7 +453,7 @@ impl TryFrom<LoxValue> for bool {
         if let LoxValue::Bool(b) = value {
             Ok(b)
         } else {
-            Err(LoxError::TypeError(format!(
+            Err(LoxError::type_error(format!(
                 "expected bool, found {}",
                 LoxValueType::from(value)
             )))
@@ -419,7 +468,7 @@ impl TryFrom<LoxValue> for String {
         if let LoxValue::Str(string) = value {
             Ok(string.to_string())
         } else {
-            Err(LoxError::TypeError(format!(
+            Err(LoxError::type_error(format!(
                 "expected string, found {}",
                 LoxValueType::from(value)
             )))
@@ -458,14 +507,18 @@ macro_rules! impl_numeric {
                 match value {
                     LoxValue::Num(ref num) => {
                         if *num > Self::MAX as f64 {
-                            Err(LoxError::SizeError{
-                                found: mem::size_of::<Self>()
-                            })
+                            Err(LoxError {
+                                    inner: LoxErrorInner::SizeError {
+                                        found: mem::size_of::<Self>(),
+                                    },
+                                    trace: vec![],
+                                }
+                            )
                         } else {
                             Ok(*num as Self)
                         }
                     },
-                    _ => Err(LoxError::TypeError(format!("expected number, found {}", LoxValueType::from(value))))
+                    _ => Err(LoxError::type_error(format!("expected number, found {}", LoxValueType::from(value))))
                 }
             }
         }
@@ -476,7 +529,7 @@ macro_rules! impl_numeric {
             fn add(self, rhs: $t) -> Self::Output {
                 match self {
                     Self::Num(num) => Ok(Self::Num(num + rhs as f64)),
-                    _ => Err(LoxValue::type_error(format!("cannot add number to {}", LoxValueType::from(self)))),
+                    _ => Err(LoxError::type_error(format!("cannot add number to {}", LoxValueType::from(self)))),
                 }
             }
         }
@@ -487,7 +540,7 @@ macro_rules! impl_numeric {
             fn sub(self, rhs: $t) -> Self::Output {
                 match self {
                     Self::Num(num) => Ok(Self::Num(num - rhs as f64)),
-                    _ => Err(LoxValue::type_error(format!("cannot subtract number from {}", LoxValueType::from(self)))),
+                    _ => Err(LoxError::type_error(format!("cannot subtract number from {}", LoxValueType::from(self)))),
                 }
             }
         }
@@ -498,7 +551,7 @@ macro_rules! impl_numeric {
             fn mul(self, rhs: $t) -> Self::Output {
                 match self {
                     Self::Num(num) => Ok(Self::Num(num * rhs as f64)),
-                    _ => Err(LoxValue::type_error(format!("cannot multiply {} by number", LoxValueType::from(self)))),
+                    _ => Err(LoxError::type_error(format!("cannot multiply {} by number", LoxValueType::from(self)))),
                 }
             }
         }
@@ -509,7 +562,7 @@ macro_rules! impl_numeric {
             fn div(self, rhs: $t) -> Self::Output {
                 match self {
                     Self::Num(num) => Ok(Self::Num(num / rhs as f64)),
-                    _ => Err(LoxValue::type_error(format!("cannot divide {} by number", LoxValueType::from(self)))),
+                    _ => Err(LoxError::type_error(format!("cannot divide {} by number", LoxValueType::from(self)))),
                 }
             }
         }
@@ -533,7 +586,7 @@ impl ops::Add for LoxValue {
                 arr1.write().append(&mut arr2.write());
                 Ok(LoxValue::Arr(arr1))
             }
-            _ => Err(LoxValue::type_error(format!(
+            _ => Err(LoxError::type_error(format!(
                 "cannot add {} to {}",
                 LoxValueType::from(rhs),
                 self_type,
@@ -558,7 +611,7 @@ impl ops::Sub for LoxValue {
         if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
             Ok(LoxValue::Num(num1 - num2))
         } else {
-            Err(LoxValue::type_error(format!(
+            Err(LoxError::type_error(format!(
                 "cannot subtract {} from {}",
                 LoxValueType::from(rhs),
                 LoxValueType::from(self),
@@ -574,7 +627,7 @@ impl ops::Mul for LoxValue {
         if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
             Ok(LoxValue::Num(num1 * num2))
         } else {
-            Err(LoxValue::type_error(format!(
+            Err(LoxError::type_error(format!(
                 "cannot multiply {} by {}",
                 LoxValueType::from(self),
                 LoxValueType::from(rhs),
@@ -590,7 +643,7 @@ impl ops::Div for LoxValue {
         if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
             Ok(LoxValue::Num(num1 / num2))
         } else {
-            Err(LoxValue::type_error(format!(
+            Err(LoxError::type_error(format!(
                 "cannot divide {} by {}",
                 LoxValueType::from(self),
                 LoxValueType::from(rhs),
@@ -605,7 +658,7 @@ impl ops::Neg for LoxValue {
     fn neg(self) -> Self::Output {
         match self {
             Self::Num(num) => Ok(Self::Num(-num)),
-            _ => Err(LoxValue::type_error(format!(
+            _ => Err(LoxError::type_error(format!(
                 "cannot negate {}",
                 LoxValueType::from(self)
             ))),
@@ -619,7 +672,7 @@ impl ops::Not for LoxValue {
     fn not(self) -> Self::Output {
         match self {
             Self::Bool(b) => Ok(Self::Bool(!b)),
-            _ => Err(LoxValue::type_error(format!(
+            _ => Err(LoxError::type_error(format!(
                 "cannot take logical not of {}",
                 LoxValueType::from(self)
             ))),

@@ -4,8 +4,8 @@
 [![github](https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github)](https://github.com/Spartan2909/rulox)
 [![docs.rs](https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs)](https://docs.rs/rulox/latest) <br>
 
-`rulox` is a lightweight scripting language embedded in Rust. 
-It is based on the Lox language from [Crafting Interpreters](https://craftinginterpreters.com/). 
+`rulox` is a lightweight scripting language embedded in Rust. It is based on the
+Lox language from [Crafting Interpreters](https://craftinginterpreters.com/). 
 
 # Examples
 ```rust
@@ -50,7 +50,7 @@ fn main() {
 
     hello(LoxValue::from("Alice"));
 
-    assert_eq!(add_one(LoxValue::from(3)), LoxValue::from(4));
+    assert_eq!(add_one(LoxValue::from(3)), 4);
 }
 ```
 

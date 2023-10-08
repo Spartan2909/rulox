@@ -101,7 +101,9 @@
 pub use rulox_macro::lox;
 
 /// Generates a rulox binding for a Rust function.
-/// # Examples
+///
+/// ## Examples
+///
 /// ```
 /// use rulox::prelude::*;
 /// use rulox::lox_bindgen;
@@ -137,6 +139,40 @@ macro_rules! lox_bindgen {
     };
 }
 
+/// Generates a Rust binding for a rulox function.
+///
+/// ## Examples
+///
+/// ```
+/// use rulox::prelude::*;
+/// use rulox::rust_bindgen;
+/// # use rulox::LoxError;
+///
+/// # fn main() -> Result<(), LoxError> {
+/// lox! {
+///     fun hello(name) {
+///         return "Hello " + name + "!";
+///     }
+/// }
+///
+/// rust_bindgen!(fn hello(name: &str) -> String as rust_hello);
+///
+/// assert_eq!(rust_hello("Bob"), Ok("Hello Bob!".to_string()));
+/// # Ok(())
+/// # }
+/// ```
+#[macro_export]
+macro_rules! rust_bindgen {
+    ( fn $lox_name:ident ( $( $arg_name:ident : $arg_ty:ty ),* ) -> $ret_ty:ty as $rust_name:ident ) => {
+        let $rust_name = {
+            let $lox_name = $lox_name.close_over();
+            move | $( $arg_name : $arg_ty ),* | -> $crate::prelude::__rulox_helpers::Result<$ret_ty, $crate::LoxError> {
+                $lox_name.get()?.lox_call([ $( $arg_name.into() ),* ].into())?.try_into()
+            }
+        };
+    };
+}
+
 pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxCallable;
 pub use rulox_types::LoxClass;
@@ -161,5 +197,6 @@ pub mod prelude {
         pub use rulox_types::extract;
         pub use std::collections::HashMap;
         pub use std::rc::Rc;
+        pub use std::result::Result;
     }
 }

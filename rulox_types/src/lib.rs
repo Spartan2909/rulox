@@ -22,7 +22,7 @@ use std::process::Termination;
 use std::ptr;
 use std::vec;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LoxError {
     inner: LoxErrorInner,
     trace: Vec<&'static str>,
@@ -64,7 +64,7 @@ impl LoxError {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum LoxErrorInner {
     /// An error that occurs when attempting to use a LoxValue with an invalid type.
     TypeError(String),

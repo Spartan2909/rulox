@@ -114,10 +114,13 @@ fn convert_block(stmts: Vec<ast::Stmt>) -> (HashSet<Ident>, Vec<Stmt>) {
 
     for stmt in stmts {
         let stmt: Stmt = stmt.into();
-        if let Stmt::Class { name, .. } = &stmt {
-            forward_declarations.insert(name.clone());
-        } else if let Stmt::Function(Function { name, .. }) = &stmt {
-            forward_declarations.insert(name.clone());
+        match &stmt {
+            Stmt::Class { name, .. }
+            | Stmt::Function(Function { name, .. })
+            | Stmt::Var { name, .. } => {
+                forward_declarations.insert(name.clone());
+            }
+            _ => {}
         }
         body.push(stmt);
     }
@@ -134,7 +137,7 @@ fn block_to_token_stream(
     for name in forward_declarations {
         tokens.append_all(quote! {
             #[allow(non_snake_case)]
-            let #name = __rulox_helpers::LoxVariable::new(LoxValue::Nil);
+            let #name = __rulox_helpers::LoxVariable::new(LoxValue::Undefined(stringify!(#name)));
         });
     }
 
@@ -456,11 +459,7 @@ impl ToTokens for Stmt {
             Stmt::Var { name, initialiser } => {
                 if let Some(initialiser) = initialiser {
                     tokens.append_all(quote! {
-                        let #name = __rulox_helpers::LoxVariable::new(#initialiser);
-                    });
-                } else {
-                    tokens.append_all(quote! {
-                        let #name = __rulox_helpers::LoxVariable::new(LoxValue::Nil);
+                        #name.overwrite(#initialiser);
                     });
                 }
             }

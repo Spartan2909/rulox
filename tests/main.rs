@@ -245,12 +245,12 @@ fn closure() -> Result<(), LoxError> {
     Ok(())
 }
 
-fn hello(name: String) -> String {
-    "Hello ".to_string() + &name
-}
-
 #[test]
 fn bindgen() -> Result<(), LoxError> {
+    fn hello(name: String) -> String {
+        "Hello ".to_string() + &name
+    }
+
     lox_bindgen!(fn hello(name) as lox_hello);
 
     lox! {

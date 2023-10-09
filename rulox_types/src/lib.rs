@@ -1,6 +1,8 @@
 //! `rulox_types` is a collection of types used by the `rulox` crate to
 //! represent dynamically typed values.
 
+#![warn(missing_docs)]
+
 #[cfg_attr(feature = "sync", path = "sync.rs")]
 #[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
 mod shared;
@@ -22,6 +24,7 @@ use std::process::Termination;
 use std::ptr;
 use std::vec;
 
+/// An error raised during compilation or execution.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoxError {
     inner: LoxErrorInner,
@@ -148,7 +151,7 @@ macro_rules! extract {
 
 /// An enum used for error reporting.
 #[derive(Debug, Clone)]
-pub enum LoxValueType {
+enum LoxValueType {
     Bool,
     Str,
     Num,
@@ -200,35 +203,47 @@ macro_rules! loxvalue_to_loxvaluetype {
 
 loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }
 
+/// A result returned from most Lox operations.
 pub type LoxResult = Result<LoxValue, LoxError>;
 
 /// A dynamically typed value used by Lox programs.
 #[non_exhaustive]
 #[derive(Clone)]
 pub enum LoxValue {
+    /// A boolean value.
     Bool(bool),
+    /// A string.
     Str(Rc<String>),
+    /// A floating-point number.
     Num(f64),
+    /// An array of [`LoxValue`]s.
     Arr(Shared<Vec<Self>>),
+    /// A function.
     Function(Rc<LoxFn>),
+    #[doc(hidden)]
     BoundMethod(Rc<LoxFn>, Shared<LoxInstance>),
+    /// A class.
     Class(Rc<LoxClass>),
+    /// An instance of a class.
     Instance(Shared<LoxInstance>),
+    /// A wrapped error.
     Error(LoxError),
+    /// Nothing.
     Nil,
     #[doc(hidden)] // Not public API.
     Undefined(&'static str),
 }
 
 impl LoxValue {
+    /// Gets the `index`th item of `self`, if `self` is an array.
     pub fn index<T: TryInto<f64> + Into<LoxValue> + Clone + fmt::Display>(
         &self,
-        value: T,
+        index: T,
     ) -> Result<LoxValue, LoxError> {
-        let num: f64 = value
+        let num: f64 = index
             .clone()
             .try_into()
-            .map_err(|_| LoxError::type_error(format!("invalid base for index: {value}")))?;
+            .map_err(|_| LoxError::type_error(format!("invalid base for index: {index}")))?;
         let output = match self {
             LoxValue::Arr(arr) => {
                 let index = num as usize;
@@ -253,10 +268,12 @@ impl LoxValue {
         Ok(output)
     }
 
+    /// Returns `false` if self is `false` or `nil`, and `true` otherwise.
     pub fn is_truthy(&self) -> bool {
         !matches!(self, LoxValue::Bool(false) | LoxValue::Nil)
     }
 
+    #[doc(hidden)] // Not public API.
     pub fn function(func: LoxFn) -> LoxValue {
         LoxValue::Function(Rc::new(func))
     }
@@ -277,11 +294,13 @@ impl LoxValue {
         }
     }
 
+    /// Gets the attribute corresponding to `self.key`, if it exists.
     pub fn get(&self, key: &'static str) -> LoxResult {
         self.get_impl(key)
             .ok_or(LoxError::invalid_property(key, self.to_string()))
     }
 
+    /// Gets the attribute corresponding to `self.key` to `value`, if it exists.
     pub fn set(&self, key: &'static str, value: LoxValue) -> LoxResult {
         if let LoxValue::Instance(instance) = self {
             instance
@@ -339,6 +358,31 @@ impl LoxValue {
             err
         } else {
             LoxError::value(self)
+        }
+    }
+
+    /// Calls `self` with the given arguments, if `self` is a function or a
+    /// class.
+    pub fn call(&self, mut args: LoxArgs) -> LoxResult {
+        match self {
+            Self::Function(func) => (func.fun)(args),
+            Self::BoundMethod(func, instance) => {
+                args.head = Some(LoxValue::Instance(instance.clone()));
+                (func.fun)(args)
+            }
+            Self::Class(class) => {
+                let instance = LoxValue::Instance(Shared::new(LoxInstance {
+                    class: Rc::clone(class),
+                    attributes: HashMap::new(),
+                }));
+                if let Some(initialiser) = &class.initialiser {
+                    args.head = Some(instance.clone());
+                    (initialiser.fun)(args)
+                } else {
+                    Ok(instance)
+                }
+            }
+            _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
 }
@@ -753,8 +797,12 @@ impl IntoIterator for LoxValue {
     }
 }
 
+/// An iterator over a `LoxValue::Array` or a `LoxValue::String`.
+#[non_exhaustive]
 pub enum LoxIterator {
+    #[doc(hidden)] // Not public API.
     Array(vec::IntoIter<LoxValue>),
+    #[doc(hidden)] // Not public API.
     String(vec::IntoIter<u8>),
 }
 
@@ -818,6 +866,7 @@ impl Iterator for LoxIterator {
     }
 }
 
+/// A function defined in Lox code.
 pub struct LoxFn {
     fun: Box<dyn Fn(LoxArgs) -> LoxResult>,
     params: Vec<&'static str>,
@@ -856,6 +905,7 @@ pub struct LoxInstance {
     attributes: HashMap<String, LoxValue>,
 }
 
+/// A class defined in Lox code.
 #[derive(Debug, PartialEq)]
 pub struct LoxClass {
     name: &'static str,
@@ -896,12 +946,16 @@ impl LoxClass {
     }
 }
 
+/// Arguments to a Lox function.
 pub struct LoxArgs {
     head: Option<LoxValue>,
     main: Vec<LoxValue>,
 }
 
 impl LoxArgs {
+    /// Creates a new set of arguments from a `Vec<LoxValue>`.
+    /// 
+    /// See also the various [`From`] implementations.
     pub fn new(values: Vec<LoxValue>) -> LoxArgs {
         LoxArgs {
             head: None,
@@ -944,35 +998,6 @@ impl Iterator for Drain<'_> {
             self.head.take()
         } else {
             self.main.next()
-        }
-    }
-}
-
-pub trait LoxCallable {
-    fn lox_call(&self, args: LoxArgs) -> LoxResult;
-}
-
-impl LoxCallable for LoxValue {
-    fn lox_call(&self, mut args: LoxArgs) -> LoxResult {
-        match self {
-            Self::Function(func) => (func.fun)(args),
-            Self::BoundMethod(func, instance) => {
-                args.head = Some(LoxValue::Instance(instance.clone()));
-                (func.fun)(args)
-            }
-            Self::Class(class) => {
-                let instance = LoxValue::Instance(Shared::new(LoxInstance {
-                    class: Rc::clone(class),
-                    attributes: HashMap::new(),
-                }));
-                if let Some(initialiser) = &class.initialiser {
-                    args.head = Some(instance.clone());
-                    (initialiser.fun)(args)
-                } else {
-                    Ok(instance)
-                }
-            }
-            _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
 }

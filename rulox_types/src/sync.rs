@@ -39,13 +39,18 @@ pub struct ReadGuard<'a, T>(RwLockReadGuard<'a, T>);
 #[derive(Debug)]
 pub struct WriteGuard<'a, T>(RwLockWriteGuard<'a, T>);
 
+/// A variable defined in Lox code.
+/// 
+/// There is no public way to create a [`LoxVariable`].
 pub struct LoxVariable(Shared<LoxValue>);
 
 impl LoxVariable {
+    #[doc(hidden)]
     pub fn new<T: Into<LoxValue>>(value: T) -> LoxVariable {
         LoxVariable(Shared::new(value.into()))
     }
 
+    /// Gets the value of `self`, returning an error if it is not defined.
     pub fn get(&self) -> LoxResult {
         let inner = self.0.read();
         if let &LoxValue::Undefined(name) = inner.deref() {

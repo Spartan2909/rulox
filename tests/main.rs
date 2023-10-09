@@ -138,7 +138,7 @@ fn function() -> Result<(), LoxError> {
 
     hello
         .get()?
-        .lox_call([LoxValue::from("Alice")].into())
+        .call([LoxValue::from("Alice")].into())
         .unwrap();
 
     Ok(())
@@ -155,7 +155,7 @@ fn return_test() -> Result<(), LoxError> {
     assert_eq!(
         add_one
             .get()?
-            .lox_call([LoxValue::Num(3.0)].into())
+            .call([LoxValue::Num(3.0)].into())
             .unwrap(),
         LoxValue::Num(4.0)
     );
@@ -201,7 +201,7 @@ fn fibonacci() -> Result<(), LoxError> {
         }
     }
 
-    assert_eq!(fib.get()?.lox_call([LoxValue::Num(5.0)].into())?, 8);
+    assert_eq!(fib.get()?.call([LoxValue::Num(5.0)].into())?, 8);
 
     Ok(())
 }
@@ -226,7 +226,7 @@ fn mutual_recursion() -> Result<(), LoxError> {
         }
     }
 
-    a.get()?.lox_call([LoxValue::Num(4.0)].into()).unwrap();
+    a.get()?.call([LoxValue::Num(4.0)].into()).unwrap();
 
     Ok(())
 }
@@ -240,7 +240,7 @@ fn closure() -> Result<(), LoxError> {
     }
 
     assert_eq!(
-        add_2.get()?.lox_call([LoxValue::Num(1.0)].into()).unwrap(),
+        add_2.get()?.call([LoxValue::Num(1.0)].into()).unwrap(),
         3
     );
 
@@ -271,7 +271,7 @@ fn inline_function() -> Result<(), LoxError> {
     assert_eq!(
         add_one
             .get()?
-            .lox_call([LoxValue::Num(1.5)].into())
+            .call([LoxValue::Num(1.5)].into())
             .unwrap(),
         LoxValue::Num(2.5)
     );

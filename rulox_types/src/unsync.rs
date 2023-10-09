@@ -57,13 +57,18 @@ impl<T: Clone> CloneCell<T> {
     }
 }
 
+/// A variable defined in Lox code.
+/// 
+/// There is no public way to create a [`LoxVariable`].
 pub struct LoxVariable(Rc<CloneCell<LoxValue>>);
 
 impl LoxVariable {
-    pub fn new(value: LoxValue) -> LoxVariable {
-        LoxVariable(Rc::new(CloneCell::new(value)))
+    #[doc(hidden)]
+    pub fn new<T: Into<LoxValue>>(value: T) -> LoxVariable {
+        LoxVariable(Rc::new(CloneCell::new(value.into())))
     }
 
+    /// Gets the value of `self`, returning an error if it is not defined.
     pub fn get(&self) -> LoxResult {
         let inner = self.0.get();
         if let LoxValue::Undefined(name) = inner {

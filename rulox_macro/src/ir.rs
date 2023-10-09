@@ -1122,7 +1122,7 @@ fn function_expr_to_tokens(
                 let _this = #this;
                 let fun = #fun;
                 let bound = LoxValue::bind(fun, _this);
-                bound.lox_call(args)
+                bound.call(args)
             };
         });
     }
@@ -1204,7 +1204,7 @@ impl ToTokens for Expr {
                 let mut inner = TokenStream::new();
                 inner.append_separated(arguments, Punct::new(',', Spacing::Alone));
 
-                tokens.append_all(wrap_extract(quote! { #callee.lox_call([#inner].into()) }));
+                tokens.append_all(wrap_extract(quote! { #callee.call([#inner].into()) }));
             }
             Expr::Unary { operator, right } => {
                 tokens.append_all(wrap_extract(quote! { #operator #right }));

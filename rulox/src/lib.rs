@@ -78,6 +78,8 @@
 //! # }
 //! ```
 
+#![warn(missing_docs)]
+
 /// Parses Lox code and converts it to Rust.
 /// # Examples
 /// ```
@@ -174,7 +176,6 @@ macro_rules! rust_bindgen {
 }
 
 pub use rulox_types::LoxArgs;
-pub use rulox_types::LoxCallable;
 pub use rulox_types::LoxClass;
 pub use rulox_types::LoxError;
 pub use rulox_types::LoxFn;
@@ -182,9 +183,9 @@ pub use rulox_types::LoxResult;
 pub use rulox_types::LoxValue;
 pub use rulox_types::LoxVariable;
 
+/// Items that the [`lox`] macro expects to find in scope.
 pub mod prelude {
     pub use crate::lox;
-    pub use crate::LoxCallable as _;
     pub use crate::LoxValue;
 
     #[doc(hidden)] // Not public API.

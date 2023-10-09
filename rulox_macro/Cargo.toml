@@ -1,6 +1,6 @@
 [package]
 name = "rulox_macro"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2021"
 description = "A macro for embedding Lox in Rust."
 readme = "README.md"
@@ -13,7 +13,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-"rulox_types" = { path = "../rulox_types", version = "0.4" }
+"rulox_types" = { path = "../rulox_types", version = "0.5" }
 "syn" = { version = "2.0", features = ["extra-traits"] }
 "quote" = "1.0"
 "proc-macro2" = "1.0"

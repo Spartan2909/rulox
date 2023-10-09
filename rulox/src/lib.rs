@@ -55,9 +55,9 @@
 //!     hello("Alice");
 //! }
 //!
-//! hello.get()?.lox_call([LoxValue::from("Bob")].into())?;
+//! hello.get()?.call([LoxValue::from("Bob")].into())?;
 //!
-//! assert_eq!(add_one.get()?.lox_call([LoxValue::from(3)].into())?, LoxValue::from(4));
+//! assert_eq!(add_one.get()?.call([LoxValue::from(3)].into())?, LoxValue::from(4));
 //! # Ok(())
 //! # }
 //! ```
@@ -182,7 +182,7 @@ macro_rules! rust_bindgen {
         let $rust_name = {
             let $lox_name = $lox_name.close_over();
             move | $( $arg_name : $arg_ty ),* | -> $crate::prelude::__rulox_helpers::Result<$ret_ty, $crate::LoxError> {
-                $lox_name.get()?.lox_call([ $( $arg_name.into() ),* ].into())?.try_into()
+                $lox_name.get()?.call([ $( $arg_name.into() ),* ].into())?.try_into()
             }
         };
     };

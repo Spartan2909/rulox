@@ -4,6 +4,7 @@ use std::time::Duration;
 use rulox::lox_bindgen;
 use rulox::prelude::*;
 use rulox::LoxError;
+use rulox::rust_bindgen;
 
 use tokio::time;
 
@@ -494,6 +495,35 @@ async fn async_bindgen() -> Result<(), LoxError> {
     lox_bindgen!(async fn do_some_stuff() as lox_do_stuff);
 
     assert_eq!(lox_do_stuff.get()?.call([].into())?.await?, 3);
+
+    Ok(())
+}
+
+#[test]
+fn comments() -> Result<(), LoxError> {
+    lox! {
+        var x = 5; // x coordinate
+        // thing to say hello to
+        var hello = "world";
+    }
+
+    assert_eq!(x.get()?, 5);
+    assert_eq!(hello.get()?, "world");
+
+    Ok(())
+}
+
+#[test]
+fn rust_bindgen() -> Result<(), LoxError> {
+    lox! {
+        fun hello(name) {
+            return "Hello " + name + "!";
+        }
+    }
+
+    rust_bindgen!(fn hello(name: &str) -> String as rust_hello);
+
+    assert_eq!(rust_hello("John"), Ok("Hello John!".to_string()));
 
     Ok(())
 }

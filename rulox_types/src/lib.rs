@@ -57,6 +57,13 @@ impl LoxError {
         }
     }
 
+    fn value(value: LoxValue) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::Value(Box::new(value)),
+            trace: vec![],
+        }
+    }
+
     #[doc(hidden)] // Not public API.
     #[cold]
     pub fn push_trace(&mut self, value: &'static str) {
@@ -79,6 +86,7 @@ enum LoxErrorInner {
         object: String,
     },
     NonExistentSuper(&'static str),
+    Value(Box<LoxValue>),
 }
 
 impl fmt::Display for LoxError {
@@ -105,6 +113,9 @@ impl fmt::Display for LoxError {
             }
             LoxErrorInner::NonExistentSuper(name) => {
                 write!(f, "function '{name}' has no super function")
+            }
+            LoxErrorInner::Value(value) => {
+                write!(f, "error: {value}")
             }
         }
     }
@@ -183,6 +194,7 @@ loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }
 pub type LoxResult = Result<LoxValue, LoxError>;
 
 /// A dynamically typed value used by Lox programs.
+#[non_exhaustive]
 #[derive(Clone)]
 pub enum LoxValue {
     Bool(bool),
@@ -195,6 +207,7 @@ pub enum LoxValue {
     Instance(Shared<LoxInstance>),
     Error(LoxError),
     Nil,
+    #[doc(hidden)] // Not public API.
     Undefined(&'static str),
 }
 
@@ -309,6 +322,15 @@ impl LoxValue {
     #[doc(hidden)] // Not public API.
     pub fn bind(fun: Rc<LoxFn>, instance: LoxValue) -> LoxValue {
         LoxValue::BoundMethod(fun, instance.as_instance().unwrap())
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn into_error(self) -> LoxError {
+        if let LoxValue::Error(err) = self {
+            err
+        } else {
+            LoxError::value(self)
+        }
     }
 }
 

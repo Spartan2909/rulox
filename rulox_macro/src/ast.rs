@@ -21,6 +21,7 @@ mod kw {
     syn::custom_keyword!(fun);
     syn::custom_keyword!(class);
     syn::custom_keyword!(this);
+    syn::custom_keyword!(throw);
 }
 
 pub struct LoxProgram {
@@ -96,6 +97,7 @@ pub enum Stmt {
         methods: Vec<Function>,
         superclass: Option<Ident>,
     },
+    Throw(Expr),
 }
 
 impl Parse for Stmt {
@@ -184,6 +186,8 @@ impl Stmt {
             Self::for_statement(input)
         } else if input.peek(Token![loop]) {
             Self::loop_statement(input)
+        } else if input.peek(kw::throw) {
+            Self::throw(input)
         } else if input.peek(token::Brace) {
             Self::block(input)
         } else {
@@ -317,6 +321,16 @@ impl Stmt {
         Ok(Self::Loop {
             body: Box::new(body),
         })
+    }
+
+    fn throw(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<kw::throw>()?;
+
+        let expr = input.parse()?;
+
+        input.parse::<Token![;]>()?;
+
+        Ok(Self::Throw(expr))
     }
 
     fn block(input: ParseStream) -> syn::Result<Self> {

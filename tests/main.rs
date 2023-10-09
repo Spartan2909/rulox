@@ -1,3 +1,5 @@
+use std::convert::Infallible;
+
 use rulox::lox_bindgen;
 use rulox::prelude::*;
 use rulox::LoxError;
@@ -365,4 +367,15 @@ fn super_call() -> Result<(), LoxError> {
     }
 
     Ok(())
+}
+
+#[test]
+fn throw() {
+    fn throws() -> Result<Infallible, LoxError> {
+        lox! {
+            throw 3;
+        }
+    }
+
+    assert!(throws().is_err());
 }

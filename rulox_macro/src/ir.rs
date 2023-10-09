@@ -184,6 +184,7 @@ enum Stmt {
         methods: Vec<Function>,
         superclass: Option<Ident>,
     },
+    Throw(Expr),
 }
 
 impl Stmt {
@@ -193,7 +194,7 @@ impl Stmt {
         references: &mut HashSet<Ident>,
     ) {
         match self {
-            Stmt::Expr(expr) | Stmt::Print(expr) => {
+            Stmt::Expr(expr) | Stmt::Print(expr) | Stmt::Throw(expr) => {
                 expr.undeclared_references(declared, references)
             }
             Stmt::Var { name, initialiser } => {
@@ -275,7 +276,7 @@ impl Stmt {
 
     fn resolve(&mut self, resolver: &mut Resolver) {
         match self {
-            Stmt::Expr(expr) | Stmt::Print(expr) => expr.resolve(resolver),
+            Stmt::Expr(expr) | Stmt::Print(expr) | Stmt::Throw(expr) => expr.resolve(resolver),
             Stmt::Break => {
                 if !resolver.in_loop {
                     panic!("cannot use 'break' outside of loop");
@@ -432,6 +433,7 @@ impl From<ast::Stmt> for Stmt {
                     .collect(),
                 superclass,
             },
+            ast::Stmt::Throw(expr) => Stmt::Throw(expr.into()),
         }
     }
 }
@@ -566,6 +568,9 @@ impl ToTokens for Stmt {
                         #superclass,
                     ))));
                 });
+            }
+            Stmt::Throw(expr) => {
+                tokens.append_all(quote! { return Err((#expr).into_error()); })
             }
         }
     }

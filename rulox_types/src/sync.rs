@@ -40,7 +40,7 @@ pub struct ReadGuard<'a, T>(RwLockReadGuard<'a, T>);
 pub struct WriteGuard<'a, T>(RwLockWriteGuard<'a, T>);
 
 /// A variable defined in Lox code.
-/// 
+///
 /// There is no public way to create a [`LoxVariable`].
 pub struct LoxVariable(Shared<LoxValue>);
 

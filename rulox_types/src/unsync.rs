@@ -58,7 +58,7 @@ impl<T: Clone> CloneCell<T> {
 }
 
 /// A variable defined in Lox code.
-/// 
+///
 /// There is no public way to create a [`LoxVariable`].
 pub struct LoxVariable(Rc<CloneCell<LoxValue>>);
 

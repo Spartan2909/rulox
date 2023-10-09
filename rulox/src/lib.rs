@@ -127,17 +127,30 @@ pub use rulox_macro::lox;
 #[macro_export]
 macro_rules! lox_bindgen {
     ( fn $rust_name:ident ( $( $arg:ident ),* ) as $lox_name:ident ) => {
-        let $lox_name = __rulox_helpers::LoxVariable::new(
-            LoxValue::function(__rulox_helpers::LoxFn::new(|mut args: $crate::LoxArgs| -> __rulox_helpers::LoxResult {
+        let $lox_name = __rulox_helpers::LoxVariable::new(LoxValue::function(__rulox_helpers::LoxFn::new(
+            |mut args: $crate::LoxArgs| -> __rulox_helpers::LoxResult {
                 let mut _drain = args.drain();
                 $(
                     let $arg = _drain.next().unwrap();
                 )*
-                Ok($rust_name( $( $arg.try_into().unwrap() )* ).into())
-                },
-                vec![$( stringify!($arg) ),*]
-            ))
-        );
+                $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into().unwrap() )* ))
+            },
+            vec![$( stringify!($arg) ),*]
+        )));
+    };
+    ( async fn $rust_name:ident ( $( $arg:ident ),* ) as $lox_name:ident ) => {
+        let $lox_name = __rulox_helpers::LoxVariable::new(LoxValue::coroutine(
+            |mut args: $crate::LoxArgs| -> Box<dyn $crate::prelude::__rulox_helpers::Future<Output = $crate::LoxResult> + Send + Sync + 'static> {
+                    let mut _drain = args.drain();
+                $(
+                    let $arg = _drain.next().unwrap();
+                )*
+                Box::new(async {
+                    $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into().unwrap() )* ).await)
+                })
+            },
+            vec![$( stringify!($arg) ),*]
+        ));
     };
 }
 
@@ -183,6 +196,9 @@ pub use rulox_types::LoxResult;
 pub use rulox_types::LoxValue;
 pub use rulox_types::LoxVariable;
 
+#[doc(hidden)]
+pub use rulox_types::ToLoxResult;
+
 /// Items that the [`lox`] macro expects to find in scope.
 pub mod prelude {
     pub use crate::lox;
@@ -195,9 +211,12 @@ pub mod prelude {
         pub use crate::LoxFn;
         pub use crate::LoxResult;
         pub use crate::LoxVariable;
+        pub use core::result::Result;
         pub use rulox_types::extract;
+        pub use rulox_types::LoxRc;
         pub use std::collections::HashMap;
-        pub use std::rc::Rc;
-        pub use std::result::Result;
+
+        #[cfg(feature = "async")]
+        pub use core::future::Future;
     }
 }

@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 "rulox" = { path = "./rulox" }
+"tokio" = { version = "1", features = ["rt", "macros", "time"] }
 
 [workspace]
 members = ["rulox", "rulox_macro", "rulox_types"]

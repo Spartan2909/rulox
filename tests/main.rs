@@ -1,8 +1,11 @@
 use std::convert::Infallible;
+use std::time::Duration;
 
 use rulox::lox_bindgen;
 use rulox::prelude::*;
 use rulox::LoxError;
+
+use tokio::time;
 
 #[test]
 fn var_declaration() {
@@ -136,10 +139,7 @@ fn function() -> Result<(), LoxError> {
         hello("Bob");
     }
 
-    hello
-        .get()?
-        .call([LoxValue::from("Alice")].into())
-        .unwrap();
+    hello.get()?.call([LoxValue::from("Alice")].into()).unwrap();
 
     Ok(())
 }
@@ -153,10 +153,7 @@ fn return_test() -> Result<(), LoxError> {
     }
 
     assert_eq!(
-        add_one
-            .get()?
-            .call([LoxValue::Num(3.0)].into())
-            .unwrap(),
+        add_one.get()?.call([LoxValue::Num(3.0)].into()).unwrap(),
         LoxValue::Num(4.0)
     );
 
@@ -239,10 +236,7 @@ fn closure() -> Result<(), LoxError> {
         var add_2 = adder(2);
     }
 
-    assert_eq!(
-        add_2.get()?.call([LoxValue::Num(1.0)].into()).unwrap(),
-        3
-    );
+    assert_eq!(add_2.get()?.call([LoxValue::Num(1.0)].into()).unwrap(), 3);
 
     Ok(())
 }
@@ -269,10 +263,7 @@ fn inline_function() -> Result<(), LoxError> {
     }
 
     assert_eq!(
-        add_one
-            .get()?
-            .call([LoxValue::Num(1.5)].into())
-            .unwrap(),
+        add_one.get()?.call([LoxValue::Num(1.5)].into()).unwrap(),
         LoxValue::Num(2.5)
     );
 
@@ -482,6 +473,27 @@ fn try_finally_ok() -> Result<(), LoxError> {
     assert_eq!(except_ran.get()?, false);
     assert_eq!(else_ran.get()?, true);
     assert_eq!(finally_ran.get()?, true);
+
+    Ok(())
+}
+
+#[test]
+fn sync() {
+    fn needs_send_sync<T: Send + Sync>(_x: T) {}
+
+    needs_send_sync(LoxValue::Nil);
+}
+
+#[tokio::test]
+async fn async_bindgen() -> Result<(), LoxError> {
+    async fn do_some_stuff() -> i32 {
+        time::sleep(Duration::from_secs(2)).await;
+        3
+    }
+
+    lox_bindgen!(async fn do_some_stuff() as lox_do_stuff);
+
+    assert_eq!(lox_do_stuff.get()?.call([].into())?.await?, 3);
 
     Ok(())
 }

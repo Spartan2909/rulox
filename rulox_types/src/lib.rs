@@ -3,6 +3,9 @@
 
 #![warn(missing_docs)]
 
+#[cfg(feature = "async")]
+mod async_types;
+
 #[cfg_attr(feature = "sync", path = "sync.rs")]
 #[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
 mod shared;
@@ -11,7 +14,12 @@ use shared::Shared;
 
 mod to_tokens;
 
-use std::rc::Rc;
+#[cfg(not(feature = "sync"))]
+#[doc(hidden)]
+pub use std::rc::Rc as LoxRc;
+#[cfg(feature = "sync")]
+#[doc(hidden)]
+pub use std::sync::Arc as LoxRc;
 
 use std::cmp;
 use std::collections::HashMap;
@@ -23,6 +31,25 @@ use std::process::ExitCode;
 use std::process::Termination;
 use std::ptr;
 use std::vec;
+
+#[cfg(feature = "async")]
+use std::future::Future;
+
+use castaway::cast;
+
+#[derive(Debug, Clone)]
+#[cfg(feature = "sync")]
+struct ExternalError(LoxRc<dyn Error + Send + Sync>);
+
+#[derive(Debug, Clone)]
+#[cfg(not(feature = "sync"))]
+struct ExternalError(LoxRc<dyn Error>);
+
+impl PartialEq for ExternalError {
+    fn eq(&self, other: &Self) -> bool {
+        LoxRc::ptr_eq(&self.0, &other.0)
+    }
+}
 
 /// An error raised during compilation or execution.
 #[derive(Debug, Clone, PartialEq)]
@@ -67,6 +94,14 @@ impl LoxError {
         }
     }
 
+    #[cfg(feature = "async")]
+    fn finished_coroutine() -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::FinishedCoroutine,
+            trace: vec![],
+        }
+    }
+
     #[doc(hidden)] // Not public API.
     #[cold]
     pub fn push_trace(&mut self, value: &'static str) {
@@ -79,6 +114,24 @@ impl LoxError {
             *value
         } else {
             LoxValue::Error(self)
+        }
+    }
+
+    /// Creates a [`LoxError`] from another error.
+    #[cfg(feature = "sync")]
+    pub fn external<E: Error + Send + Sync + 'static>(value: E) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::External(ExternalError(LoxRc::new(value))),
+            trace: vec![],
+        }
+    }
+
+    /// Creates a [`LoxError`] from another error.
+    #[cfg(not(feature = "sync"))]
+    pub fn external<E: Error + 'static>(value: E) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::External(ExternalError(LoxRc::new(value))),
+            trace: vec![],
         }
     }
 }
@@ -99,6 +152,9 @@ enum LoxErrorInner {
     },
     NonExistentSuper(&'static str),
     Value(Box<LoxValue>),
+    External(ExternalError),
+    #[cfg(feature = "async")]
+    FinishedCoroutine,
 }
 
 impl fmt::Display for LoxError {
@@ -129,6 +185,9 @@ impl fmt::Display for LoxError {
             LoxErrorInner::Value(value) => {
                 write!(f, "error: {value}")
             }
+            LoxErrorInner::External(err) => fmt::Display::fmt(&err.0, f),
+            #[cfg(feature = "async")]
+            LoxErrorInner::FinishedCoroutine => write!(f, "cannot await a finished coroutine"),
         }
     }
 }
@@ -160,6 +219,10 @@ enum LoxValueType {
     Class,
     Instance(&'static str),
     Error,
+    #[cfg(feature = "async")]
+    Coroutine(Vec<&'static str>),
+    #[cfg(feature = "async")]
+    Future(bool),
     Nil,
 }
 
@@ -174,6 +237,10 @@ impl fmt::Display for LoxValueType {
             Self::Class => write!(f, "class"),
             Self::Instance(class) => write!(f, "instance of {class}"),
             Self::Error => f.write_str("error"),
+            #[cfg(feature = "async")]
+            Self::Coroutine(params) => write!(f, "async function({:#?})", params),
+            #[cfg(feature = "async")]
+            Self::Future(done) => write!(f, "{}future", if *done { "completed" } else { "" }),
             Self::Nil => write!(f, "nil"),
         }
     }
@@ -193,6 +260,10 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Class(_) => Self::Class,
                     LoxValue::Instance(instance) => Self::Instance(instance.read().class.name.clone()),
                     LoxValue::Error(_) => Self::Error,
+                    #[cfg(feature = "async")]
+                    LoxValue::Coroutine(f) => Self::Coroutine(f.params().to_vec()),
+                    #[cfg(feature = "async")]
+                    LoxValue::Future(fut) => Self::Future(fut.read().done()),
                     LoxValue::Nil => Self::Nil,
                     LoxValue::Undefined(_) => unreachable!(),
                 }
@@ -213,21 +284,27 @@ pub enum LoxValue {
     /// A boolean value.
     Bool(bool),
     /// A string.
-    Str(Rc<String>),
+    Str(LoxRc<String>),
     /// A floating-point number.
     Num(f64),
     /// An array of [`LoxValue`]s.
     Arr(Shared<Vec<Self>>),
     /// A function.
-    Function(Rc<LoxFn>),
+    Function(LoxRc<LoxFn>),
     #[doc(hidden)]
-    BoundMethod(Rc<LoxFn>, Shared<LoxInstance>),
+    BoundMethod(LoxRc<LoxFn>, Shared<LoxInstance>),
     /// A class.
-    Class(Rc<LoxClass>),
+    Class(LoxRc<LoxClass>),
     /// An instance of a class.
     Instance(Shared<LoxInstance>),
     /// A wrapped error.
     Error(LoxError),
+    /// An asynchronous function.
+    #[cfg(feature = "async")]
+    Coroutine(LoxRc<async_types::Coroutine>),
+    /// A value returned from an async function.
+    #[cfg(feature = "async")]
+    Future(Shared<async_types::LoxFuture>),
     /// Nothing.
     Nil,
     #[doc(hidden)] // Not public API.
@@ -275,7 +352,21 @@ impl LoxValue {
 
     #[doc(hidden)] // Not public API.
     pub fn function(func: LoxFn) -> LoxValue {
-        LoxValue::Function(Rc::new(func))
+        LoxValue::Function(LoxRc::new(func))
+    }
+
+    #[doc(hidden)] // Not public API.
+    #[cfg(feature = "async")]
+    pub fn coroutine<
+        F: Fn(LoxArgs) -> Box<dyn Future<Output = LoxResult> + Send + Sync> + Send + Sync + 'static,
+    >(
+        fun: F,
+        params: Vec<&'static str>,
+    ) -> LoxValue {
+        LoxValue::Coroutine(LoxRc::new(async_types::Coroutine::new(
+            Box::new(fun),
+            params,
+        )))
     }
 
     fn get_impl(&self, key: &str) -> Option<LoxValue> {
@@ -322,7 +413,7 @@ impl LoxValue {
     }
 
     #[doc(hidden)] // Not public API.
-    pub fn as_class(&self) -> Result<&Rc<LoxClass>, LoxError> {
+    pub fn as_class(&self) -> Result<&LoxRc<LoxClass>, LoxError> {
         if let LoxValue::Class(class) = self {
             Ok(class)
         } else {
@@ -332,23 +423,23 @@ impl LoxValue {
         }
     }
 
-    fn super_fn_impl(&self, name: &'static str) -> Option<Rc<LoxFn>> {
+    fn super_fn_impl(&self, name: &'static str) -> Option<LoxRc<LoxFn>> {
         let instance = self.as_instance()?;
         let mut class = &instance.read().class;
         while class.methods.get(name).is_none() {
             class = class.superclass.as_ref()?;
         }
-        Some(Rc::clone(class.superclass.as_ref()?.methods.get(name)?))
+        Some(LoxRc::clone(class.superclass.as_ref()?.methods.get(name)?))
     }
 
     #[doc(hidden)] // Not public API.
-    pub fn super_fn(&self, name: &'static str) -> Result<Rc<LoxFn>, LoxError> {
+    pub fn super_fn(&self, name: &'static str) -> Result<LoxRc<LoxFn>, LoxError> {
         self.super_fn_impl(name)
             .ok_or(LoxError::non_existent_super(name))
     }
 
     #[doc(hidden)] // Not public API.
-    pub fn bind(fun: Rc<LoxFn>, instance: LoxValue) -> LoxValue {
+    pub fn bind(fun: LoxRc<LoxFn>, instance: LoxValue) -> LoxValue {
         LoxValue::BoundMethod(fun, instance.as_instance().unwrap())
     }
 
@@ -372,7 +463,7 @@ impl LoxValue {
             }
             Self::Class(class) => {
                 let instance = LoxValue::Instance(Shared::new(LoxInstance {
-                    class: Rc::clone(class),
+                    class: LoxRc::clone(class),
                     attributes: HashMap::new(),
                 }));
                 if let Some(initialiser) = &class.initialiser {
@@ -382,6 +473,8 @@ impl LoxValue {
                     Ok(instance)
                 }
             }
+            #[cfg(feature = "async")]
+            Self::Coroutine(func) => Ok(LoxValue::Future(Shared::new(func.start(args)))),
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
@@ -401,6 +494,10 @@ impl fmt::Debug for LoxValue {
             Self::Class(class) => write!(f, "Class({:#?})", class),
             Self::Instance(instance) => write!(f, "Instance({:#?})", instance.read()),
             Self::Error(error) => write!(f, "Error({:#?})", error),
+            #[cfg(feature = "async")]
+            Self::Coroutine(fun) => write!(f, "Coroutine({:#?})", fun.params()),
+            #[cfg(feature = "async")]
+            Self::Future(_) => write!(f, "Future"),
             Self::Nil => write!(f, "Nil"),
             Self::Undefined(_) => write!(f, "Undefined"),
         }
@@ -456,6 +553,10 @@ impl fmt::Display for LoxValue {
                 write!(f, "<instance of {}>", instance.read().class.name)
             }
             Self::Error(error) => write!(f, "{error}"),
+            #[cfg(feature = "async")]
+            Self::Coroutine(_) => write!(f, "<async function>"),
+            #[cfg(feature = "async")]
+            Self::Future(_) => write!(f, "<future>"),
             Self::Nil => {
                 write!(f, "nil")
             }
@@ -518,6 +619,12 @@ impl<const N: usize> From<[LoxValue; N]> for LoxValue {
 impl From<LoxError> for LoxValue {
     fn from(value: LoxError) -> Self {
         LoxValue::Error(value)
+    }
+}
+
+impl From<()> for LoxValue {
+    fn from(_value: ()) -> Self {
+        LoxValue::Nil
     }
 }
 
@@ -654,7 +761,7 @@ impl ops::Add for LoxValue {
         let self_type = LoxValueType::from(&self);
         match (self, &rhs) {
             (LoxValue::Str(s1), LoxValue::Str(s2)) => {
-                Ok(LoxValue::Str(Rc::new(s1.to_string() + s2)))
+                Ok(LoxValue::Str(LoxRc::new(s1.to_string() + s2)))
             }
             (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
             (LoxValue::Arr(arr1), LoxValue::Arr(ref arr2)) => {
@@ -827,10 +934,7 @@ fn next_code_point<I: Iterator<Item = u8>>(bytes: &mut I) -> Option<u32> {
 
     // Multibyte case follows
     // Decode from a byte combination out of: [[[x y] z] w]
-    // NOTE: Performance is sensitive to the exact formulation here
     let init = utf8_first_byte(x, 2);
-    // SAFETY: `bytes` produces an UTF-8-like string,
-    // so the iterator must produce a value here.
     let y = bytes.next().unwrap();
     let mut ch = utf8_acc_cont_byte(init, y);
     if x >= 0xE0 {
@@ -868,13 +972,29 @@ impl Iterator for LoxIterator {
 
 /// A function defined in Lox code.
 pub struct LoxFn {
+    #[cfg(feature = "sync")]
+    fun: Box<dyn Fn(LoxArgs) -> LoxResult + Send + Sync>,
+    #[cfg(not(feature = "sync"))]
     fun: Box<dyn Fn(LoxArgs) -> LoxResult>,
     params: Vec<&'static str>,
 }
 
 impl LoxFn {
+    #[cfg(not(feature = "sync"))]
     #[doc(hidden)] // Not public API.
     pub fn new<F: Fn(LoxArgs) -> LoxResult + 'static>(fun: F, params: Vec<&'static str>) -> Self {
+        Self {
+            fun: Box::new(fun),
+            params,
+        }
+    }
+
+    #[cfg(feature = "sync")]
+    #[doc(hidden)]
+    pub fn new<F: Fn(LoxArgs) -> LoxResult + Send + Sync + 'static>(
+        fun: F,
+        params: Vec<&'static str>,
+    ) -> Self {
         Self {
             fun: Box::new(fun),
             params,
@@ -901,7 +1021,7 @@ impl PartialEq for LoxFn {
 /// An instance of a Lox class.
 #[derive(Debug, PartialEq)]
 pub struct LoxInstance {
-    class: Rc<LoxClass>,
+    class: LoxRc<LoxClass>,
     attributes: HashMap<String, LoxValue>,
 }
 
@@ -909,17 +1029,17 @@ pub struct LoxInstance {
 #[derive(Debug, PartialEq)]
 pub struct LoxClass {
     name: &'static str,
-    initialiser: Option<Rc<LoxFn>>,
-    methods: HashMap<&'static str, Rc<LoxFn>>,
-    superclass: Option<Rc<LoxClass>>,
+    initialiser: Option<LoxRc<LoxFn>>,
+    methods: HashMap<&'static str, LoxRc<LoxFn>>,
+    superclass: Option<LoxRc<LoxClass>>,
 }
 
 impl LoxClass {
     #[doc(hidden)] // Not public API.
     pub fn new(
         name: &'static str,
-        methods: HashMap<&'static str, Rc<LoxFn>>,
-        superclass: Option<Rc<LoxClass>>,
+        methods: HashMap<&'static str, LoxRc<LoxFn>>,
+        superclass: Option<LoxRc<LoxClass>>,
     ) -> LoxClass {
         let mut class = LoxClass {
             name,
@@ -935,9 +1055,9 @@ impl LoxClass {
         class
     }
 
-    fn get(&self, key: &str) -> Option<Rc<LoxFn>> {
+    fn get(&self, key: &str) -> Option<LoxRc<LoxFn>> {
         if let Some(method) = self.methods.get(key) {
-            Some(Rc::clone(method))
+            Some(LoxRc::clone(method))
         } else {
             self.superclass
                 .as_ref()
@@ -954,7 +1074,7 @@ pub struct LoxArgs {
 
 impl LoxArgs {
     /// Creates a new set of arguments from a `Vec<LoxValue>`.
-    /// 
+    ///
     /// See also the various [`From`] implementations.
     pub fn new(values: Vec<LoxValue>) -> LoxArgs {
         LoxArgs {
@@ -999,6 +1119,51 @@ impl Iterator for Drain<'_> {
         } else {
             self.main.next()
         }
+    }
+}
+
+#[doc(hidden)]
+pub trait ToLoxResult {
+    fn to_lox_result(self) -> LoxResult;
+}
+
+#[doc(hidden)]
+impl<T: Into<LoxValue>> ToLoxResult for T {
+    fn to_lox_result(self) -> LoxResult {
+        let value: LoxValue = self.into();
+        if let LoxValue::Error(err) = value {
+            Err(err)
+        } else {
+            Ok(value)
+        }
+    }
+}
+
+#[cfg(feature = "sync")]
+#[doc(hidden)]
+impl<T: Into<LoxValue>, E: Error + Send + Sync + 'static> ToLoxResult for Result<T, E> {
+    fn to_lox_result(self) -> LoxResult {
+        self.map(|value| value.into()).map_err(|err| {
+            if cast!(&err, &LoxError).is_ok() {
+                cast!(err, LoxError).unwrap()
+            } else {
+                LoxError::external(err)
+            }
+        })
+    }
+}
+
+#[cfg(not(feature = "sync"))]
+#[doc(hidden)]
+impl<T: Into<LoxValue>, E: Error + 'static> ToLoxResult for Result<T, E> {
+    fn to_lox_result(self) -> LoxResult {
+        self.map(|value| value.into()).map_err(|err| {
+            if let Ok(lox_error) = cast!(&err, &LoxError) {
+                lox_error.clone()
+            } else {
+                LoxError::external(err)
+            }
+        })
     }
 }
 

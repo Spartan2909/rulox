@@ -47,11 +47,13 @@ impl<T: Clone> CloneCell<T> {
     }
 
     fn set(&self, value: T) {
+        // SAFETY: There are no pther references to `self.0`.
         let inner = unsafe { &mut *self.0.get() };
         *inner = value;
     }
 
     fn get(&self) -> T {
+        // SAFETY: There are no other references to `self.0`.
         let inner = unsafe { &*self.0.get() };
         inner.clone()
     }

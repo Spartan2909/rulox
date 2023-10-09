@@ -18,5 +18,6 @@ license.workspace = true
 "rulox_types" = { path ="../rulox_types", version = "0.5" }
 
 [features]
-default = ["sync"]
+default = ["sync", "async"]
 sync = ["rulox_types/sync"]
+async = ["sync", "rulox_types/async"]

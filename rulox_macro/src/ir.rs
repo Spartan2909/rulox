@@ -651,7 +651,7 @@ impl ToTokens for Stmt {
                     let get = wrap_extract(quote! { #superclass.get() });
                     let class = wrap_extract(quote! { #get.as_class() });
                     quote! {
-                        Some(__rulox_helpers::Rc::clone(#class))
+                        Some(__rulox_helpers::LoxRc::clone(#class))
                     }
                 } else {
                     quote! { None }
@@ -670,12 +670,12 @@ impl ToTokens for Stmt {
                     );
                     let method_name = &method.name;
                     methods_tokens.append_all(
-                        quote! { (stringify!(#method_name), __rulox_helpers::Rc::new(#method_tokens)), },
+                        quote! { (stringify!(#method_name), __rulox_helpers::LoxRc::new(#method_tokens)), },
                     );
                 }
 
                 tokens.append_all(quote! {
-                    #name.overwrite(LoxValue::Class(__rulox_helpers::Rc::new(__rulox_helpers::LoxClass::new(
+                    #name.overwrite(LoxValue::Class(__rulox_helpers::LoxRc::new(__rulox_helpers::LoxClass::new(
                         stringify!(#name),
                         __rulox_helpers::HashMap::from_iter([#methods_tokens]),
                         #superclass,

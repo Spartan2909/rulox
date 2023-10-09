@@ -7,6 +7,7 @@ use syn::parse::Parse;
 use syn::parse::ParseStream;
 use syn::spanned::Spanned;
 use syn::token;
+use syn::token::Paren;
 use syn::BinOp;
 use syn::Ident;
 use syn::Token;
@@ -22,6 +23,8 @@ mod kw {
     syn::custom_keyword!(class);
     syn::custom_keyword!(this);
     syn::custom_keyword!(throw);
+    syn::custom_keyword!(except);
+    syn::custom_keyword!(finally);
 }
 
 pub struct LoxProgram {
@@ -64,6 +67,12 @@ impl Parse for Function {
     }
 }
 
+pub struct Except {
+    pub binding: Option<Ident>,
+    pub guard: Option<Expr>,
+    pub body: Box<Stmt>,
+}
+
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),
@@ -98,6 +107,12 @@ pub enum Stmt {
         superclass: Option<Ident>,
     },
     Throw(Expr),
+    Try {
+        body: Box<Stmt>,
+        excepts: Vec<Except>,
+        else_block: Option<Box<Stmt>>,
+        finally: Option<Box<Stmt>>,
+    },
 }
 
 impl Parse for Stmt {
@@ -188,6 +203,8 @@ impl Stmt {
             Self::loop_statement(input)
         } else if input.peek(kw::throw) {
             Self::throw(input)
+        } else if input.peek(Token![try]) {
+            Self::try_statement(input)
         } else if input.peek(token::Brace) {
             Self::block(input)
         } else {
@@ -331,6 +348,61 @@ impl Stmt {
         input.parse::<Token![;]>()?;
 
         Ok(Self::Throw(expr))
+    }
+
+    fn try_statement(input: ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![try]>()?;
+
+        let body = input.parse()?;
+
+        let mut excepts = vec![];
+        while input.peek(kw::except) {
+            input.parse::<kw::except>()?;
+
+            let (binding, guard) = if input.peek(Paren) {
+                let content;
+                parenthesized!(content in input);
+                let binding = content.parse()?;
+                let guard = if content.peek(Token![if]) {
+                    content.parse::<Token![if]>()?;
+                    Some(content.parse()?)
+                } else {
+                    None
+                };
+                (binding, guard)
+            } else {
+                (None, None)
+            };
+
+            let body = input.parse()?;
+
+            excepts.push(Except {
+                binding,
+                guard,
+                body,
+            })
+        }
+
+        let else_block = if input.peek(Token![else]) {
+            input.parse::<Token![else]>()?;
+            Some(input.parse()?)
+        } else {
+            None
+        };
+
+        let finally = if input.peek(kw::finally) {
+            input.parse::<kw::finally>()?;
+            Some(input.parse()?)
+        } else {
+            None
+        };
+
+        Ok(Self::Try {
+            body: Box::new(body),
+            excepts,
+            else_block,
+            finally,
+        })
     }
 
     fn block(input: ParseStream) -> syn::Result<Self> {

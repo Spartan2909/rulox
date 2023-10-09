@@ -148,6 +148,59 @@ fn block_to_token_stream(
     tokens
 }
 
+struct Except {
+    binding: Option<Ident>,
+    guard: Option<Expr>,
+    body: Box<Stmt>,
+}
+
+impl Except {
+    fn undeclared_references(&self, declared: &HashSet<Ident>, references: &mut HashSet<Ident>) {
+        let mut declared = declared.clone();
+        if let Some(binding) = &self.binding {
+            declared.insert(binding.clone());
+        }
+        if let Some(guard) = &self.guard {
+            guard.undeclared_references(&mut declared, references);
+        }
+        self.body.undeclared_references(&mut declared, references);
+    }
+
+    fn resolve(&mut self, resolver: &mut Resolver) {
+        if let Some(guard) = &mut self.guard {
+            guard.resolve(resolver);
+        }
+
+        self.body.resolve(resolver);
+    }
+}
+
+impl From<ast::Except> for Except {
+    fn from(value: ast::Except) -> Self {
+        Except {
+            binding: value.binding,
+            guard: value.guard.map(|expr| expr.into()),
+            body: Box::new(value.body.into()),
+        }
+    }
+}
+
+impl ToTokens for Except {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let pattern = if let Some(binding) = &self.binding {
+            if let Some(guard) = &self.guard {
+                quote! { Err(#binding) if (#guard).is_truthy() }
+            } else {
+                quote! { Err(#binding) }
+            }
+        } else {
+            quote! { Err(_) }
+        };
+        let body = &self.body;
+        tokens.append_all(quote! { #pattern => { #body } })
+    }
+}
+
 enum Stmt {
     Expr(Expr),
     Print(Expr),
@@ -185,6 +238,12 @@ enum Stmt {
         superclass: Option<Ident>,
     },
     Throw(Expr),
+    Try {
+        body: Box<Stmt>,
+        excepts: Vec<Except>,
+        else_block: Option<Box<Stmt>>,
+        finally: Option<Box<Stmt>>,
+    },
 }
 
 impl Stmt {
@@ -268,6 +327,29 @@ impl Stmt {
                         declared.insert(param.clone());
                     }
                     method.body.undeclared_references(&mut declared, references);
+                }
+            }
+            Stmt::Try {
+                body,
+                excepts,
+                else_block,
+                finally,
+            } => {
+                let mut body_declared = declared.clone();
+                body.undeclared_references(&mut body_declared, references);
+
+                for except in excepts {
+                    except.undeclared_references(declared, references);
+                }
+
+                if let Some(block) = else_block {
+                    let mut declared = declared.clone();
+                    block.undeclared_references(&mut declared, references);
+                }
+
+                if let Some(block) = finally {
+                    let mut declared = declared.clone();
+                    block.undeclared_references(&mut declared, references);
                 }
             }
             Stmt::Break => {}
@@ -359,6 +441,26 @@ impl Stmt {
                 }
                 resolver.function_type = current_function_type;
             }
+            Stmt::Try {
+                body,
+                excepts,
+                else_block,
+                finally,
+            } => {
+                body.resolve(resolver);
+
+                for except in excepts {
+                    except.resolve(resolver);
+                }
+
+                if let Some(block) = else_block {
+                    block.resolve(resolver);
+                }
+
+                if let Some(block) = finally {
+                    block.resolve(resolver);
+                }
+            }
             Stmt::Var {
                 name: _,
                 initialiser: None,
@@ -434,6 +536,17 @@ impl From<ast::Stmt> for Stmt {
                 superclass,
             },
             ast::Stmt::Throw(expr) => Stmt::Throw(expr.into()),
+            ast::Stmt::Try {
+                body,
+                excepts,
+                else_block,
+                finally,
+            } => Stmt::Try {
+                body: Box::new(body.into()),
+                excepts: excepts.into_iter().map(|x| x.into()).collect(),
+                else_block: else_block.map(|block| Box::new(block.into())),
+                finally: finally.map(|block| Box::new(block.into())),
+            },
         }
     }
 }
@@ -569,8 +682,40 @@ impl ToTokens for Stmt {
                     ))));
                 });
             }
-            Stmt::Throw(expr) => {
-                tokens.append_all(quote! { return Err((#expr).into_error()); })
+            Stmt::Throw(expr) => tokens.append_all(quote! { return Err((#expr).into_error()); }),
+            Stmt::Try {
+                body,
+                excepts,
+                else_block,
+                finally,
+            } => {
+                let else_block = else_block
+                    .as_ref()
+                    .map_or(TokenStream::new(), |block| block.to_token_stream());
+                let mut catches = TokenStream::new();
+                for except in excepts {
+                    except.to_tokens(&mut catches);
+                }
+                let match_block = quote! {
+                    match
+                        (|| -> Result<(), LoxError> { #body #[allow(unreachable_code)] Ok(()) })()
+                            .map_err(|err| __rulox_helpers::LoxVariable::new(err.into_value()))
+                    {
+                        Ok(()) => { #else_block }
+                        #catches
+                        #[allow(unreachable_code)]
+                        Err(_) => {}
+                    }
+                };
+                if let Some(finally) = finally {
+                    tokens.append_all(quote! { {
+                        let __result = #match_block;
+                        { #finally }
+                        __result
+                    } });
+                } else {
+                    tokens.append_all(match_block);
+                }
             }
         }
     }

@@ -379,3 +379,109 @@ fn throw() {
 
     assert!(throws().is_err());
 }
+
+#[test]
+fn catch() -> Result<(), LoxError> {
+    lox! {
+        try {
+            throw 3;
+        } except (e) {
+            print e;
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn except_guards() -> Result<(), LoxError> {
+    lox! {
+        var result;
+        try {
+            throw 3;
+        } except (e if e == 2) {
+            result = "two";
+        } except (e if e == 3) {
+            result = "three";
+        } except {
+            result = "other";
+        }
+    }
+
+    assert_eq!(result.get()?, "three");
+
+    Ok(())
+}
+
+#[test]
+fn try_else() -> Result<(), LoxError> {
+    lox! {
+        var result = 1;
+        try {
+            result = 2;
+        } except {
+            result = 3;
+        } else {
+            result = 4;
+        }
+    }
+
+    assert_eq!(result.get()?, 4);
+
+    Ok(())
+}
+
+#[test]
+fn try_finally_error() -> Result<(), LoxError> {
+    lox! {
+        var except_ran = false;
+        var else_ran = false;
+        var finally_ran = false;
+        try {
+            print "try";
+            throw 1;
+        } except {
+            print "except";
+            except_ran = true;
+        } else {
+            print "else";
+            else_ran = true;
+        } finally {
+            print "finally";
+            finally_ran = true;
+        }
+    }
+
+    assert_eq!(except_ran.get()?, true);
+    assert_eq!(else_ran.get()?, false);
+    assert_eq!(finally_ran.get()?, true);
+
+    Ok(())
+}
+
+#[test]
+fn try_finally_ok() -> Result<(), LoxError> {
+    lox! {
+        var except_ran = false;
+        var else_ran = false;
+        var finally_ran = false;
+        try {
+            print "try";
+        } except {
+            print "except";
+            except_ran = true;
+        } else {
+            print "else";
+            else_ran = true;
+        } finally {
+            print "finally";
+            finally_ran = true;
+        }
+    }
+
+    assert_eq!(except_ran.get()?, false);
+    assert_eq!(else_ran.get()?, true);
+    assert_eq!(finally_ran.get()?, true);
+
+    Ok(())
+}

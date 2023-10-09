@@ -69,6 +69,15 @@ impl LoxError {
     pub fn push_trace(&mut self, value: &'static str) {
         self.trace.push(value);
     }
+
+    #[doc(hidden)] // Not public API.
+    pub fn into_value(self) -> LoxValue {
+        if let LoxErrorInner::Value(value) = self.inner {
+            *value
+        } else {
+            LoxValue::Error(self)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

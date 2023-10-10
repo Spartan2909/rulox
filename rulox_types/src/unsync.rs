@@ -60,12 +60,11 @@ impl<T: Clone> CloneCell<T> {
 }
 
 /// A variable defined in Lox code.
-///
-/// There is no public way to create a [`LoxVariable`].
 pub struct LoxVariable(Rc<CloneCell<LoxValue>>);
 
 impl LoxVariable {
-    #[doc(hidden)]
+    /// Creates a new [`LoxVariable`] wrapping a [`LoxValue`] created from the
+    /// argument.
     pub fn new<T: Into<LoxValue>>(value: T) -> LoxVariable {
         LoxVariable(Rc::new(CloneCell::new(value.into())))
     }

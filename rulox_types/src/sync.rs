@@ -40,12 +40,11 @@ pub struct ReadGuard<'a, T>(RwLockReadGuard<'a, T>);
 pub struct WriteGuard<'a, T>(RwLockWriteGuard<'a, T>);
 
 /// A variable defined in Lox code.
-///
-/// There is no public way to create a [`LoxVariable`].
 pub struct LoxVariable(Shared<LoxValue>);
 
 impl LoxVariable {
-    #[doc(hidden)]
+    /// Creates a new [`LoxVariable`] wrapping a [`LoxValue`] created from the
+    /// argument.
     pub fn new<T: Into<LoxValue>>(value: T) -> LoxVariable {
         LoxVariable(Shared::new(value.into()))
     }

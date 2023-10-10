@@ -604,12 +604,18 @@ impl LoxValue {
         }
     }
 
-    /// Returns the external object wrapped by `self` if it exists, or a type
-    /// error if it doesn't.
+    /// Creates a new `LoxValue::External` with the given value.
     #[cfg(feature = "sync")]
     pub fn external<T: LoxObject + Send + Sync + 'static>(value: T) -> LoxValue {
         let shared = Shared::new(value.into());
         LoxValue::External(shared as Shared<dyn LoxObject + Send + Sync>)
+    }
+
+    /// Creates a new `LoxValue::External` with the given value.
+    #[cfg(not(feature = "sync"))]
+    pub fn external<T: LoxObject + 'static>(value: T) -> LoxValue {
+        let shared = Shared::new(value.into());
+        LoxValue::External(shared as Shared<dyn LoxObject>)
     }
 }
 

@@ -129,9 +129,9 @@ macro_rules! lox_bindgen {
     ( fn $rust_name:ident ( $( $arg:ident ),* ) as $lox_name:ident ) => {
         let $lox_name = __rulox_helpers::LoxVariable::new(LoxValue::function(__rulox_helpers::LoxFn::new(
             |mut args: $crate::LoxArgs| -> __rulox_helpers::LoxResult {
-                let mut _drain = args.drain();
+                let mut __drain = args.drain();
                 $(
-                    let $arg = _drain.next().unwrap();
+                    let $arg = __drain.next().unwrap();
                 )*
                 $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into().unwrap() )* ))
             },
@@ -141,9 +141,9 @@ macro_rules! lox_bindgen {
     ( async fn $rust_name:ident ( $( $arg:ident ),* ) as $lox_name:ident ) => {
         let $lox_name = __rulox_helpers::LoxVariable::new(LoxValue::coroutine(
             |mut args: $crate::LoxArgs| -> Box<dyn $crate::prelude::__rulox_helpers::Future<Output = $crate::LoxResult> + Send + Sync + 'static> {
-                    let mut _drain = args.drain();
+                let mut __drain = args.drain();
                 $(
-                    let $arg = _drain.next().unwrap();
+                    let $arg = __drain.next().unwrap();
                 )*
                 Box::new(async {
                     $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into().unwrap() )* ).await)

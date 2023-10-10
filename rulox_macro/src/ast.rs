@@ -82,7 +82,10 @@ pub enum Stmt {
         initialiser: Option<Expr>,
     },
     Return(Option<Expr>),
-    Function(Function),
+    Function {
+        is_async: bool,
+        function: Function,
+    },
     Block(Vec<Stmt>),
     If {
         condition: Expr,
@@ -103,7 +106,7 @@ pub enum Stmt {
     },
     Class {
         name: Ident,
-        methods: Vec<Function>,
+        methods: Vec<(bool, Function)>,
         superclass: Option<Ident>,
     },
     Throw(Expr),
@@ -126,7 +129,10 @@ impl Stmt {
         if input.peek(kw::var) {
             Self::var_declaration(input)
         } else if input.peek(kw::fun) {
-            Self::function(input)
+            Self::function(input, false)
+        } else if input.peek(Token![async]) {
+            input.parse::<Token![async]>()?;
+            Self::function(input, true)
         } else if input.peek(kw::class) {
             Self::class(input)
         } else {
@@ -151,14 +157,17 @@ impl Stmt {
         Ok(Self::Var { name, initialiser })
     }
 
-    fn function(input: ParseStream) -> syn::Result<Self> {
+    fn function(input: ParseStream, is_async: bool) -> syn::Result<Self> {
         if !input.peek2(Ident) {
-            return Ok(Self::Expr(Expr::function(input)?));
+            return Ok(Self::Expr(Expr::function(input, is_async)?));
         }
 
         input.parse::<kw::fun>()?;
 
-        Ok(Self::Function(input.parse()?))
+        Ok(Self::Function {
+            is_async,
+            function: input.parse()?,
+        })
     }
 
     fn class(input: ParseStream) -> syn::Result<Self> {
@@ -176,7 +185,13 @@ impl Stmt {
         let content;
         braced!(content in input);
         while !content.is_empty() {
-            methods.push(content.parse()?);
+            let is_async = if input.peek(Token![async]) {
+                input.parse::<Token![async]>()?;
+                true
+            } else {
+                false
+            };
+            methods.push((is_async, content.parse()?));
         }
 
         Ok(Self::Class {
@@ -429,6 +444,7 @@ pub enum Expr {
     Literal(rulox_types::LoxValue),
     Array(Vec<Expr>),
     Function {
+        is_async: bool,
         params: Vec<Ident>,
         body: Box<Stmt>,
     },
@@ -462,6 +478,9 @@ pub enum Expr {
     },
     Super {
         arguments: Vec<Expr>,
+    },
+    Await {
+        left: Box<Expr>,
     },
 }
 
@@ -623,9 +642,16 @@ impl Expr {
                 expr = Self::finish_call(input, expr)?;
             } else if input.peek(Token![.]) {
                 input.parse::<Token![.]>()?;
-                expr = Self::Get {
-                    object: Box::new(expr),
-                    name: input.parse()?,
+                if input.peek(Token![await]) {
+                    input.parse::<Token![await]>()?;
+                    expr = Self::Await {
+                        left: Box::new(expr),
+                    };
+                } else {
+                    expr = Self::Get {
+                        object: Box::new(expr),
+                        name: input.parse()?,
+                    };
                 }
             } else {
                 break;
@@ -664,7 +690,10 @@ impl Expr {
             let value: syn::LitFloat = input.parse()?;
             Ok(Self::Literal(LoxValue::from(value.base10_parse::<f64>()?)))
         } else if lookahead.peek(kw::fun) {
-            Self::function(input)
+            Self::function(input, false)
+        } else if lookahead.peek(Token![async]) {
+            input.parse::<Token![async]>()?;
+            Self::function(input, true)
         } else if lookahead.peek(kw::this) {
             input.parse::<kw::this>()?;
             Ok(Expr::This)
@@ -697,7 +726,7 @@ impl Expr {
         }
     }
 
-    fn function(input: ParseStream) -> syn::Result<Self> {
+    fn function(input: ParseStream, is_async: bool) -> syn::Result<Self> {
         input.parse::<kw::fun>()?;
 
         let content;
@@ -708,6 +737,7 @@ impl Expr {
         let body: Stmt = input.parse()?;
 
         Ok(Self::Function {
+            is_async,
             params: Vec::from_iter(params),
             body: Box::new(body),
         })

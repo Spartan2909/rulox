@@ -218,5 +218,7 @@ pub mod prelude {
 
         #[cfg(feature = "async")]
         pub use core::future::Future;
+        #[cfg(feature = "async")]
+        pub use rulox_types::async_types::Coroutine;
     }
 }

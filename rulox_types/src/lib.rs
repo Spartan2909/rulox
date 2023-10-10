@@ -4,7 +4,8 @@
 #![warn(missing_docs)]
 
 #[cfg(feature = "async")]
-mod async_types;
+#[doc(hidden)]
+pub mod async_types;
 
 #[cfg_attr(feature = "sync", path = "sync.rs")]
 #[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
@@ -25,6 +26,7 @@ use std::cmp;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use std::fmt::Debug;
 use std::mem;
 use std::ops;
 use std::process::ExitCode;
@@ -256,7 +258,7 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Num(_) => Self::Num,
                     LoxValue::Arr(_) => Self::Arr,
                     LoxValue::Function(f) => Self::Function(f.params.to_vec()),
-                    LoxValue::BoundMethod(f, _) => Self::Function(f.params.to_vec()),
+                    LoxValue::BoundMethod(f, _) => Self::Function(f.params().to_vec()),
                     LoxValue::Class(_) => Self::Class,
                     LoxValue::Instance(instance) => Self::Instance(instance.read().class.name.clone()),
                     LoxValue::Error(_) => Self::Error,
@@ -292,7 +294,7 @@ pub enum LoxValue {
     /// A function.
     Function(LoxRc<LoxFn>),
     #[doc(hidden)]
-    BoundMethod(LoxRc<LoxFn>, Shared<LoxInstance>),
+    BoundMethod(LoxMethod, Shared<LoxInstance>),
     /// A class.
     Class(LoxRc<LoxClass>),
     /// An instance of a class.
@@ -423,24 +425,24 @@ impl LoxValue {
         }
     }
 
-    fn super_fn_impl(&self, name: &'static str) -> Option<LoxRc<LoxFn>> {
+    fn super_fn_impl(&self, name: &'static str) -> Option<LoxMethod> {
         let instance = self.as_instance()?;
         let mut class = &instance.read().class;
         while class.methods.get(name).is_none() {
             class = class.superclass.as_ref()?;
         }
-        Some(LoxRc::clone(class.superclass.as_ref()?.methods.get(name)?))
+        Some(class.superclass.as_ref()?.methods.get(name)?.clone())
     }
 
     #[doc(hidden)] // Not public API.
-    pub fn super_fn(&self, name: &'static str) -> Result<LoxRc<LoxFn>, LoxError> {
+    pub fn super_fn(&self, name: &'static str) -> Result<LoxMethod, LoxError> {
         self.super_fn_impl(name)
             .ok_or(LoxError::non_existent_super(name))
     }
 
     #[doc(hidden)] // Not public API.
-    pub fn bind(fun: LoxRc<LoxFn>, instance: LoxValue) -> LoxValue {
-        LoxValue::BoundMethod(fun, instance.as_instance().unwrap())
+    pub fn bind<F: Into<LoxMethod>>(fun: F, instance: LoxValue) -> LoxValue {
+        LoxValue::BoundMethod(fun.into(), instance.as_instance().unwrap())
     }
 
     #[doc(hidden)] // Not public API.
@@ -459,7 +461,7 @@ impl LoxValue {
             Self::Function(func) => (func.fun)(args),
             Self::BoundMethod(func, instance) => {
                 args.head = Some(LoxValue::Instance(instance.clone()));
-                (func.fun)(args)
+                func.call(args)
             }
             Self::Class(class) => {
                 let instance = LoxValue::Instance(Shared::new(LoxInstance {
@@ -489,7 +491,7 @@ impl fmt::Debug for LoxValue {
             Self::Arr(a) => write!(f, "Arr({:#?})", a),
             Self::Function(func) => write!(f, "Function({:#?})", func.params),
             Self::BoundMethod(func, instance) => {
-                write!(f, "BoundMethod({:#?}, {:#?}", func.params, instance)
+                write!(f, "BoundMethod({:#?}, {:#?}", func.params(), instance)
             }
             Self::Class(class) => write!(f, "Class({:#?})", class),
             Self::Instance(instance) => write!(f, "Instance({:#?})", instance.read()),
@@ -1025,12 +1027,99 @@ pub struct LoxInstance {
     attributes: HashMap<String, LoxValue>,
 }
 
+#[derive(Clone)]
+#[doc(hidden)] // Not public API.
+pub enum LoxMethod {
+    Sync(LoxRc<LoxFn>),
+    #[cfg(feature = "async")]
+    Async(LoxRc<async_types::Coroutine>),
+}
+
+impl LoxMethod {
+    fn params(&self) -> &[&'static str] {
+        match self {
+            LoxMethod::Sync(fun) => &fun.params,
+            #[cfg(feature = "async")]
+            LoxMethod::Async(fun) => fun.params(),
+        }
+    }
+
+    fn get_sync(self) -> Option<LoxRc<LoxFn>> {
+        match self {
+            LoxMethod::Sync(fun) => Some(fun),
+            #[cfg(feature = "async")]
+            LoxMethod::Async(_) => None,
+        }
+    }
+
+    fn call(&self, args: LoxArgs) -> LoxResult {
+        match self {
+            LoxMethod::Sync(fun) => (fun.fun)(args),
+            #[cfg(feature = "async")]
+            LoxMethod::Async(fun) => Ok(LoxValue::Future(Shared::new(fun.start(args)))),
+        }
+    }
+}
+
+impl PartialEq for LoxMethod {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (LoxMethod::Sync(f1), LoxMethod::Sync(f2)) => LoxRc::ptr_eq(f1, f2),
+            #[cfg(feature = "async")]
+            (LoxMethod::Async(f1), LoxMethod::Async(f2)) => LoxRc::ptr_eq(f1, f2),
+            #[allow(unreachable_patterns)]
+            _ => false,
+        }
+    }
+}
+
+#[doc(hidden)]
+impl Debug for LoxMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LoxMethod::Sync(fun) => write!(f, "Sync({:#?})", fun.params),
+            #[cfg(feature = "async")]
+            LoxMethod::Async(fun) => write!(f, "Async({:#?})", fun.params()),
+        }
+    }
+}
+
+#[doc(hidden)] // Not public API.
+impl From<LoxFn> for LoxMethod {
+    fn from(value: LoxFn) -> Self {
+        LoxMethod::Sync(LoxRc::new(value))
+    }
+}
+
+#[doc(hidden)] // Not public API.
+impl From<LoxRc<LoxFn>> for LoxMethod {
+    fn from(value: LoxRc<LoxFn>) -> Self {
+        LoxMethod::Sync(value)
+    }
+}
+
+#[doc(hidden)] // Not public API.
+#[cfg(feature = "async")]
+impl From<async_types::Coroutine> for LoxMethod {
+    fn from(value: async_types::Coroutine) -> Self {
+        LoxMethod::Async(LoxRc::new(value))
+    }
+}
+
+#[doc(hidden)] // Not public API.
+#[cfg(feature = "async")]
+impl From<LoxRc<async_types::Coroutine>> for LoxMethod {
+    fn from(value: LoxRc<async_types::Coroutine>) -> Self {
+        LoxMethod::Async(value)
+    }
+}
+
 /// A class defined in Lox code.
 #[derive(Debug, PartialEq)]
 pub struct LoxClass {
     name: &'static str,
     initialiser: Option<LoxRc<LoxFn>>,
-    methods: HashMap<&'static str, LoxRc<LoxFn>>,
+    methods: HashMap<&'static str, LoxMethod>,
     superclass: Option<LoxRc<LoxClass>>,
 }
 
@@ -1038,26 +1127,24 @@ impl LoxClass {
     #[doc(hidden)] // Not public API.
     pub fn new(
         name: &'static str,
-        methods: HashMap<&'static str, LoxRc<LoxFn>>,
+        methods: HashMap<&'static str, LoxMethod>,
         superclass: Option<LoxRc<LoxClass>>,
     ) -> LoxClass {
         let mut class = LoxClass {
             name,
-            initialiser: methods.get("init").cloned(),
+            initialiser: None,
             methods,
             superclass,
         };
 
-        if class.initialiser.is_none() {
-            class.initialiser = class.get("init");
-        }
+        class.initialiser = class.get("init").and_then(|fun| fun.get_sync());
 
         class
     }
 
-    fn get(&self, key: &str) -> Option<LoxRc<LoxFn>> {
+    fn get(&self, key: &str) -> Option<LoxMethod> {
         if let Some(method) = self.methods.get(key) {
-            Some(LoxRc::clone(method))
+            Some(method.clone())
         } else {
             self.superclass
                 .as_ref()

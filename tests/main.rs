@@ -3,10 +3,8 @@ use std::time::Duration;
 
 use rulox::lox_bindgen;
 use rulox::prelude::*;
-use rulox::LoxError;
 use rulox::rust_bindgen;
-
-use tokio::time;
+use rulox::LoxError;
 
 #[test]
 fn var_declaration() {
@@ -488,13 +486,17 @@ fn sync() {
 #[tokio::test]
 async fn async_bindgen() -> Result<(), LoxError> {
     async fn do_some_stuff() -> i32 {
-        time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
         3
     }
 
     lox_bindgen!(async fn do_some_stuff() as lox_do_stuff);
 
-    assert_eq!(lox_do_stuff.get()?.call([].into())?.await?, 3);
+    lox! {
+        var result = lox_do_stuff().await;
+    }
+
+    assert_eq!(result.get()?, 3);
 
     Ok(())
 }
@@ -524,6 +526,26 @@ fn rust_bindgen() -> Result<(), LoxError> {
     rust_bindgen!(fn hello(name: &str) -> String as rust_hello);
 
     assert_eq!(rust_hello("John"), Ok("Hello John!".to_string()));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn async_function() -> Result<(), LoxError> {
+    async fn do_some_stuff() -> i32 {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        3
+    }
+
+    lox_bindgen!(async fn do_some_stuff() as lox_do_stuff);
+
+    lox! {
+        async fun my_function() {
+            print lox_do_stuff().await;
+        }
+
+        my_function().await;
+    }
 
     Ok(())
 }

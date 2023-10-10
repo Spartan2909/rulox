@@ -16,7 +16,8 @@ pub struct Coroutine {
 }
 
 impl Coroutine {
-    pub(super) fn new(
+    #[doc(hidden)]
+    pub fn new(
         fun: Box<
             dyn Fn(LoxArgs) -> Box<dyn Future<Output = LoxResult> + Send + Sync> + Send + Sync,
         >,

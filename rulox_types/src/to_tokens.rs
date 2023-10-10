@@ -29,7 +29,7 @@ impl ToTokens for LoxValue {
                 tokens.append(Punct::new(']', Spacing::Joint));
                 tokens.append(Punct::new(')', Spacing::Alone));
             }
-            Self::Function(_) | Self::BoundMethod(_, _) => unimplemented!(
+            Self::Function(_) | Self::BoundMethod(_, _) | Self::PrimitiveMethod(_, _) => unimplemented!(
                 "tokens produced by Lox functions differ for statements and expressions, and so must be converted manually"
             ),
             Self::Class(_) => unimplemented!("classes contain functions, which cannot be converted without context"),

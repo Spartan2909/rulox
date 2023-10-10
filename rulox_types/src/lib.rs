@@ -15,6 +15,55 @@ use shared::Shared;
 
 mod to_tokens;
 
+mod primitive_methods {
+    use crate::LoxResult;
+    use crate::LoxValue;
+
+    pub(super) fn is_bool(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(value, LoxValue::Bool(_))))
+    }
+
+    pub(super) fn is_str(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(value, LoxValue::Str(_))))
+    }
+
+    pub(super) fn is_num(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(value, LoxValue::Num(_))))
+    }
+
+    pub(super) fn is_arr(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(value, LoxValue::Arr(_))))
+    }
+
+    #[cfg(feature = "async")]
+    pub(super) fn is_function(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(
+            value,
+            LoxValue::BoundMethod(_, _) | LoxValue::Coroutine(_) | LoxValue::PrimitiveMethod(_, _)
+        )))
+    }
+
+    #[cfg(not(feature = "async"))]
+    pub(super) fn is_function(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(
+            value,
+            LoxValue::BoundMethod(_, _) | LoxValue::PrimitiveMethod(_, _)
+        )))
+    }
+
+    pub(super) fn is_class(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(value, LoxValue::Class(_))))
+    }
+
+    pub(super) fn is_error(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(value, LoxValue::Error(_))))
+    }
+
+    pub(super) fn is_nil(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(value, LoxValue::Nil)))
+    }
+}
+
 #[cfg(not(feature = "sync"))]
 #[doc(hidden)]
 pub use std::rc::Rc as LoxRc;
@@ -32,6 +81,7 @@ use std::ops;
 use std::process::ExitCode;
 use std::process::Termination;
 use std::ptr;
+use std::sync::OnceLock;
 use std::vec;
 
 #[cfg(feature = "async")]
@@ -259,6 +309,7 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Arr(_) => Self::Arr,
                     LoxValue::Function(f) => Self::Function(f.params.to_vec()),
                     LoxValue::BoundMethod(f, _) => Self::Function(f.params().to_vec()),
+                    LoxValue::PrimitiveMethod(_, _) => Self::Function(vec![]),
                     LoxValue::Class(_) => Self::Class,
                     LoxValue::Instance(instance) => Self::Instance(instance.read().class.name.clone()),
                     LoxValue::Error(_) => Self::Error,
@@ -295,6 +346,8 @@ pub enum LoxValue {
     Function(LoxRc<LoxFn>),
     #[doc(hidden)]
     BoundMethod(LoxMethod, Shared<LoxInstance>),
+    #[doc(hidden)]
+    PrimitiveMethod(fn(LoxValue) -> LoxResult, Box<LoxValue>),
     /// A class.
     Class(LoxRc<LoxClass>),
     /// An instance of a class.
@@ -372,6 +425,21 @@ impl LoxValue {
     }
 
     fn get_impl(&self, key: &str) -> Option<LoxValue> {
+        static PRIMITIVE_METHODS: OnceLock<HashMap<&'static str, fn(LoxValue) -> LoxResult>> =
+            OnceLock::new();
+        fn init_primitives() -> HashMap<&'static str, fn(LoxValue) -> LoxResult> {
+            HashMap::from_iter([
+                ("is_bool", primitive_methods::is_bool as fn(_) -> _),
+                ("is_str", primitive_methods::is_str),
+                ("is_num", primitive_methods::is_num),
+                ("is_arr", primitive_methods::is_arr),
+                ("is_function", primitive_methods::is_function),
+                ("is_class", primitive_methods::is_class),
+                ("is_error", primitive_methods::is_error),
+                ("is_nil", primitive_methods::is_nil),
+            ])
+        }
+
         if let LoxValue::Instance(instance) = self {
             if let Some(attr) = instance.read().attributes.get(key) {
                 Some(attr.clone())
@@ -382,6 +450,8 @@ impl LoxValue {
                     .get(key)
                     .map(|func| LoxValue::BoundMethod(func, instance.clone()))
             }
+        } else if let Some(method) = PRIMITIVE_METHODS.get_or_init(init_primitives).get(key) {
+            Some(LoxValue::PrimitiveMethod(*method, Box::new(self.clone())))
         } else {
             None
         }
@@ -475,6 +545,7 @@ impl LoxValue {
                     Ok(instance)
                 }
             }
+            Self::PrimitiveMethod(func, object) => func((**object).clone()),
             #[cfg(feature = "async")]
             Self::Coroutine(func) => Ok(LoxValue::Future(Shared::new(func.start(args)))),
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
@@ -491,7 +562,10 @@ impl fmt::Debug for LoxValue {
             Self::Arr(a) => write!(f, "Arr({:#?})", a),
             Self::Function(func) => write!(f, "Function({:#?})", func.params),
             Self::BoundMethod(func, instance) => {
-                write!(f, "BoundMethod({:#?}, {:#?}", func.params(), instance)
+                write!(f, "BoundMethod({:#?}, {:#?})", func.params(), instance)
+            }
+            Self::PrimitiveMethod(_, object) => {
+                write!(f, "PrimitiveMethod({:#?})", object)
             }
             Self::Class(class) => write!(f, "Class({:#?})", class),
             Self::Instance(instance) => write!(f, "Instance({:#?})", instance.read()),
@@ -550,6 +624,7 @@ impl fmt::Display for LoxValue {
                 write!(f, "<function>")
             }
             Self::BoundMethod(_, _) => write!(f, "<bound method>"),
+            Self::PrimitiveMethod(_, _) => write!(f, "<bound method>"),
             Self::Class(_) => write!(f, "<class>"),
             Self::Instance(instance) => {
                 write!(f, "<instance of {}>", instance.read().class.name)
@@ -1134,7 +1209,12 @@ impl LoxClass {
             name,
             initialiser: None,
             methods,
-            superclass,
+            superclass: Some(superclass.unwrap_or(LoxRc::new(LoxClass {
+                name: "object",
+                initialiser: None,
+                methods: HashMap::new(),
+                superclass: None,
+            }))),
         };
 
         class.initialiser = class.get("init").and_then(|fun| fun.get_sync());

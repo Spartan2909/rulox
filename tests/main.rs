@@ -549,3 +549,16 @@ async fn async_function() -> Result<(), LoxError> {
 
     Ok(())
 }
+
+#[test]
+fn primitive_methods() -> Result<(), LoxError> {
+    lox! {
+        var a = 3.is_num();
+        var b = "test".is_str();
+    }
+
+    assert_eq!(a.get()?, true);
+    assert_eq!(b.get()?, true);
+
+    Ok(())
+}

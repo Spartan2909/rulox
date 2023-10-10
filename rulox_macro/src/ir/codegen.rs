@@ -253,7 +253,8 @@ fn function_expr_to_tokens(
     let mut inner = TokenStream::new();
     if is_async {
         inner.append_all(quote! {
-            move |mut __args| -> Box<dyn __rulox_helpers::Future<Output = __rulox_helpers::LoxResult> + Send + Sync + 'static>
+            move |mut __args|
+                -> Box<dyn __rulox_helpers::Future<Output = __rulox_helpers::LoxResult> + Send + Sync + 'static>
         });
     } else {
         inner.append_all(quote! { move |mut __args| -> __rulox_helpers::LoxResult });

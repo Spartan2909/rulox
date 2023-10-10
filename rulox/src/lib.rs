@@ -133,7 +133,7 @@ macro_rules! lox_bindgen {
                 $(
                     let $arg = __drain.next().unwrap();
                 )*
-                $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into()? )* ))
+                $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into()? ),* ))
             },
             vec![$( stringify!($arg) ),*]
         )));
@@ -146,7 +146,7 @@ macro_rules! lox_bindgen {
                     let $arg = __drain.next().unwrap();
                 )*
                 Box::new(async {
-                    $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into()? )* ).await)
+                    $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into()? ),* ).await)
                 })
             },
             vec![$( stringify!($arg) ),*]

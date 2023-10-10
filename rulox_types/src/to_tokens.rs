@@ -40,6 +40,7 @@ impl ToTokens for LoxValue {
             #[cfg(feature = "async")]
             Self::Future(_) => unimplemented!("futures cannot directly occur in source code"),
             Self::Nil => tokens.append_all(quote! { LoxValue::Nil }),
+            Self::External(_) => unimplemented!("external objects cannot be represented in Lox code"),
             Self::Undefined(_) => unreachable!(),
         }
     }

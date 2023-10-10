@@ -11,7 +11,7 @@ pub mod async_types;
 #[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
 mod shared;
 pub use shared::LoxVariable;
-use shared::Shared;
+pub use shared::Shared;
 
 mod to_tokens;
 
@@ -71,6 +71,8 @@ pub use std::rc::Rc as LoxRc;
 #[doc(hidden)]
 pub use std::sync::Arc as LoxRc;
 
+use std::any::Any;
+use std::any::TypeId;
 use std::cmp;
 use std::collections::HashMap;
 use std::error::Error;
@@ -78,6 +80,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::mem;
 use std::ops;
+use std::ops::Deref;
 use std::process::ExitCode;
 use std::process::Termination;
 use std::ptr;
@@ -275,6 +278,7 @@ enum LoxValueType {
     Coroutine(Vec<&'static str>),
     #[cfg(feature = "async")]
     Future(bool),
+    External,
     Nil,
 }
 
@@ -292,7 +296,8 @@ impl fmt::Display for LoxValueType {
             #[cfg(feature = "async")]
             Self::Coroutine(params) => write!(f, "async function({:#?})", params),
             #[cfg(feature = "async")]
-            Self::Future(done) => write!(f, "{}future", if *done { "completed" } else { "" }),
+            Self::Future(done) => write!(f, "{}future", if *done { "completed " } else { "" }),
+            Self::External => write!(f, "external object"),
             Self::Nil => write!(f, "nil"),
         }
     }
@@ -317,6 +322,7 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Coroutine(f) => Self::Coroutine(f.params().to_vec()),
                     #[cfg(feature = "async")]
                     LoxValue::Future(fut) => Self::Future(fut.read().done()),
+                    LoxValue::External(_) => Self::External,
                     LoxValue::Nil => Self::Nil,
                     LoxValue::Undefined(_) => unreachable!(),
                 }
@@ -362,6 +368,12 @@ pub enum LoxValue {
     Future(Shared<async_types::LoxFuture>),
     /// Nothing.
     Nil,
+    /// An object that couldn't normally be represented in Lox.
+    #[cfg(not(feature = "sync"))]
+    External(Shared<dyn LoxObject>),
+    /// An object that couldn't normally be represented in Lox.
+    #[cfg(feature = "sync")]
+    External(Shared<dyn LoxObject + Send + Sync>),
     #[doc(hidden)] // Not public API.
     Undefined(&'static str),
 }
@@ -424,6 +436,7 @@ impl LoxValue {
         )))
     }
 
+    #[inline(always)]
     fn get_impl(&self, key: &str) -> Option<LoxValue> {
         static PRIMITIVE_METHODS: OnceLock<HashMap<&'static str, fn(LoxValue) -> LoxResult>> =
             OnceLock::new();
@@ -551,6 +564,33 @@ impl LoxValue {
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
+
+    #[inline(always)]
+    fn as_external_error(&self) -> LoxError {
+        LoxError::type_error(format!("cannot cast {self} to an external object"))
+    }
+
+    /// Returns the external object wrapped by `self` if it exists, or a type
+    /// error if it doesn't.
+    #[cfg(feature = "sync")]
+    pub fn as_external(self) -> Result<Shared<dyn LoxObject + Send + Sync>, LoxError> {
+        if let LoxValue::External(obj) = self {
+            Ok(obj)
+        } else {
+            Err(self.as_external_error())
+        }
+    }
+
+    /// Returns the external object wrapped by `self` if it exists, or a type
+    /// error if it doesn't.
+    #[cfg(not(feature = "sync"))]
+    pub fn as_external(self) -> Result<Shared<dyn LoxObject>, LoxError> {
+        if let LoxValue::External(obj) = self {
+            Ok(obj)
+        } else {
+            Err(self.as_external_error())
+        }
+    }
 }
 
 impl fmt::Debug for LoxValue {
@@ -568,13 +608,14 @@ impl fmt::Debug for LoxValue {
                 write!(f, "PrimitiveMethod({:#?})", object)
             }
             Self::Class(class) => write!(f, "Class({:#?})", class),
-            Self::Instance(instance) => write!(f, "Instance({:#?})", instance.read()),
+            Self::Instance(instance) => write!(f, "Instance({:#?})", instance.read().deref()),
             Self::Error(error) => write!(f, "Error({:#?})", error),
             #[cfg(feature = "async")]
             Self::Coroutine(fun) => write!(f, "Coroutine({:#?})", fun.params()),
             #[cfg(feature = "async")]
             Self::Future(_) => write!(f, "Future"),
             Self::Nil => write!(f, "Nil"),
+            Self::External(_) => write!(f, "External"),
             Self::Undefined(_) => write!(f, "Undefined"),
         }
     }
@@ -637,6 +678,7 @@ impl fmt::Display for LoxValue {
             Self::Nil => {
                 write!(f, "nil")
             }
+            Self::External(_) => write!(f, "<external object>"),
             Self::Undefined(_) => unreachable!(),
         }
     }
@@ -1331,6 +1373,71 @@ impl<T: Into<LoxValue>, E: Error + 'static> ToLoxResult for Result<T, E> {
                 LoxError::external(err)
             }
         })
+    }
+}
+
+/// A trait for foreign objects that can be used in Lox.
+pub trait LoxObject: Any {
+    /// Gets the field of `self` corresponding to `key`.
+    fn get(&self, key: &'static str) -> LoxResult;
+
+    /// Sets the field of `self` corresponding to `key` to the given value.
+    fn set(&self, key: &'static str, value: LoxValue);
+}
+
+impl Shared<dyn LoxObject> {
+    /// ## Safety
+    /// `self` must be of type `T`.
+    unsafe fn downcast_unchecked<T: LoxObject>(self) -> Shared<T> {
+        let ptr = self.into_raw();
+        // SAFETY: Must be upheld by caller.
+        unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) }
+    }
+
+    fn is<T: LoxObject>(&self) -> bool {
+        let t = TypeId::of::<T>();
+        let concrete = (*self.read().deref()).type_id();
+        t == concrete
+    }
+
+    /// Attempts to downcast `self` to a concrete type, returning `Err(self)`
+    /// if the cast fails.
+    pub fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject>> {
+        if self.is::<T>() {
+            // SAFETY: The `TypeId`s are the same, therefore `self` is an
+            // instance of `T`.
+            Ok(unsafe { Self::downcast_unchecked(self) })
+        } else {
+            todo!()
+        }
+    }
+}
+
+impl Shared<dyn LoxObject + Send + Sync> {
+    /// ## Safety
+    /// `self` must be of type `T`.
+    unsafe fn downcast_unchecked<T: LoxObject>(self) -> Shared<T> {
+        let ptr = self.into_raw();
+        // SAFETY: Must be upheld by caller.
+        unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) }
+    }
+
+    fn is<T: LoxObject>(&self) -> bool {
+        let t = TypeId::of::<T>();
+        let concrete = (*self.read().deref()).type_id();
+        t == concrete
+    }
+
+    /// Attempts to downcast `self` to a concrete type, returning `Err(self)`
+    /// if the cast fails.
+    pub fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject + Send + Sync>> {
+        if self.is::<T>() {
+            // SAFETY: The `TypeId`s are the same, therefore `self` is an
+            // instance of `T`.
+            Ok(unsafe { Self::downcast_unchecked(self) })
+        } else {
+            todo!()
+        }
     }
 }
 

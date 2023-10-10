@@ -10,34 +10,51 @@ use core::cell::RefMut;
 use std::cell::UnsafeCell;
 use std::rc::Rc;
 
+/// A pointer to `T` with shared ownership.
 #[derive(Debug)]
-pub struct Shared<T>(Rc<RefCell<T>>);
+pub struct Shared<T: ?Sized>(Rc<RefCell<T>>);
+
+pub(super) type Inner<T> = RefCell<T>;
 
 impl<T> Shared<T> {
+    /// Create a [`Shared<T>`] from a value of type `T`.
     pub fn new(value: T) -> Shared<T> {
         Shared(Rc::new(RefCell::new(value)))
     }
+}
 
+impl<T: ?Sized> Shared<T> {
+    pub(super) fn into_raw(self) -> *const RefCell<T> {
+        Rc::into_raw(self.0)
+    }
+
+    /// ## Safety
+    /// `ptr` must have come from [`Shared<T>::into_raw`].
+    pub(super) unsafe fn from_raw(ptr: *const RefCell<T>) -> Shared<T> {
+        // SAFETY: Must be guaranteed by caller.
+        Shared(unsafe { Rc::from_raw(ptr) })
+    }
+
+    /// Returns a read-only RAII guard for `self`.
     pub fn read(&self) -> ReadGuard<T> {
         ReadGuard(self.0.borrow())
     }
 
+    /// Returns a read-write RAII guard for `self`.
     pub fn write(&self) -> WriteGuard<T> {
         WriteGuard(self.0.borrow_mut())
     }
 }
 
-impl<T> Clone for Shared<T> {
+impl<T: ?Sized> Clone for Shared<T> {
     fn clone(&self) -> Self {
         Shared(Rc::clone(&self.0))
     }
 }
 
-#[derive(Debug)]
-pub struct ReadGuard<'a, T>(Ref<'a, T>);
+pub struct ReadGuard<'a, T: ?Sized>(Ref<'a, T>);
 
-#[derive(Debug)]
-pub struct WriteGuard<'a, T>(RefMut<'a, T>);
+pub struct WriteGuard<'a, T: ?Sized>(RefMut<'a, T>);
 
 struct CloneCell<T: Clone>(UnsafeCell<T>);
 

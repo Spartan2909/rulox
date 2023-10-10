@@ -32,7 +32,7 @@ impl<T> From<T> for Shared<T> {
     }
 }
 
-impl<'a, T> Deref for ReadGuard<'a, T> {
+impl<'a, T: ?Sized> Deref for ReadGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -40,7 +40,7 @@ impl<'a, T> Deref for ReadGuard<'a, T> {
     }
 }
 
-impl<'a, T> Deref for WriteGuard<'a, T> {
+impl<'a, T: ?Sized> Deref for WriteGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -48,7 +48,7 @@ impl<'a, T> Deref for WriteGuard<'a, T> {
     }
 }
 
-impl<'a, T> DerefMut for WriteGuard<'a, T> {
+impl<'a, T: ?Sized> DerefMut for WriteGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

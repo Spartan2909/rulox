@@ -4,6 +4,7 @@ version = "0.8.1"
 edition = "2021"
 description = "A lightweight scripting language embedded in Rust."
 documentation = "https://docs.rs/rulox/latest"
+rust-version = "1.70"
 
 keywords = ["lox", "scripting", "parsing"]
 categories = ["parser-implementations"]

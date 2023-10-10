@@ -214,6 +214,8 @@ pub mod prelude {
         pub use crate::LoxVariable;
         pub use core::result::Result;
         pub use rulox_types::extract;
+        pub use rulox_types::read;
+        pub use rulox_types::write;
         pub use rulox_types::LoxRc;
         pub use std::collections::HashMap;
 

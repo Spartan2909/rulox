@@ -1,3 +1,4 @@
+use crate::write;
 use crate::LoxArgs;
 use crate::LoxError;
 use crate::LoxResult;
@@ -76,7 +77,7 @@ impl Future for LoxValue {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.deref() {
-            LoxValue::Future(fut) => Future::poll(Pin::new(fut.write().deref_mut()), cx),
+            LoxValue::Future(fut) => Future::poll(Pin::new(write(fut).deref_mut()), cx),
             _ => Poll::Ready(Err(LoxError::type_error(format!("Cannot await {self}")))),
         }
     }
@@ -87,7 +88,7 @@ impl Future for &LoxValue {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.deref() {
-            LoxValue::Future(fut) => Future::poll(Pin::new(fut.write().deref_mut()), cx),
+            LoxValue::Future(fut) => Future::poll(Pin::new(write(fut).deref_mut()), cx),
             _ => Poll::Ready(Err(LoxError::type_error(format!("Cannot await {self}")))),
         }
     }

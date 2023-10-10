@@ -10,8 +10,10 @@ pub mod async_types;
 #[cfg_attr(feature = "sync", path = "sync.rs")]
 #[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
 mod shared;
+pub use shared::read;
+pub use shared::write;
 pub use shared::LoxVariable;
-pub use shared::Shared;
+use shared::Shared;
 
 mod to_tokens;
 
@@ -316,12 +318,12 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::BoundMethod(f, _) => Self::Function(f.params().to_vec()),
                     LoxValue::PrimitiveMethod(_, _) => Self::Function(vec![]),
                     LoxValue::Class(_) => Self::Class,
-                    LoxValue::Instance(instance) => Self::Instance(instance.read().class.name.clone()),
+                    LoxValue::Instance(instance) => Self::Instance(read(&instance).class.name.clone()),
                     LoxValue::Error(_) => Self::Error,
                     #[cfg(feature = "async")]
                     LoxValue::Coroutine(f) => Self::Coroutine(f.params().to_vec()),
                     #[cfg(feature = "async")]
-                    LoxValue::Future(fut) => Self::Future(fut.read().done()),
+                    LoxValue::Future(fut) => Self::Future(read(&fut).done()),
                     LoxValue::External(_) => Self::External,
                     LoxValue::Nil => Self::Nil,
                     LoxValue::Undefined(_) => unreachable!(),
@@ -393,7 +395,7 @@ impl LoxValue {
                 let index = num as usize;
 
                 if index as f64 == num {
-                    arr.read()[index].clone()
+                    read(arr)[index].clone()
                 } else {
                     return Err(LoxError::type_error(format!(
                         "invalid base for index: {}",
@@ -437,7 +439,7 @@ impl LoxValue {
     }
 
     #[inline(always)]
-    fn get_impl(&self, key: &str) -> Option<LoxValue> {
+    fn get_impl(&self, key: &'static str) -> Result<Option<LoxValue>, LoxError> {
         static PRIMITIVE_METHODS: OnceLock<HashMap<&'static str, fn(LoxValue) -> LoxResult>> =
             OnceLock::new();
         fn init_primitives() -> HashMap<&'static str, fn(LoxValue) -> LoxResult> {
@@ -454,36 +456,43 @@ impl LoxValue {
         }
 
         if let LoxValue::Instance(instance) = self {
-            if let Some(attr) = instance.read().attributes.get(key) {
-                Some(attr.clone())
+            if let Some(attr) = read(instance).attributes.get(key) {
+                Ok(Some(attr.clone()))
             } else {
-                instance
-                    .read()
+                Ok(read(instance)
                     .class
                     .get(key)
-                    .map(|func| LoxValue::BoundMethod(func, instance.clone()))
+                    .map(|func| LoxValue::BoundMethod(func, instance.clone())))
             }
         } else if let Some(method) = PRIMITIVE_METHODS.get_or_init(init_primitives).get(key) {
-            Some(LoxValue::PrimitiveMethod(*method, Box::new(self.clone())))
+            Ok(Some(LoxValue::PrimitiveMethod(
+                *method,
+                Box::new(self.clone()),
+            )))
+        } else if let LoxValue::External(object) = self {
+            read(object).get(key)
         } else {
-            None
+            Ok(None)
         }
     }
 
     /// Gets the attribute corresponding to `self.key`, if it exists.
     pub fn get(&self, key: &'static str) -> LoxResult {
-        self.get_impl(key)
+        self.get_impl(key)?
             .ok_or(LoxError::invalid_property(key, self.to_string()))
     }
 
     /// Gets the attribute corresponding to `self.key` to `value`, if it exists.
     pub fn set(&self, key: &'static str, value: LoxValue) -> LoxResult {
         if let LoxValue::Instance(instance) = self {
-            instance
-                .write()
+            write(instance)
                 .attributes
                 .insert(key.to_string(), value.clone());
             Ok(value)
+        } else if let LoxValue::External(object) = self {
+            read(object).set(key, value).map_err(|err| {
+                err.unwrap_or_else(|| LoxError::invalid_property(key, self.to_string()))
+            })
         } else {
             Err(LoxError::invalid_property(key, self.to_string()))
         }
@@ -510,7 +519,7 @@ impl LoxValue {
 
     fn super_fn_impl(&self, name: &'static str) -> Option<LoxMethod> {
         let instance = self.as_instance()?;
-        let mut class = &instance.read().class;
+        let mut class = &read(&instance).class;
         while class.methods.get(name).is_none() {
             class = class.superclass.as_ref()?;
         }
@@ -547,10 +556,13 @@ impl LoxValue {
                 func.call(args)
             }
             Self::Class(class) => {
-                let instance = LoxValue::Instance(Shared::new(LoxInstance {
-                    class: LoxRc::clone(class),
-                    attributes: HashMap::new(),
-                }));
+                let instance = LoxValue::Instance(Shared::new(
+                    LoxInstance {
+                        class: LoxRc::clone(class),
+                        attributes: HashMap::new(),
+                    }
+                    .into(),
+                ));
                 if let Some(initialiser) = &class.initialiser {
                     args.head = Some(instance.clone());
                     (initialiser.fun)(args)
@@ -560,7 +572,7 @@ impl LoxValue {
             }
             Self::PrimitiveMethod(func, object) => func((**object).clone()),
             #[cfg(feature = "async")]
-            Self::Coroutine(func) => Ok(LoxValue::Future(Shared::new(func.start(args)))),
+            Self::Coroutine(func) => Ok(LoxValue::Future(Shared::new(func.start(args).into()))),
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
@@ -591,6 +603,14 @@ impl LoxValue {
             Err(self.as_external_error())
         }
     }
+
+    /// Returns the external object wrapped by `self` if it exists, or a type
+    /// error if it doesn't.
+    #[cfg(feature = "sync")]
+    pub fn external<T: LoxObject + Send + Sync + 'static>(value: T) -> LoxValue {
+        let shared = Shared::new(value.into());
+        LoxValue::External(shared as Shared<dyn LoxObject + Send + Sync>)
+    }
 }
 
 impl fmt::Debug for LoxValue {
@@ -608,7 +628,7 @@ impl fmt::Debug for LoxValue {
                 write!(f, "PrimitiveMethod({:#?})", object)
             }
             Self::Class(class) => write!(f, "Class({:#?})", class),
-            Self::Instance(instance) => write!(f, "Instance({:#?})", instance.read().deref()),
+            Self::Instance(instance) => write!(f, "Instance({:#?})", read(instance).deref()),
             Self::Error(error) => write!(f, "Error({:#?})", error),
             #[cfg(feature = "async")]
             Self::Coroutine(fun) => write!(f, "Coroutine({:#?})", fun.params()),
@@ -632,8 +652,8 @@ where
             (&Self::Bool(b1), Self::Bool(b2)) => b1 == b2,
             (Self::Str(s1), Self::Str(s2)) => s1 == &s2,
             (&Self::Num(n1), Self::Num(n2)) => n1 == n2,
-            (Self::Arr(a1), Self::Arr(a2)) => a1 == &a2,
-            (Self::Instance(i1), Self::Instance(i2)) => i1 == &i2,
+            (Self::Arr(a1), Self::Arr(a2)) => read(a1).deref() == read(&a2).deref(),
+            (Self::Instance(i1), Self::Instance(i2)) => read(i1).deref() == read(&i2).deref(),
             _ => false,
         }
     }
@@ -651,10 +671,10 @@ impl fmt::Display for LoxValue {
             }
             Self::Arr(values) => {
                 let mut buf = "[".to_string();
-                for value in values.read().iter().take(values.read().len() - 1) {
+                for value in read(values).iter().take(read(values).len() - 1) {
                     buf += &(value.to_string() + ", ");
                 }
-                if let Some(value) = values.read().last() {
+                if let Some(value) = read(values).last() {
                     buf += &value.to_string();
                 }
 
@@ -668,7 +688,7 @@ impl fmt::Display for LoxValue {
             Self::PrimitiveMethod(_, _) => write!(f, "<bound method>"),
             Self::Class(_) => write!(f, "<class>"),
             Self::Instance(instance) => {
-                write!(f, "<instance of {}>", instance.read().class.name)
+                write!(f, "<instance of {}>", read(instance).class.name)
             }
             Self::Error(error) => write!(f, "{error}"),
             #[cfg(feature = "async")]
@@ -725,7 +745,7 @@ impl From<&str> for LoxValue {
 
 impl From<Vec<LoxValue>> for LoxValue {
     fn from(values: Vec<LoxValue>) -> Self {
-        Self::Arr(values.into())
+        Self::Arr(Shared::new(values.into()))
     }
 }
 
@@ -884,7 +904,7 @@ impl ops::Add for LoxValue {
             }
             (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
             (LoxValue::Arr(arr1), LoxValue::Arr(ref arr2)) => {
-                arr1.write().append(&mut arr2.write());
+                write(&arr1).append(&mut write(arr2));
                 Ok(LoxValue::Arr(arr1))
             }
             _ => Err(LoxError::type_error(format!(
@@ -991,7 +1011,7 @@ where
             (Self::Bool(b1), Self::Bool(b2)) => b1.partial_cmp(&b2),
             (Self::Num(n1), Self::Num(n2)) => n1.partial_cmp(&n2),
             (Self::Str(s1), Self::Str(s2)) => s1.partial_cmp(&s2),
-            (Self::Arr(a1), Self::Arr(a2)) => a1.partial_cmp(&a2),
+            (Self::Arr(a1), Self::Arr(a2)) => read(a1).partial_cmp(&read(&a2)),
             _ => None,
         }
     }
@@ -1016,7 +1036,7 @@ impl IntoIterator for LoxValue {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            Self::Arr(arr) => LoxIterator::Array(arr.read().clone().into_iter()),
+            Self::Arr(arr) => LoxIterator::Array(read(&arr).clone().into_iter()),
             Self::Str(string) => LoxIterator::String(string.to_string().into_bytes().into_iter()),
             _ => panic!("cannot convert {} into iterator", LoxValueType::from(self)),
         }
@@ -1173,7 +1193,7 @@ impl LoxMethod {
         match self {
             LoxMethod::Sync(fun) => (fun.fun)(args),
             #[cfg(feature = "async")]
-            LoxMethod::Async(fun) => Ok(LoxValue::Future(Shared::new(fun.start(args)))),
+            LoxMethod::Async(fun) => Ok(LoxValue::Future(Shared::new(fun.start(args).into()))),
         }
     }
 }
@@ -1379,67 +1399,79 @@ impl<T: Into<LoxValue>, E: Error + 'static> ToLoxResult for Result<T, E> {
 /// A trait for foreign objects that can be used in Lox.
 pub trait LoxObject: Any {
     /// Gets the field of `self` corresponding to `key`.
-    fn get(&self, key: &'static str) -> LoxResult;
+    ///
+    /// This method should return `Ok(None)` instead of an error if the value is
+    /// not found.
+    fn get(&self, key: &'static str) -> Result<Option<LoxValue>, LoxError> {
+        let _ = key;
+        Ok(None)
+    }
 
     /// Sets the field of `self` corresponding to `key` to the given value.
-    fn set(&self, key: &'static str, value: LoxValue);
+    ///
+    /// If the operation succeeds, the given value should be cloned and
+    /// returned.
+    fn set(&self, key: &'static str, value: LoxValue) -> Result<LoxValue, Option<LoxError>> {
+        let (_, _) = (key, value);
+        Err(None)
+    }
 }
 
-impl Shared<dyn LoxObject> {
-    /// ## Safety
-    /// `self` must be of type `T`.
-    unsafe fn downcast_unchecked<T: LoxObject>(self) -> Shared<T> {
-        let ptr = self.into_raw();
-        // SAFETY: Must be upheld by caller.
-        unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) }
-    }
+fn unsync_is<T: LoxObject>(value: &Shared<dyn LoxObject>) -> bool {
+    let t = TypeId::of::<T>();
+    let concrete = (*read(value).deref()).type_id();
+    t == concrete
+}
 
-    fn is<T: LoxObject>(&self) -> bool {
-        let t = TypeId::of::<T>();
-        let concrete = (*self.read().deref()).type_id();
-        t == concrete
-    }
+fn sync_is<T: LoxObject>(value: &Shared<dyn LoxObject + Send + Sync>) -> bool {
+    let t = TypeId::of::<T>();
+    let concrete = (*read(value).deref()).type_id();
+    t == concrete
+}
 
+/// Objects which can be downcast to a concrete type.
+///
+/// This trait is sealed, and cannot be implemented for foreign types.
+pub trait Downcast: Sized + Sealed {
     /// Attempts to downcast `self` to a concrete type, returning `Err(self)`
     /// if the cast fails.
-    pub fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject>> {
-        if self.is::<T>() {
+    fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Self>;
+}
+
+impl Sealed for Shared<dyn LoxObject> {}
+
+impl Downcast for Shared<dyn LoxObject> {
+    fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject>> {
+        if unsync_is::<T>(&self) {
+            let ptr = LoxRc::into_raw(self);
             // SAFETY: The `TypeId`s are the same, therefore `self` is an
             // instance of `T`.
-            Ok(unsafe { Self::downcast_unchecked(self) })
+            Ok(unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) })
         } else {
             todo!()
         }
     }
 }
 
-impl Shared<dyn LoxObject + Send + Sync> {
-    /// ## Safety
-    /// `self` must be of type `T`.
-    unsafe fn downcast_unchecked<T: LoxObject>(self) -> Shared<T> {
-        let ptr = self.into_raw();
-        // SAFETY: Must be upheld by caller.
-        unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) }
-    }
+impl Sealed for Shared<dyn LoxObject + Send + Sync> {}
 
-    fn is<T: LoxObject>(&self) -> bool {
-        let t = TypeId::of::<T>();
-        let concrete = (*self.read().deref()).type_id();
-        t == concrete
-    }
-
-    /// Attempts to downcast `self` to a concrete type, returning `Err(self)`
-    /// if the cast fails.
-    pub fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject + Send + Sync>> {
-        if self.is::<T>() {
+impl Downcast for Shared<dyn LoxObject + Send + Sync> {
+    fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject + Send + Sync>> {
+        if sync_is::<T>(&self) {
+            let ptr = LoxRc::into_raw(self);
             // SAFETY: The `TypeId`s are the same, therefore `self` is an
             // instance of `T`.
-            Ok(unsafe { Self::downcast_unchecked(self) })
+            Ok(unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) })
         } else {
             todo!()
         }
     }
 }
+
+mod private {
+    pub trait Sealed {}
+}
+use private::Sealed;
 
 #[cfg(test)]
 mod tests;

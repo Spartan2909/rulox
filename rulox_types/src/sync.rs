@@ -10,46 +10,18 @@ use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
 use std::sync::RwLockWriteGuard;
 
-/// A pointer to `T` with shared ownership.
-#[derive(Debug)]
-pub struct Shared<T: ?Sized>(Arc<RwLock<T>>);
+pub type Shared<T> = Arc<RwLock<T>>;
 
 pub(super) type Inner<T> = RwLock<T>;
 
-impl<T> Shared<T> {
-    /// Create a [`Shared<T>`] from a value of type `T`.
-    pub fn new(value: T) -> Shared<T> {
-        Shared(Arc::new(RwLock::new(value)))
-    }
+/// Returns a read-only RAII guard for the shared pointer.
+pub fn read<T: ?Sized>(ptr: &Shared<T>) -> ReadGuard<T> {
+    ReadGuard(ptr.read().unwrap())
 }
 
-impl<T: ?Sized> Shared<T> {
-    pub(super) fn into_raw(self) -> *const RwLock<T> {
-        Arc::into_raw(self.0)
-    }
-
-    /// ## Safety
-    /// `ptr` must have come from [`Shared<T>::into_raw`].
-    pub(super) unsafe fn from_raw(ptr: *const RwLock<T>) -> Shared<T> {
-        // SAFETY: Must be guaranteed by caller.
-        Shared(unsafe { Arc::from_raw(ptr) })
-    }
-
-    /// Returns a read-only RAII guard for `self`.
-    pub fn read(&self) -> ReadGuard<T> {
-        ReadGuard(self.0.read().unwrap())
-    }
-
-    /// Returns a read-write RAII guard for `self`.
-    pub fn write(&self) -> WriteGuard<T> {
-        WriteGuard(self.0.write().unwrap())
-    }
-}
-
-impl<T: ?Sized> Clone for Shared<T> {
-    fn clone(&self) -> Self {
-        Shared(Arc::clone(&self.0))
-    }
+/// Returns a read-write RAII guard for the shared pointer.
+pub fn write<T: ?Sized>(ptr: &Shared<T>) -> WriteGuard<T> {
+    WriteGuard(ptr.write().unwrap())
 }
 
 pub struct ReadGuard<'a, T: ?Sized>(RwLockReadGuard<'a, T>);
@@ -63,12 +35,12 @@ impl LoxVariable {
     /// Creates a new [`LoxVariable`] wrapping a [`LoxValue`] created from the
     /// argument.
     pub fn new<T: Into<LoxValue>>(value: T) -> LoxVariable {
-        LoxVariable(Shared::new(value.into()))
+        LoxVariable(Arc::new(RwLock::new(value.into())))
     }
 
     /// Gets the value of `self`, returning an error if it is not defined.
     pub fn get(&self) -> LoxResult {
-        let inner = self.0.read();
+        let inner = read(&self.0);
         if let &LoxValue::Undefined(name) = inner.deref() {
             Err(LoxError::undefined_variable(name))
         } else {
@@ -78,7 +50,7 @@ impl LoxVariable {
 
     #[doc(hidden)] // Not public API.
     pub fn overwrite(&self, value: LoxValue) {
-        *self.0.write() = value;
+        *write(&self.0) = value;
     }
 
     #[doc(hidden)] // Not public API.

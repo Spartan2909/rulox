@@ -679,6 +679,7 @@ impl Expr {
             let value: syn::LitBool = input.parse()?;
             Ok(Self::Literal(LoxValue::from(value.value)))
         } else if lookahead.peek(kw::nil) {
+            input.parse::<kw::nil>()?;
             Ok(Self::Literal(LoxValue::Nil))
         } else if lookahead.peek(syn::LitStr) {
             let value: syn::LitStr = input.parse()?;

@@ -167,7 +167,7 @@ impl ToTokens for Stmt {
             } => {
                 let superclass = if let Some(superclass) = superclass {
                     let get = wrap_extract(quote! { #superclass.get() });
-                    let class = wrap_extract(quote! { #get.as_class() });
+                    let class = wrap_extract(quote! { #get.expect_class() });
                     quote! {
                         Some(__rulox_helpers::LoxRc::clone(#class))
                     }

@@ -31,7 +31,7 @@ impl Coroutine {
         &self.params
     }
 
-    pub(super) fn start(&self, args: LoxArgs) -> LoxFuture {
+    pub fn start(&self, args: LoxArgs) -> LoxFuture {
         LoxFuture {
             handle: (self.fun)(args),
             done: false,

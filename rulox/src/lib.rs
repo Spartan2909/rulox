@@ -188,6 +188,11 @@ macro_rules! rust_bindgen {
     };
 }
 
+pub use rulox_macro::TryFromLoxValue;
+pub use rulox_types::async_types::Coroutine;
+pub use rulox_types::async_types::LoxFuture;
+pub use rulox_types::Downcast;
+pub use rulox_types::DynLoxObject;
 pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxClass;
 pub use rulox_types::LoxError;
@@ -209,14 +214,18 @@ pub mod prelude {
     pub mod __rulox_helpers {
         pub use crate::LoxArgs;
         pub use crate::LoxClass;
+        pub use crate::LoxError;
         pub use crate::LoxFn;
+        pub use crate::LoxObject;
         pub use crate::LoxResult;
+        pub use crate::LoxValue;
         pub use crate::LoxVariable;
         pub use core::result::Result;
         pub use rulox_types::extract;
         pub use rulox_types::read;
         pub use rulox_types::write;
         pub use rulox_types::LoxRc;
+        pub use rulox_types::Shared;
         pub use std::collections::HashMap;
 
         #[cfg(feature = "async")]

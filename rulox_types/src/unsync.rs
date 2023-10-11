@@ -10,6 +10,7 @@ use core::cell::RefMut;
 use std::cell::UnsafeCell;
 use std::rc::Rc;
 
+/// A shared, mutable pointer to `T`.
 pub type Shared<T> = Rc<RefCell<T>>;
 
 pub(super) type Inner<T> = RefCell<T>;

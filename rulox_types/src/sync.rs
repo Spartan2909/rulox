@@ -10,6 +10,7 @@ use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
 use std::sync::RwLockWriteGuard;
 
+/// A shared, mutable pointer to `T`.
 pub type Shared<T> = Arc<RwLock<T>>;
 
 pub(super) type Inner<T> = RwLock<T>;

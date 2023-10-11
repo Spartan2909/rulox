@@ -185,8 +185,8 @@ impl Stmt {
         let content;
         braced!(content in input);
         while !content.is_empty() {
-            let is_async = if input.peek(Token![async]) {
-                input.parse::<Token![async]>()?;
+            let is_async = if content.peek(Token![async]) {
+                content.parse::<Token![async]>()?;
                 true
             } else {
                 false

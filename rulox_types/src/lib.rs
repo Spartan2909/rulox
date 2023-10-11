@@ -1315,6 +1315,22 @@ pub struct LoxInstance {
     attributes: HashMap<String, LoxValue>,
 }
 
+impl LoxInstance {
+    /// Checks if `self` is an instance of `target_class` or one of its
+    /// subclasses.
+    pub fn instance_of(&self, target_class: LoxRc<LoxClass>) -> bool {
+        let mut current_class = Some(self.class.clone());
+        while let Some(class) = current_class {
+            if class == target_class {
+                return true;
+            } else {
+                current_class = class.superclass.clone();
+            }
+        }
+        false
+    }
+}
+
 #[derive(Clone)]
 #[doc(hidden)] // Not public API.
 pub enum LoxMethod {
@@ -1422,12 +1438,27 @@ impl LoxClass {
             name,
             initialiser: None,
             methods,
-            superclass: Some(superclass.unwrap_or(LoxRc::new(LoxClass {
-                name: "object",
-                initialiser: None,
-                methods: HashMap::new(),
-                superclass: None,
-            }))),
+            superclass: Some(superclass.unwrap_or_else(|| {
+                let instance_of = |args: LoxArgs| -> LoxResult {
+                    let this = args.get(0).unwrap().as_instance().unwrap();
+                    let target_class = args.get(0).unwrap().expect_class()?.clone();
+                    let is_instance = read(&this).instance_of(target_class);
+
+                    Ok(LoxValue::Bool(is_instance))
+                };
+                LoxRc::new(LoxClass {
+                    name: "object",
+                    initialiser: None,
+                    methods: HashMap::from_iter([(
+                        "instance_of",
+                        LoxMethod::Sync(LoxRc::new(LoxFn {
+                            fun: Box::new(instance_of),
+                            params: vec!["class"],
+                        })),
+                    )]),
+                    superclass: None,
+                })
+            })),
         };
 
         class.initialiser = class.get("init").and_then(|fun| fun.get_sync());

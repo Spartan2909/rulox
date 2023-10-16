@@ -126,19 +126,25 @@ pub use rulox_macro::lox;
 /// ```
 #[macro_export]
 macro_rules! lox_bindgen {
-    ( fn $rust_name:ident ( $( $arg:ident ),* ) as $lox_name:ident ) => {
+    ( fn $rust_name:ident $( :: $segment:ident )* ( $( $arg:ident ),* ) ) => {
+        $crate::lox_bindgen!( fn $rust_name ( $( $arg ),* ) as $rust_name )
+    };
+    ( fn $rust_name:ident $( :: $segment:ident )* ( $( $arg:ident ),* ) as $lox_name:ident ) => {
         let $lox_name = __rulox_helpers::LoxVariable::new(LoxValue::function(__rulox_helpers::LoxFn::new(
             |mut args: $crate::LoxArgs| -> __rulox_helpers::LoxResult {
                 let mut __drain = args.drain();
                 $(
                     let $arg = __drain.next().unwrap();
                 )*
-                $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into()? ),* ))
+                $crate::ToLoxResult::to_lox_result($rust_name $( :: $segment )* ( $( $arg.try_into()? ),* ))
             },
             vec![$( stringify!($arg) ),*]
         )));
     };
-    ( async fn $rust_name:ident ( $( $arg:ident ),* ) as $lox_name:ident ) => {
+    ( async fn $rust_name:ident $( :: $segment:ident )* ( $( $arg:ident ),* ) ) => {
+        $crate::lox_bindgen!( async fn $rust_name ( $( $arg ),* ) as $rust_name )
+    };
+    ( async fn $rust_name:ident $( :: $segment:ident )* ( $( $arg:ident ),* ) as $lox_name:ident ) => {
         let $lox_name = __rulox_helpers::LoxVariable::new(LoxValue::coroutine(
             |mut args: $crate::LoxArgs| -> Box<dyn $crate::prelude::__rulox_helpers::Future<Output = $crate::LoxResult> + Send + Sync + 'static> {
                 let mut __drain = args.drain();
@@ -146,7 +152,7 @@ macro_rules! lox_bindgen {
                     let $arg = __drain.next().unwrap();
                 )*
                 Box::new(async {
-                    $crate::ToLoxResult::to_lox_result($rust_name( $( $arg.try_into()? ),* ).await)
+                    $crate::ToLoxResult::to_lox_result($rust_name $( :: $segment )* ( $( $arg.try_into()? ),* ).await)
                 })
             },
             vec![$( stringify!($arg) ),*]

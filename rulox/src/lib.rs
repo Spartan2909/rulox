@@ -207,6 +207,7 @@ pub use rulox_types::LoxObject;
 pub use rulox_types::LoxResult;
 pub use rulox_types::LoxValue;
 pub use rulox_types::LoxVariable;
+pub use rulox_types::Shared;
 
 #[doc(hidden)]
 pub use rulox_types::ToLoxResult;

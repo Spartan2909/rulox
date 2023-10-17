@@ -382,8 +382,8 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Undefined(_) => unreachable!(),
                 }
             }
-        }) *
-    };
+        }
+    )* };
 }
 
 loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }

@@ -35,6 +35,7 @@ impl ToTokens for LoxValue {
             ),
             Self::Class(_) => unimplemented!("classes contain functions, which cannot be converted without context"),
             Self::Instance(_) => unimplemented!("instances cannot directly occur in source code"),
+            Self::Map(_) => unimplemented!("maps must be constructed with LoxValue::map"),
             Self::Error(_) => unimplemented!("errors cannot directly occur in source code"),
             #[cfg(feature = "async")]
             Self::Coroutine(_) => unimplemented!("coroutine are functions, which cannot be converted without context"),

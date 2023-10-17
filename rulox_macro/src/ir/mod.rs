@@ -641,6 +641,16 @@ enum Expr {
     Await {
         left: Box<Expr>,
     },
+    Index {
+        left: Box<Expr>,
+        index: Box<Expr>,
+    },
+    IndexSet {
+        left: Box<Expr>,
+        index: Box<Expr>,
+        value: Box<Expr>,
+    },
+    Map(Vec<(Expr, Expr)>),
 }
 
 impl Expr {
@@ -713,6 +723,21 @@ impl Expr {
                 }
             }
             Expr::Await { left } => left.undeclared_references(declared, references),
+            Expr::Index { left, index } => {
+                left.undeclared_references(declared, references);
+                index.undeclared_references(declared, references);
+            }
+            Expr::IndexSet { left, index, value } => {
+                left.undeclared_references(declared, references);
+                index.undeclared_references(declared, references);
+                value.undeclared_references(declared, references);
+            }
+            Expr::Map(map) => {
+                for (key, value) in map {
+                    key.undeclared_references(declared, references);
+                    value.undeclared_references(declared, references);
+                }
+            }
             Expr::Literal(_) | Expr::This => (),
         }
     }
@@ -777,6 +802,21 @@ impl Expr {
                 }
             }
             Expr::Await { left } => left.resolve(resolver),
+            Expr::Index { left, index } => {
+                left.resolve(resolver);
+                index.resolve(resolver);
+            }
+            Expr::IndexSet { left, index, value } => {
+                left.resolve(resolver);
+                index.resolve(resolver);
+                value.resolve(resolver);
+            }
+            Expr::Map(map) => {
+                for (key, value) in map {
+                    key.resolve(resolver);
+                    value.resolve(resolver);
+                }
+            }
             Expr::Literal(_) | Expr::Variable(_) | Expr::This => {}
         }
     }
@@ -905,6 +945,20 @@ impl From<ast::Expr> for Expr {
             ast::Expr::Await { left } => Expr::Await {
                 left: Box::new(left.into()),
             },
+            ast::Expr::Index { left, index } => Expr::Index {
+                left: Box::new(left.into()),
+                index: Box::new(index.into()),
+            },
+            ast::Expr::IndexSet { left, index, value } => Expr::IndexSet {
+                left: Box::new(left.into()),
+                index: Box::new(index.into()),
+                value: Box::new(value.into()),
+            },
+            ast::Expr::Map(map) => Expr::Map(
+                map.into_iter()
+                    .map(|(key, value)| (key.into(), value.into()))
+                    .collect(),
+            ),
         }
     }
 }

@@ -165,7 +165,7 @@ fn index_arr() -> Result<(), LoxError> {
         var list = [true, false];
     }
 
-    let b1: bool = list.get()?.index(0)?.try_into().unwrap();
+    let b1: bool = list.get()?.index(0.into())?.try_into().unwrap();
     let b2: bool = list.get()?.index(LoxValue::Num(1.0))?.try_into().unwrap();
 
     assert!(b1);
@@ -490,10 +490,10 @@ async fn async_bindgen() -> Result<(), LoxError> {
         3
     }
 
-    lox_bindgen!(async fn do_some_stuff() as lox_do_stuff);
+    lox_bindgen!(async fn do_some_stuff());
 
     lox! {
-        var result = lox_do_stuff().await;
+        var result = do_some_stuff().await;
     }
 
     assert_eq!(result.get()?, 3);
@@ -559,6 +559,71 @@ fn primitive_methods() -> Result<(), LoxError> {
 
     assert_eq!(a.get()?, true);
     assert_eq!(b.get()?, true);
+
+    Ok(())
+}
+
+#[test]
+fn index() -> Result<(), LoxError> {
+    lox! {
+        var list = ["a", "b", "c"];
+        var a = list[0];
+        var b = list[1];
+        var c = list[2];
+        var d;
+        try {
+            d = list[3];
+        } except {
+            d = "failed";
+        } else {
+            throw "succesfully indexed out of range";
+        }
+    }
+
+    assert_eq!(a.get()?, "a");
+    assert_eq!(b.get()?, "b");
+    assert_eq!(c.get()?, "c");
+    assert_eq!(d.get()?, "failed");
+
+    Ok(())
+}
+
+#[test]
+fn index_set() -> Result<(), LoxError> {
+    lox! {
+        var list = [1, 2, 3, 4];
+        list[0] = "hello";
+        list[3] = 3;
+
+        var a = list[0];
+        var b = list[1];
+        var c = list[2];
+        var d = list[3];
+    }
+
+    assert_eq!(a.get()?, "hello");
+    assert_eq!(b.get()?, 2);
+    assert_eq!(c.get()?, 3);
+    assert_eq!(d.get()?, 3);
+
+    Ok(())
+}
+
+#[test]
+fn map() -> Result<(), LoxError> {
+    lox! {
+        var map = {
+            "a": 1,
+            "b": 2,
+        };
+
+        var a = map["a"];
+        map["b"] = 3;
+        var b = map["b"];
+    }
+
+    assert_eq!(a.get()?, 1);
+    assert_eq!(b.get()?, 3);
 
     Ok(())
 }

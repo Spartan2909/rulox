@@ -441,7 +441,7 @@ impl Stmt {
 }
 
 pub enum Expr {
-    Literal(rulox_types::LoxValue),
+    Literal(LoxValue),
     Array(Vec<Expr>),
     Function {
         is_async: bool,
@@ -482,6 +482,16 @@ pub enum Expr {
     Await {
         left: Box<Expr>,
     },
+    Index {
+        left: Box<Expr>,
+        index: Box<Expr>,
+    },
+    IndexSet {
+        left: Box<Expr>,
+        index: Box<Expr>,
+        value: Box<Expr>,
+    },
+    Map(Vec<(Expr, Expr)>),
 }
 
 impl Parse for Expr {
@@ -653,6 +663,23 @@ impl Expr {
                         name: input.parse()?,
                     };
                 }
+            } else if input.peek(token::Bracket) {
+                let content;
+                bracketed!(content in input);
+                let index = content.parse()?;
+                if input.peek(Token![=]) {
+                    input.parse::<Token![=]>()?;
+                    expr = Expr::IndexSet {
+                        left: Box::new(expr),
+                        index: Box::new(index),
+                        value: Box::new(input.parse()?),
+                    };
+                } else {
+                    expr = Expr::Index {
+                        left: Box::new(expr),
+                        index: Box::new(index),
+                    };
+                }
             } else {
                 break;
             }
@@ -720,6 +747,8 @@ impl Expr {
             let content;
             parenthesized!(content in input);
             Self::parse(&content)
+        } else if lookahead.peek(token::Brace) {
+            Self::map(input)
         } else if lookahead.peek(Ident) {
             Ok(Self::Variable(input.parse()?))
         } else {
@@ -742,5 +771,18 @@ impl Expr {
             params: Vec::from_iter(params),
             body: Box::new(body),
         })
+    }
+
+    fn map(input: ParseStream) -> syn::Result<Self> {
+        let content;
+        braced!(content in input);
+        let mut map = vec![];
+        while !content.is_empty() {
+            let key = content.parse()?;
+            content.parse::<Token![:]>()?;
+            map.push((key, content.parse()?));
+            content.parse::<Token![,]>()?;
+        }
+        Ok(Self::Map(map))
     }
 }

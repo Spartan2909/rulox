@@ -108,7 +108,7 @@ impl ToTokens for Stmt {
                     params,
                     body,
                     true,
-                    false,
+                    None,
                     None,
                     Some(name),
                     *is_async,
@@ -177,12 +177,17 @@ impl ToTokens for Stmt {
 
                 let mut methods_tokens = TokenStream::new();
                 for (is_async, method) in methods {
+                    let initialiser = if method.is_initialiser {
+                        Some(name)
+                    } else {
+                        None
+                    };
                     let method_tokens = function_expr_to_tokens(
                         &method.upvalues,
                         &method.params,
                         &method.body,
                         false,
-                        method.is_initialiser,
+                        initialiser,
                         Some(&method.name),
                         Some(&method.name),
                         *is_async,
@@ -201,7 +206,9 @@ impl ToTokens for Stmt {
                     ))));
                 });
             }
-            Stmt::Throw(expr) => tokens.append_all(quote! { return Err((#expr).into_error()); }),
+            Stmt::Throw(expr) => tokens.append_all(
+                quote! { return Err((#expr).into_error().with_trace(vec![__rulox_fn_name])); },
+            ),
             Stmt::Try {
                 body,
                 excepts,
@@ -245,7 +252,7 @@ fn function_expr_to_tokens(
     params: &VecDeque<Ident>,
     body: &Stmt,
     value_wrap: bool,
-    is_initialiser: bool,
+    initialiser: Option<&Ident>,
     insert_super_fn: Option<&Ident>,
     fn_name: Option<&Ident>,
     is_async: bool,
@@ -280,16 +287,19 @@ fn function_expr_to_tokens(
         });
     }
 
-    let fn_name = fn_name.map_or(
-        quote! { "<anonymous function>" },
-        |name| quote! { stringify!(#name) },
-    );
+    let fn_name = fn_name.map_or(quote! { "<anonymous function>" }, |name| {
+        if let Some(class_name) = initialiser {
+            quote! { stringify!(#class_name) }
+        } else {
+            quote! { stringify!(#name) }
+        }
+    });
 
     expr_body.append_all(quote! { let __rulox_fn_name = #fn_name; });
 
     expr_body.append_all(quote! { { #body } });
 
-    let tail = if is_initialiser {
+    let tail = if initialiser.is_some() {
         quote! { this.get() }
     } else {
         quote! { Ok(LoxValue::Nil) }
@@ -374,7 +384,7 @@ impl ToTokens for Expr {
                 body,
             } => {
                 tokens.append_all(function_expr_to_tokens(
-                    upvalues, params, body, true, false, None, None, *is_async,
+                    upvalues, params, body, true, None, None, None, *is_async,
                 ));
             }
             Expr::Variable(var) => {
@@ -444,6 +454,17 @@ impl ToTokens for Expr {
                 tokens.append_all(quote! { __super([#inner].into())? });
             }
             Expr::Await { left } => tokens.append_all(quote! { (#left).await? }),
+            Expr::Index { left, index } => tokens.append_all(quote! { (#left).index(#index)? }),
+            Expr::IndexSet { left, index, value } => {
+                tokens.append_all(quote! { (#left).index_set(#index, #value)? })
+            }
+            Expr::Map(map) => {
+                let mut inner = TokenStream::new();
+                for (key, value) in map {
+                    inner.append_all(quote! { (#key, #value), });
+                }
+                tokens.append_all(quote! { LoxValue::map([#inner])? });
+            }
         }
     }
 }

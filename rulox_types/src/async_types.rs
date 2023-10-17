@@ -1,3 +1,4 @@
+use crate::hash_ptr;
 use crate::write;
 use crate::LoxArgs;
 use crate::LoxError;
@@ -5,9 +6,11 @@ use crate::LoxResult;
 use crate::LoxValue;
 
 use std::future::Future;
+use std::hash::Hash;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::pin::Pin;
+use std::ptr;
 use std::task::Context;
 use std::task::Poll;
 
@@ -39,6 +42,20 @@ impl Coroutine {
     }
 }
 
+impl PartialEq for Coroutine {
+    fn eq(&self, other: &Self) -> bool {
+        let f1: *const _ = self.fun.as_ref();
+        let f2: *const _ = other.fun.as_ref();
+        ptr::eq(f1 as *const (), f2 as *const ())
+    }
+}
+
+impl Hash for Coroutine {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        hash_ptr(self.fun.as_ref(), state);
+    }
+}
+
 pub struct LoxFuture {
     handle: Box<dyn Future<Output = LoxResult> + Send + Sync>,
     done: bool,
@@ -47,6 +64,20 @@ pub struct LoxFuture {
 impl LoxFuture {
     pub(super) fn done(&self) -> bool {
         self.done
+    }
+}
+
+impl PartialEq for LoxFuture {
+    fn eq(&self, other: &Self) -> bool {
+        let h1: *const _ = self.handle.as_ref();
+        let h2: *const _ = other.handle.as_ref();
+        ptr::eq(h1 as *const (), h2 as *const ())
+    }
+}
+
+impl Hash for LoxFuture {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        hash_ptr(self.handle.as_ref(), state);
     }
 }
 

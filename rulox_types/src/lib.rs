@@ -394,6 +394,7 @@ pub type LoxResult = Result<LoxValue, LoxError>;
 
 /// An entry in a hashmap.
 #[derive(Clone, PartialEq, PartialOrd, Hash)]
+#[repr(transparent)]
 pub struct Entry(LoxValue);
 
 impl Entry {
@@ -404,9 +405,29 @@ impl Entry {
             _ => Err(LoxError::invalid_key(key)),
         }
     }
+
+    /// Extracts the [`LoxValue`] from `self`.
+    pub fn into_inner(self) -> LoxValue {
+        self.0
+    }
+}
+
+impl TryFrom<LoxValue> for Entry {
+    type Error = LoxError;
+
+    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
+        Entry::verify_key(value)
+    }
+}
+
+impl From<Entry> for LoxValue {
+    fn from(value: Entry) -> Self {
+        value.into_inner()
+    }
 }
 
 impl Debug for Entry {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Debug::fmt(&self.0, f)
     }

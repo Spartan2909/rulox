@@ -18,7 +18,9 @@ license.workspace = true
 "fastrand" = "2"
 "proc-macro2" = "1.0"
 "quote" = "1.0"
+"serde" = { version = "1", features = ["derive", "rc"], optional = true }
 
 [features]
 sync = []
 async = ["sync"]
+serialise = ["dep:serde"]

@@ -11,6 +11,9 @@ pub use async_types::Coroutine;
 #[cfg(feature = "async")]
 pub use async_types::LoxFuture;
 
+#[cfg(feature = "serialise")]
+mod serialise;
+
 #[cfg_attr(feature = "sync", path = "sync.rs")]
 #[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
 mod shared;
@@ -102,6 +105,9 @@ use std::future::Future;
 
 use castaway::cast;
 
+#[cfg(feature = "serialise")]
+use serde::Serialize;
+
 #[derive(Debug, Clone)]
 #[cfg(feature = "sync")]
 struct ExternalError(LoxRc<dyn Error + Send + Sync>);
@@ -124,6 +130,7 @@ impl PartialEq for ExternalError {
 
 /// An error raised during compilation or execution.
 #[derive(Debug, Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 pub struct LoxError {
     inner: LoxErrorInner,
     trace: VecDeque<&'static str>,
@@ -247,6 +254,7 @@ impl From<Infallible> for LoxError {
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 enum LoxErrorInner {
     /// An error that occurs when attempting to use a LoxValue with an invalid type.
     TypeError(String),
@@ -268,7 +276,11 @@ enum LoxErrorInner {
         found: usize,
     },
     Value(Box<LoxValue>),
+    #[cfg_attr(feature = "serialise", serde(serialize_with = "serialise::external_error"))]
     External(ExternalError),
+    #[cfg(feature = "serialise")]
+    #[doc(hidden)]
+    Arbitrary(String),
     #[cfg(feature = "async")]
     FinishedCoroutine,
 }
@@ -308,6 +320,8 @@ impl fmt::Display for LoxError {
                 write!(f, "error: {value}")
             }
             LoxErrorInner::External(err) => fmt::Display::fmt(&err.0, f),
+            #[cfg(feature = "serialise")]
+            LoxErrorInner::Arbitrary(string) => f.write_str(string),
             #[cfg(feature = "async")]
             LoxErrorInner::FinishedCoroutine => write!(f, "cannot await a finished coroutine"),
         }
@@ -408,6 +422,7 @@ pub type LoxResult = Result<LoxValue, LoxError>;
 
 /// An entry in a hashmap.
 #[derive(Clone, PartialEq, PartialOrd, Hash)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 #[repr(transparent)]
 pub struct Entry(LoxValue);
 
@@ -452,6 +467,7 @@ impl Eq for Entry {}
 /// A dynamically typed value used by Lox programs.
 #[non_exhaustive]
 #[derive(Clone)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 pub enum LoxValue {
     /// A boolean value.
     Bool(bool),
@@ -466,6 +482,7 @@ pub enum LoxValue {
     #[doc(hidden)]
     BoundMethod(LoxMethod, Shared<LoxInstance>),
     #[doc(hidden)]
+    #[cfg_attr(feature = "serialise", serde(serialize_with = "serialise::primitive_method"))]
     PrimitiveMethod(fn(LoxValue) -> LoxResult, Box<LoxValue>),
     /// A class.
     Class(LoxRc<LoxClass>),
@@ -484,11 +501,8 @@ pub enum LoxValue {
     /// Nothing.
     Nil,
     /// An object that couldn't normally be represented in Lox.
-    #[cfg(not(feature = "sync"))]
-    External(Shared<dyn LoxObject>),
-    /// An object that couldn't normally be represented in Lox.
-    #[cfg(feature = "sync")]
-    External(Shared<dyn LoxObject + Send + Sync>),
+    #[cfg_attr(feature = "serialise", serde(serialize_with = "serialise::external"))]
+    External(Shared<DynLoxObject>),
     #[doc(hidden)] // Not public API.
     Undefined(&'static str),
 }
@@ -1494,8 +1508,10 @@ impl Iterator for LoxIterator {
 }
 
 /// A function defined in Lox code.
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 pub struct LoxFn {
     #[cfg(feature = "sync")]
+    #[cfg_attr(feature = "serialise", serde(skip_serializing))]
     fun: Box<dyn Fn(LoxArgs) -> LoxResult + Send + Sync>,
     #[cfg(not(feature = "sync"))]
     fun: Box<dyn Fn(LoxArgs) -> LoxResult>,
@@ -1549,6 +1565,7 @@ impl Hash for LoxFn {
 
 /// An instance of a Lox class.
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 pub struct LoxInstance {
     class: LoxRc<LoxClass>,
     attributes: HashMap<String, LoxValue>,
@@ -1582,6 +1599,7 @@ impl Hash for LoxInstance {
 }
 
 #[derive(Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 #[doc(hidden)] // Not public API.
 pub enum LoxMethod {
     Sync(LoxRc<LoxFn>),
@@ -1658,6 +1676,7 @@ impl From<LoxRc<async_types::Coroutine>> for LoxMethod {
 
 /// A class defined in Lox code.
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 pub struct LoxClass {
     name: &'static str,
     initialiser: Option<LoxRc<LoxFn>>,
@@ -1741,6 +1760,7 @@ impl Hash for LoxClass {
 }
 
 /// Arguments to a Lox function.
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 pub struct LoxArgs {
     head: Option<LoxValue>,
     main: Vec<LoxValue>,

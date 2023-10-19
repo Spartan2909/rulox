@@ -14,7 +14,12 @@ use std::ptr;
 use std::task::Context;
 use std::task::Poll;
 
+#[cfg(feature = "serialise")]
+use serde::Serialize;
+
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 pub struct Coroutine {
+    #[cfg_attr(feature = "serialise", serde(skip_serializing))]
     fun: Box<dyn Fn(LoxArgs) -> Box<dyn Future<Output = LoxResult> + Send + Sync> + Send + Sync>,
     params: Vec<&'static str>,
 }
@@ -56,7 +61,9 @@ impl Hash for Coroutine {
     }
 }
 
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 pub struct LoxFuture {
+    #[cfg_attr(feature = "serialise", serde(skip_serializing))]
     handle: Box<dyn Future<Output = LoxResult> + Send + Sync>,
     done: bool,
 }

@@ -781,7 +781,9 @@ impl Expr {
             let key = content.parse()?;
             content.parse::<Token![:]>()?;
             map.push((key, content.parse()?));
-            content.parse::<Token![,]>()?;
+            if !content.is_empty() {
+                content.parse::<Token![,]>()?;
+            }
         }
         Ok(Self::Map(map))
     }

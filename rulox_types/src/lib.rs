@@ -543,6 +543,15 @@ impl LoxValue {
         }
     }
 
+    /// Returns the value wrapped by `self` if `self` is a `LoxValue::Map`.
+    pub fn as_map(&self) -> Result<Shared<HashMap<Entry, Entry>>, LoxError> {
+        if let LoxValue::Map(value) = self {
+            Ok(LoxRc::clone(value))
+        } else {
+            Err(LoxError::type_error(format!("{self} is not a map")))
+        }
+    }
+
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Error`.
     pub fn as_error(&self) -> Result<LoxError, LoxError> {
         if let LoxValue::Error(value) = self {

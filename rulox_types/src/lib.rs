@@ -173,6 +173,13 @@ impl LoxError {
         }
     }
 
+    fn incorrect_arity(expected: usize, found: usize) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::IncorrectArity { expected, found },
+            trace: VecDeque::new(),
+        }
+    }
+
     fn value(value: LoxValue) -> LoxError {
         LoxError {
             inner: LoxErrorInner::Value(Box::new(value)),
@@ -256,6 +263,10 @@ enum LoxErrorInner {
     NonExistentSuper(&'static str),
     IndexOutOfRange(usize),
     InvalidKey(Box<LoxValue>),
+    IncorrectArity {
+        expected: usize,
+        found: usize,
+    },
     Value(Box<LoxValue>),
     External(ExternalError),
     #[cfg(feature = "async")]
@@ -290,6 +301,9 @@ impl fmt::Display for LoxError {
             }
             LoxErrorInner::IndexOutOfRange(index) => write!(f, "index out of range: {index}"),
             LoxErrorInner::InvalidKey(key) => write!(f, "invalid key: {key}"),
+            LoxErrorInner::IncorrectArity { expected, found } => {
+                write!(f, "expected {expected} arguments, found {found}")
+            }
             LoxErrorInner::Value(value) => {
                 write!(f, "error: {value}")
             }
@@ -779,10 +793,10 @@ impl LoxValue {
     /// class.
     pub fn call(&self, mut args: LoxArgs) -> LoxResult {
         match self {
-            Self::Function(func) => (func.fun)(args),
+            Self::Function(func) => (func.fun)(args.check_arity(func.params.len())?),
             Self::BoundMethod(func, instance) => {
                 args.head = Some(LoxValue::Instance(instance.clone()));
-                func.call(args)
+                func.call(args.check_arity(func.params().len() - 1)?)
             }
             Self::Class(class) => {
                 let instance = LoxValue::Instance(Shared::new(
@@ -792,6 +806,7 @@ impl LoxValue {
                     }
                     .into(),
                 ));
+                let mut args = args.check_arity(class.arity())?;
                 if let Some(initialiser) = &class.initialiser {
                     args.head = Some(instance.clone());
                     (initialiser.fun)(args)
@@ -801,7 +816,9 @@ impl LoxValue {
             }
             Self::PrimitiveMethod(func, object) => func((**object).clone()),
             #[cfg(feature = "async")]
-            Self::Coroutine(func) => Ok(LoxValue::Future(Shared::new(func.start(args).into()))),
+            Self::Coroutine(func) => Ok(LoxValue::Future(Shared::new(
+                func.start(args.check_arity(func.params().len())?).into(),
+            ))),
             _ => panic!("cannot call value of type {}", LoxValueType::from(self)),
         }
     }
@@ -1094,6 +1111,21 @@ impl TryFrom<LoxValue> for String {
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
         if let LoxValue::Str(string) = value {
             Ok(string.to_string())
+        } else {
+            Err(LoxError::type_error(format!(
+                "expected string, found {}",
+                LoxValueType::from(value)
+            )))
+        }
+    }
+}
+
+impl TryFrom<LoxValue> for LoxRc<String> {
+    type Error = LoxError;
+
+    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
+        if let LoxValue::Str(string) = value {
+            Ok(string)
         } else {
             Err(LoxError::type_error(format!(
                 "expected string, found {}",
@@ -1681,6 +1713,14 @@ impl LoxClass {
                 .and_then(|superclass| superclass.get(key))
         }
     }
+
+    fn arity(&self) -> usize {
+        if let Some(initialiser) = &self.initialiser {
+            initialiser.params.len() - 1
+        } else {
+            0
+        }
+    }
 }
 
 impl Hash for LoxClass {
@@ -1749,6 +1789,14 @@ impl LoxArgs {
             }
         } else {
             self.main.get(index)
+        }
+    }
+
+    fn check_arity(self, arity: usize) -> Result<LoxArgs, LoxError> {
+        if self.main.len() == arity {
+            Ok(self)
+        } else {
+            Err(LoxError::incorrect_arity(arity, self.main.len()))
         }
     }
 }

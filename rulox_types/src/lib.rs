@@ -276,7 +276,10 @@ enum LoxErrorInner {
         found: usize,
     },
     Value(Box<LoxValue>),
-    #[cfg_attr(feature = "serialise", serde(serialize_with = "serialise::external_error"))]
+    #[cfg_attr(
+        feature = "serialise",
+        serde(serialize_with = "serialise::external_error")
+    )]
     External(ExternalError),
     #[cfg(feature = "serialise")]
     #[doc(hidden)]
@@ -482,7 +485,10 @@ pub enum LoxValue {
     #[doc(hidden)]
     BoundMethod(LoxMethod, Shared<LoxInstance>),
     #[doc(hidden)]
-    #[cfg_attr(feature = "serialise", serde(serialize_with = "serialise::primitive_method"))]
+    #[cfg_attr(
+        feature = "serialise",
+        serde(serialize_with = "serialise::primitive_method")
+    )]
     PrimitiveMethod(fn(LoxValue) -> LoxResult, Box<LoxValue>),
     /// A class.
     Class(LoxRc<LoxClass>),

@@ -249,6 +249,21 @@ macro_rules! lox_bindgen {
             vec![$( stringify!($arg) ),*]
         ));
     };
+    {
+        $(
+            fn $sync_rust_name:ident $( :: $sync_segment:ident )* ( $( $sync_arg:ident ),* ) $( as $sync_lox_name:ident )? ;
+        )*
+        $(
+            async fn $async_rust_name:ident $( :: $async_segment:ident )* ( $( $async_arg:ident ),* ) $( as $async_lox_name:ident )? ;
+        )*
+    } => {
+        $(
+            $crate::lox_bindgen!( fn $sync_rust_name $( :: $sync_segment )* ( $( $sync_arg ),* ) $( as $sync_lox_name )? );
+        )*
+        $(
+            $crate::lox_bindgen!( async fn $async_rust_name $( :: $async_segment )* ( $( $async_arg ),* ) $( as $async_lox_name )? );
+        )*
+    };
 }
 
 /// Generates a Rust binding for a rulox function.

@@ -317,6 +317,7 @@ pub use rulox_types::async_types::Coroutine;
 pub use rulox_types::async_types::LoxFuture;
 pub use rulox_types::Downcast;
 pub use rulox_types::DynLoxObject;
+pub use rulox_types::Entry;
 pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxClass;
 pub use rulox_types::LoxError;

@@ -1170,6 +1170,22 @@ impl TryFrom<LoxValue> for LoxRc<LoxFn> {
     }
 }
 
+impl TryFrom<LoxValue> for Shared<HashMap<Entry, Entry>> {
+    type Error = LoxError;
+
+    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
+        value.as_map()
+    }
+}
+
+impl TryFrom<LoxValue> for HashMap<Entry, Entry> {
+    type Error = LoxError;
+
+    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
+        value.as_map().map(|value| read(&value).clone())
+    }
+}
+
 #[cfg(feature = "async")]
 impl TryFrom<LoxValue> for LoxRc<async_types::Coroutine> {
     type Error = LoxError;

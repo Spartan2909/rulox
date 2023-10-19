@@ -165,7 +165,8 @@ impl LoxError {
         }
     }
 
-    fn invalid_key(key: LoxValue) -> LoxError {
+    /// Returns an error corresponding to an invalid key in a map or array.
+    pub fn invalid_key(key: LoxValue) -> LoxError {
         LoxError {
             inner: LoxErrorInner::InvalidKey(Box::new(key)),
             trace: VecDeque::new(),

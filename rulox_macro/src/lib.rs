@@ -1,6 +1,6 @@
 //! A lightweight, dynamically typed scripting language embedded in Rust.
-
-#![doc(html_playground_url = "https://play.rust-lang.org/")]
+//!
+//! This crate should be used through [`rulox`](https://docs.rs/rulox/latest).
 
 extern crate proc_macro;
 

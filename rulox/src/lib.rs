@@ -10,26 +10,26 @@
 //! # Examples
 //! ```
 //! use rulox::prelude::*;
-//! # use rulox::LoxError;
+//! use rulox::LoxError;
 //!
-//! # fn main() -> Result<(), LoxError> {
-//! lox! {
-//!     var a = 5;
+//! fn main() -> Result<(), LoxError> {
+//!     lox! {
+//!         var a = 5;
 //!
-//!     print a + 2;
+//!         print a + 2;
+//!     }
+//!
+//!     let b: f64 = a.get()?.try_into().unwrap();
+//!
+//!     println!("{}", b);
+//!
+//!     Ok(())
 //! }
-//!
-//! let b: f64 = a.get()?.try_into().unwrap();
-//!
-//! println!("{}", b);
-//! # Ok(())
-//! # }
 //! ```
 //!
 //! ```
-//! use rulox::prelude::*;
+//! # use rulox::prelude::*;
 //! # use rulox::LoxError;
-//!
 //! # fn main() -> Result<(), LoxError> {
 //! lox! {
 //!     for (var i = 5; i > 0; i = i - 1) print i;
@@ -39,39 +39,130 @@
 //! ```
 //!
 //! ```
-//! use rulox::prelude::*;
+//! # use rulox::prelude::*;
 //! # use rulox::LoxError;
-//!
 //! # fn main() -> Result<(), LoxError> {
 //! lox! {
-//!     fun hello(name) {
+//!    fun hello(name) {
 //!         print "Hello " + name + "! :)";
-//!     }
+//!    }
 //!
 //!     fun add_one(num) {
 //!         return num + 1;
 //!     }
-//!
-//!     hello("Alice");
 //! }
 //!
-//! hello.get()?.call([LoxValue::from("Bob")].into())?;
+//! hello.get()?.call([LoxValue::from("Alice")].into());
 //!
-//! assert_eq!(add_one.get()?.call([LoxValue::from(3)].into())?, LoxValue::from(4));
+//! assert_eq!(add_one.get()?.call([LoxValue::from(3)].into())?, 4);
 //! # Ok(())
 //! # }
 //! ```
 //!
 //! ```
-//! use rulox::prelude::*;
+//! # use rulox::prelude::*;
 //! # use rulox::LoxError;
-//!
 //! # fn main() -> Result<(), LoxError> {
 //! lox! {
 //!     var people = ["Bob", "Alice", "John"];
 //!
 //!     for (person in people) {
 //!         print "Hello " + person + "!";
+//!     }
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ```
+//! # use rulox::prelude::*;
+//! # use rulox::LoxError;
+//! # fn main() -> Result<(), LoxError> {
+//! lox! {
+//!     class Person {
+//!         init(name) {
+//!             this.name = name;
+//!         }
+//!
+//!         say_hello() {
+//!             print "Hello, my name is " + this.name + "!";
+//!         }
+//!     }
+//!
+//!     var jane = Person("Jane");
+//!     jane.say_hello();
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ```
+//! # use rulox::prelude::*;
+//! # use rulox::LoxError;
+//! # fn main() -> Result<(), LoxError> {
+//! lox! {
+//!     class Person {
+//!         init(name) {
+//!             this.name = name;
+//!         }
+//!
+//!         say_hello() {
+//!             print "Hello, my name is " + this.name + "!";
+//!         }
+//!     }
+//!
+//!     class Telepath > Person {
+//!         init(name, power) {
+//!             super(name);
+//!             this.power = power;
+//!         }
+//!
+//!         lift(weight) {
+//!             if (this.power < weight) {
+//!                 print "It's too heavy!";
+//!             } else if (this.power == weight) {
+//!                 print "I can't keep this up for long!";
+//!             } else {
+//!                 print "This is child's play.";
+//!             }
+//!         }
+//!     }
+//!
+//!     var bob = Person("Bob");
+//!     bob.say_hello();
+//!
+//!     print "";
+//!
+//!     var alice = Telepath("Alice", 4);
+//!     alice.say_hello();
+//!     alice.lift(1.5);
+//!     alice.lift(4);
+//!     alice.lift(10);
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ```
+//! # use rulox::prelude::*;
+//! # use rulox::LoxError;
+//! # fn main() -> Result<(), LoxError> {
+//! lox! {
+//!     var except_ran = false;
+//!     var else_ran = false;
+//!     var finally_ran = false;
+//!     try {
+//!         print "try";
+//!         throw 1;
+//!     } except {
+//!         print "except";
+//!         except_ran = true;
+//!     } else {
+//!         print "else";
+//!         else_ran = true;
+//!     } finally {
+//!         print "finally";
+//!         finally_ran = true;
 //!     }
 //! }
 //! # Ok(())
@@ -194,7 +285,19 @@ macro_rules! rust_bindgen {
     };
 }
 
+/// Generates an implementation of [`TryFrom<LoxValue>`].
+///
+/// This implementation casts the input to an external object, attempts to
+/// downcast it to this type, and then clones it.
+///
+/// If cloning is not desirable, [`Shared<T>`][rulox_types::Shared] where
+/// [`T: LoxObject`][rulox_types::LoxObject] implements [`TryFrom<LoxValue>`],
+/// and can be used instead.
+///
+/// This macro requires that the input type implement both
+/// [`LoxObject`][rulox_types::LoxObject] and [`Clone`].
 pub use rulox_macro::TryFromLoxValue;
+
 pub use rulox_types::async_types::Coroutine;
 pub use rulox_types::async_types::LoxFuture;
 pub use rulox_types::Downcast;

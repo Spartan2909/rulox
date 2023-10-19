@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&labelColor=555555&logo=rust)](https://crates.io/crates/rulox) 
 [![github](https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github)](https://github.com/Spartan2909/rulox)
-[![docs.rs](https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs)](https://docs.rs/rulox/latest) <br>
+[![docs.rs](https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs)](https://docs.rs/rulox/latest) <br />
 
 `rulox` is a lightweight scripting language embedded in Rust. It is based on the
 Lox language from [Crafting Interpreters](https://craftinginterpreters.com/).
@@ -17,6 +17,7 @@ that return `Result<_, LoxError>`.
 ## Examples
 ```rust
 use rulox::prelude::*;
+use rulox::LoxError;
 
 fn main() -> Result<(), LoxError> {
     lox! {
@@ -25,9 +26,11 @@ fn main() -> Result<(), LoxError> {
         print a + 2;
     }
 
-    let b: f64 = a.try_into().unwrap();
+    let b: f64 = a.get()?.try_into().unwrap();
 
     println!("{}", b);
+
+    Ok(())
 }
 ```
 
@@ -38,21 +41,19 @@ lox! {
 ```
 
 ```rust
-fn main() -> Result<(), LoxError> {
-    lox! {
-        fun hello(name) {
-            print "Hello " + name + "! :)"
-        }
+lox! {
+   fun hello(name) {
+        print "Hello " + name + "! :)";
+   }
 
-        fun add_one(num) {
-            return num + 1;
-        }
+    fun add_one(num) {
+        return num + 1;
     }
-
-    hello(LoxValue::from("Alice"));
-
-    assert_eq!(add_one(LoxValue::from(3)), 4);
 }
+
+hello.get()?.call([LoxValue::from("Alice")].into());
+
+assert_eq!(add_one.get()?.call([LoxValue::from(3)].into())?, 4);
 ```
 
 ```rust
@@ -157,6 +158,8 @@ lox! {
 - [x] Object orientation
 - [x] Closures
 - [x] Error handling
+- [x] Async/await
+- [x] Hashmaps
 
 ## Possible future features
 

@@ -1,6 +1,7 @@
 use crate::read;
 use crate::LoxValue;
 
+use proc_macro2::Literal;
 use proc_macro2::Punct;
 use proc_macro2::Spacing;
 use proc_macro2::TokenStream;
@@ -36,6 +37,7 @@ impl ToTokens for LoxValue {
             Self::Class(_) => unimplemented!("classes contain functions, which cannot be converted without context"),
             Self::Instance(_) => unimplemented!("instances cannot directly occur in source code"),
             Self::Map(_) => unimplemented!("maps must be constructed with LoxValue::map"),
+            Self::Bytes(bytes) => Literal::byte_string(bytes).to_tokens(tokens),
             Self::Error(_) => unimplemented!("errors cannot directly occur in source code"),
             #[cfg(feature = "async")]
             Self::Coroutine(_) => unimplemented!("coroutine are functions, which cannot be converted without context"),

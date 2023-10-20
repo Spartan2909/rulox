@@ -1,3 +1,5 @@
+use bytes::Bytes;
+
 use rulox_types::LoxValue;
 
 use syn::braced;
@@ -717,6 +719,9 @@ impl Expr {
         } else if lookahead.peek(syn::LitFloat) {
             let value: syn::LitFloat = input.parse()?;
             Ok(Self::Literal(LoxValue::from(value.base10_parse::<f64>()?)))
+        } else if lookahead.peek(syn::LitByteStr) {
+            let value: syn::LitByteStr = input.parse()?;
+            Ok(Self::Literal(LoxValue::Bytes(Bytes::from(value.value()))))
         } else if lookahead.peek(kw::fun) {
             Self::function(input, false)
         } else if lookahead.peek(Token![async]) {

@@ -65,6 +65,14 @@ mod primitive_methods {
         Ok(LoxValue::Bool(matches!(value, LoxValue::Class(_))))
     }
 
+    pub(super) fn is_map(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(value, LoxValue::Map(_))))
+    }
+
+    pub(super) fn is_bytes(value: LoxValue) -> LoxResult {
+        Ok(LoxValue::Bool(matches!(value, LoxValue::Bytes(_))))
+    }
+
     pub(super) fn is_error(value: LoxValue) -> LoxResult {
         Ok(LoxValue::Bool(matches!(value, LoxValue::Error(_))))
     }
@@ -102,6 +110,8 @@ use std::vec;
 
 #[cfg(feature = "async")]
 use std::future::Future;
+
+use bytes::Bytes;
 
 use castaway::cast;
 
@@ -358,6 +368,7 @@ enum LoxValueType {
     Class,
     Instance(&'static str),
     Map,
+    Bytes,
     Error,
     #[cfg(feature = "async")]
     Coroutine(Vec<&'static str>),
@@ -378,6 +389,7 @@ impl fmt::Display for LoxValueType {
             Self::Class => write!(f, "class"),
             Self::Instance(class) => write!(f, "instance of {class}"),
             Self::Map => write!(f, "map"),
+            Self::Bytes => write!(f, "bytes"),
             Self::Error => f.write_str("error"),
             #[cfg(feature = "async")]
             Self::Coroutine(params) => write!(f, "async function({:#?})", params),
@@ -404,6 +416,7 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Class(_) => Self::Class,
                     LoxValue::Instance(instance) => Self::Instance(read(&instance).class.name.clone()),
                     LoxValue::Map(_) => Self::Map,
+                    LoxValue::Bytes(_) => Self::Bytes,
                     LoxValue::Error(_) => Self::Error,
                     #[cfg(feature = "async")]
                     LoxValue::Coroutine(f) => Self::Coroutine(f.params().to_vec()),
@@ -496,6 +509,8 @@ pub enum LoxValue {
     Instance(Shared<LoxInstance>),
     /// A set of key-value pairs.
     Map(Shared<HashMap<Entry, Entry>>),
+    /// A sequence of bytes.
+    Bytes(Bytes),
     /// A wrapped error.
     Error(LoxError),
     /// An asynchronous function.
@@ -583,6 +598,15 @@ impl LoxValue {
             Ok(LoxRc::clone(value))
         } else {
             Err(LoxError::type_error(format!("{self} is not a map")))
+        }
+    }
+
+    /// Returns the value wrapped by `self` if `self` is a `LoxValue::Bytes`.
+    pub fn as_bytes(&self) -> Result<Bytes, LoxError> {
+        if let LoxValue::Bytes(value) = self {
+            Ok(value.clone())
+        } else {
+            Err(LoxError::type_error(format!("{self} is not a bytestring")))
         }
     }
 
@@ -718,6 +742,8 @@ impl LoxValue {
                 ("is_arr", primitive_methods::is_arr),
                 ("is_function", primitive_methods::is_function),
                 ("is_class", primitive_methods::is_class),
+                ("is_map", primitive_methods::is_map),
+                ("is_bytes", primitive_methods::is_bytes),
                 ("is_error", primitive_methods::is_error),
                 ("is_nil", primitive_methods::is_nil),
             ])
@@ -899,6 +925,7 @@ impl fmt::Debug for LoxValue {
             Self::Class(class) => write!(f, "Class({:#?})", class),
             Self::Instance(instance) => write!(f, "Instance({:#?})", read(instance).deref()),
             Self::Map(map) => write!(f, "Map({:#?})", read(map).deref()),
+            Self::Bytes(bytes) => write!(f, "Bytes({:#?})", bytes),
             Self::Error(error) => write!(f, "Error({:#?})", error),
             #[cfg(feature = "async")]
             Self::Coroutine(fun) => write!(f, "Coroutine({:#?})", fun.params()),
@@ -928,6 +955,8 @@ where
             (Self::PrimitiveMethod(f1, _), Self::PrimitiveMethod(f2, _)) => f1 == &f2,
             (Self::Class(c1), Self::Class(c2)) => c1 == &c2,
             (Self::Instance(i1), Self::Instance(i2)) => read(i1).deref() == read(&i2).deref(),
+            (Self::Map(m1), Self::Map(m2)) => read(m1).deref() == read(&m2).deref(),
+            (Self::Bytes(b1), Self::Bytes(b2)) => b1 == &b2,
             (Self::Error(e1), Self::Error(e2)) => e1 == &e2,
             #[cfg(feature = "async")]
             (Self::Coroutine(f1), Self::Coroutine(f2)) => f1 == &f2,
@@ -971,6 +1000,7 @@ impl Hash for LoxValue {
             Self::Class(class) => class.hash(state),
             Self::Instance(instance) => read(instance).hash(state),
             Self::Map(_) => panic!("cannot hash a hashmap"),
+            Self::Bytes(bytes) => bytes.hash(state),
             Self::Error(err) => err.hash(state),
             #[cfg(feature = "async")]
             Self::Coroutine(func) => func.hash(state),
@@ -1024,6 +1054,7 @@ impl fmt::Display for LoxValue {
                 buf.push_str("}");
                 f.write_str(&buf)
             }
+            Self::Bytes(bytes) => write!(f, "{:?}", bytes),
             Self::Error(error) => write!(f, "{error}"),
             #[cfg(feature = "async")]
             Self::Coroutine(_) => write!(f, "<async function>"),
@@ -1107,6 +1138,18 @@ impl From<LoxRc<LoxClass>> for LoxValue {
     }
 }
 
+impl From<HashMap<Entry, Entry>> for LoxValue {
+    fn from(value: HashMap<Entry, Entry>) -> Self {
+        LoxValue::Map(LoxRc::new(value.into()))
+    }
+}
+
+impl From<Bytes> for LoxValue {
+    fn from(value: Bytes) -> Self {
+        LoxValue::Bytes(value)
+    }
+}
+
 impl TryFrom<LoxValue> for bool {
     type Error = LoxError;
 
@@ -1180,6 +1223,14 @@ impl TryFrom<LoxValue> for HashMap<Entry, Entry> {
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
         value.as_map().map(|value| read(&value).clone())
+    }
+}
+
+impl TryFrom<LoxValue> for Bytes {
+    type Error = LoxError;
+
+    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
+        value.as_bytes()
     }
 }
 

@@ -707,7 +707,7 @@ impl LoxValue {
     }
 
     #[inline(always)]
-    fn get_impl(&self, key: &'static str) -> Result<Option<LoxValue>, LoxError> {
+    fn get_impl(&self, key: &'static str) -> Result<LoxValue, Option<LoxError>> {
         static PRIMITIVE_METHODS: OnceLock<HashMap<&'static str, fn(LoxValue) -> LoxResult>> =
             OnceLock::new();
         fn init_primitives() -> HashMap<&'static str, fn(LoxValue) -> LoxResult> {
@@ -725,29 +725,26 @@ impl LoxValue {
 
         if let LoxValue::Instance(instance) = self {
             if let Some(attr) = read(instance).attributes.get(key) {
-                Ok(Some(attr.clone()))
+                Ok(attr.clone())
             } else {
-                Ok(read(instance)
-                    .class
-                    .get(key)
-                    .map(|func| LoxValue::BoundMethod(func, instance.clone())))
+                Ok(LoxValue::BoundMethod(
+                    read(instance).class.get(key).ok_or(None)?,
+                    instance.clone(),
+                ))
             }
         } else if let Some(method) = PRIMITIVE_METHODS.get_or_init(init_primitives).get(key) {
-            Ok(Some(LoxValue::PrimitiveMethod(
-                *method,
-                Box::new(self.clone()),
-            )))
+            Ok(LoxValue::PrimitiveMethod(*method, Box::new(self.clone())))
         } else if let LoxValue::External(object) = self {
             read(object).get(LoxRc::clone(object), key)
         } else {
-            Ok(None)
+            Err(None)
         }
     }
 
     /// Gets the attribute corresponding to `self.key`, if it exists.
     pub fn get(&self, key: &'static str) -> LoxResult {
-        self.get_impl(key)?
-            .ok_or(LoxError::invalid_property(key, self.to_string()))
+        self.get_impl(key)
+            .map_err(|err| err.unwrap_or(LoxError::invalid_property(key, self.to_string())))
     }
 
     /// Gets the attribute corresponding to `self.key` to `value`, if it exists.
@@ -1931,15 +1928,14 @@ pub trait LoxObject: Any {
 
     /// Gets the field of `self` corresponding to `key`.
     ///
-    /// This method should return `Ok(None)` instead of an error if the value is
-    /// not found.
+    /// This method should return `Err(None)` if the value is not found.
     fn get(
         &self,
         this: Shared<DynLoxObject>,
         key: &'static str,
-    ) -> Result<Option<LoxValue>, LoxError> {
+    ) -> Result<LoxValue, Option<LoxError>> {
         let (_, _) = (this, key);
-        Ok(None)
+        Err(None)
     }
 
     /// Sets the field of `self` corresponding to `key` to the given value.

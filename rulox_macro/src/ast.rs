@@ -712,7 +712,7 @@ impl Expr {
             Ok(Self::Literal(LoxValue::Nil))
         } else if lookahead.peek(syn::LitStr) {
             let value: syn::LitStr = input.parse()?;
-            Ok(Self::Literal(LoxValue::from(&value.value())))
+            Ok(Self::Literal(LoxValue::from(value.value())))
         } else if lookahead.peek(syn::LitInt) {
             let value: syn::LitInt = input.parse()?;
             Ok(Self::Literal(LoxValue::from(value.base10_parse::<f64>()?)))

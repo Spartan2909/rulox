@@ -1069,15 +1069,6 @@ impl fmt::Display for LoxValue {
     }
 }
 
-impl<T> From<&T> for LoxValue
-where
-    T: Clone + Into<LoxValue>,
-{
-    fn from(value: &T) -> Self {
-        value.clone().into()
-    }
-}
-
 impl From<bool> for LoxValue {
     fn from(value: bool) -> Self {
         Self::Bool(value)
@@ -1147,6 +1138,20 @@ impl From<HashMap<Entry, Entry>> for LoxValue {
 impl From<Bytes> for LoxValue {
     fn from(value: Bytes) -> Self {
         LoxValue::Bytes(value)
+    }
+}
+
+#[cfg(feature = "sync")]
+impl<T: LoxObject + Send + Sync> From<T> for LoxValue {
+    fn from(value: T) -> Self {
+        LoxValue::external(value)
+    }
+}
+
+#[cfg(not(feature = "sync"))]
+impl<T: LoxObject> From<T> for LoxValue {
+    fn from(value: T) -> Self {
+        LoxValue::external(value)
     }
 }
 

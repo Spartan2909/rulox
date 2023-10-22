@@ -5,6 +5,8 @@ use crate::LoxError;
 use crate::LoxResult;
 use crate::LoxValue;
 
+use std::fmt;
+use std::fmt::Debug;
 use std::future::Future;
 use std::hash::Hash;
 use std::ops::Deref;
@@ -47,6 +49,14 @@ impl Coroutine {
     }
 }
 
+impl Debug for Coroutine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Coroutine")
+            .field("params", &self.params)
+            .finish()
+    }
+}
+
 impl PartialEq for Coroutine {
     fn eq(&self, other: &Self) -> bool {
         let f1: *const _ = self.fun.as_ref();
@@ -71,6 +81,14 @@ pub struct LoxFuture {
 impl LoxFuture {
     pub(super) fn done(&self) -> bool {
         self.done
+    }
+}
+
+impl Debug for LoxFuture {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LoxFuture")
+            .field("done", &self.done)
+            .finish()
     }
 }
 

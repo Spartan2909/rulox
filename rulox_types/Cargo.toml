@@ -20,8 +20,9 @@ bytes = "1"
 "proc-macro2" = "1.0"
 "quote" = "1.0"
 "serde" = { version = "1", features = ["derive", "rc"], optional = true }
+"serde_json" = { version = "1", optional = true }
 
 [features]
 sync = []
 async = ["sync"]
-serialise = ["dep:serde", "bytes/serde"]
+serialise = ["dep:serde", "dep:serde_json", "bytes/serde"]

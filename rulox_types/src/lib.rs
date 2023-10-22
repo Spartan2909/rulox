@@ -13,6 +13,8 @@ pub use async_types::LoxFuture;
 
 #[cfg(feature = "serialise")]
 mod serialise;
+#[cfg(feature = "serialise")]
+pub use serialise::hashmap_to_json_map;
 
 #[cfg_attr(feature = "sync", path = "sync.rs")]
 #[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
@@ -436,17 +438,18 @@ loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }
 /// A result returned from most Lox operations.
 pub type LoxResult = Result<LoxValue, LoxError>;
 
-/// An entry in a hashmap.
+/// An hashmap key.
 #[derive(Clone, PartialEq, PartialOrd, Hash)]
 #[cfg_attr(feature = "serialise", derive(Serialize))]
 #[repr(transparent)]
-pub struct Entry(LoxValue);
+pub struct MapKey(LoxValue);
 
-impl Entry {
-    fn verify_key(key: LoxValue) -> Result<Entry, LoxError> {
+impl MapKey {
+    /// Creates a [`MapKey`] from a [`LoxValue`] if it is a valid key.
+    pub fn verify_key(key: LoxValue) -> Result<MapKey, LoxError> {
         match key {
             LoxValue::Num(n) if n.is_nan() => Err(LoxError::invalid_key(key)),
-            LoxValue::Bool(_) | LoxValue::Num(_) | LoxValue::Str(_) => Ok(Entry(key)),
+            LoxValue::Bool(_) | LoxValue::Num(_) | LoxValue::Str(_) => Ok(MapKey(key)),
             _ => Err(LoxError::invalid_key(key)),
         }
     }
@@ -455,30 +458,35 @@ impl Entry {
     pub fn into_inner(self) -> LoxValue {
         self.0
     }
-}
 
-impl TryFrom<LoxValue> for Entry {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        Entry::verify_key(value)
+    /// Borrows the [`LoxValue`] in `self`.
+    pub fn as_inner(&self) -> &LoxValue {
+        &self.0
     }
 }
 
-impl From<Entry> for LoxValue {
-    fn from(value: Entry) -> Self {
+impl TryFrom<LoxValue> for MapKey {
+    type Error = LoxError;
+
+    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
+        MapKey::verify_key(value)
+    }
+}
+
+impl From<MapKey> for LoxValue {
+    fn from(value: MapKey) -> Self {
         value.into_inner()
     }
 }
 
-impl Debug for Entry {
+impl Debug for MapKey {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Debug::fmt(&self.0, f)
     }
 }
 
-impl Eq for Entry {}
+impl Eq for MapKey {}
 
 /// A dynamically typed value used by Lox programs.
 #[non_exhaustive]
@@ -508,7 +516,7 @@ pub enum LoxValue {
     /// An instance of a class.
     Instance(Shared<LoxInstance>),
     /// A set of key-value pairs.
-    Map(Shared<HashMap<Entry, Entry>>),
+    Map(Shared<HashMap<MapKey, LoxValue>>),
     /// A sequence of bytes.
     Bytes(Bytes),
     /// A wrapped error.
@@ -593,7 +601,7 @@ impl LoxValue {
     }
 
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Map`.
-    pub fn as_map(&self) -> Result<Shared<HashMap<Entry, Entry>>, LoxError> {
+    pub fn as_map(&self) -> Result<Shared<HashMap<MapKey, LoxValue>>, LoxError> {
         if let LoxValue::Map(value) = self {
             Ok(LoxRc::clone(value))
         } else {
@@ -654,9 +662,8 @@ impl LoxValue {
                     .clone()
             }
             LoxValue::Map(map) => read(map)
-                .get(&Entry(index.clone()))
+                .get(&MapKey(index.clone()))
                 .ok_or(LoxError::invalid_key(index))?
-                .0
                 .clone(),
             _ => {
                 return Err(LoxError::type_error(format!(
@@ -686,7 +693,7 @@ impl LoxValue {
                 Ok(())
             }
             LoxValue::Map(map) => {
-                write(map).insert(Entry(index), Entry(value));
+                write(map).insert(MapKey(index), value);
 
                 Ok(())
             }
@@ -711,7 +718,7 @@ impl LoxValue {
     pub fn map<const N: usize>(values: [(LoxValue, LoxValue); N]) -> LoxResult {
         let map: Result<HashMap<_, _>, LoxError> = values
             .into_iter()
-            .map(|(key, value)| Ok((Entry::verify_key(key)?, Entry(value))))
+            .map(|(key, value)| Ok((MapKey::verify_key(key)?, value)))
             .collect();
         Ok(LoxValue::Map(Shared::new(map?.into())))
     }
@@ -1049,9 +1056,9 @@ impl fmt::Display for LoxValue {
                 for (key, value) in read(map).deref() {
                     buf.push_str("    \n");
                     buf += &(key.0.to_string() + ": ");
-                    buf += &value.0.to_string();
+                    buf += &value.to_string();
                 }
-                buf.push_str("}");
+                buf.push('}');
                 f.write_str(&buf)
             }
             Self::Bytes(bytes) => write!(f, "{:?}", bytes),
@@ -1129,8 +1136,8 @@ impl From<LoxRc<LoxClass>> for LoxValue {
     }
 }
 
-impl From<HashMap<Entry, Entry>> for LoxValue {
-    fn from(value: HashMap<Entry, Entry>) -> Self {
+impl From<HashMap<MapKey, LoxValue>> for LoxValue {
+    fn from(value: HashMap<MapKey, LoxValue>) -> Self {
         LoxValue::Map(LoxRc::new(value.into()))
     }
 }
@@ -1215,7 +1222,7 @@ impl TryFrom<LoxValue> for LoxRc<LoxFn> {
     }
 }
 
-impl TryFrom<LoxValue> for Shared<HashMap<Entry, Entry>> {
+impl TryFrom<LoxValue> for Shared<HashMap<MapKey, LoxValue>> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
@@ -1223,7 +1230,7 @@ impl TryFrom<LoxValue> for Shared<HashMap<Entry, Entry>> {
     }
 }
 
-impl TryFrom<LoxValue> for HashMap<Entry, Entry> {
+impl TryFrom<LoxValue> for HashMap<MapKey, LoxValue> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {

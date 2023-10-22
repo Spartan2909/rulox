@@ -317,7 +317,6 @@ pub use rulox_types::async_types::Coroutine;
 pub use rulox_types::async_types::LoxFuture;
 pub use rulox_types::Downcast;
 pub use rulox_types::DynLoxObject;
-pub use rulox_types::Entry;
 pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxClass;
 pub use rulox_types::LoxError;
@@ -326,7 +325,11 @@ pub use rulox_types::LoxObject;
 pub use rulox_types::LoxResult;
 pub use rulox_types::LoxValue;
 pub use rulox_types::LoxVariable;
+pub use rulox_types::MapKey;
 pub use rulox_types::Shared;
+
+#[cfg(feature = "serialise")]
+pub use rulox_types::hashmap_to_json_map;
 
 #[doc(hidden)]
 pub use rulox_types::ToLoxResult;

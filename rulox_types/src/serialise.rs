@@ -2,6 +2,7 @@ use crate::read;
 use crate::shared::Inner;
 use crate::DynLoxObject;
 use crate::ExternalError;
+use crate::LoxArgs;
 use crate::LoxError;
 use crate::LoxErrorInner;
 use crate::LoxRc;
@@ -27,7 +28,7 @@ pub(super) fn external_error<S: Serializer>(
 }
 
 pub(super) fn primitive_method<S: Serializer>(
-    _func: &fn(LoxValue) -> LoxResult,
+    _func: &fn(LoxArgs) -> LoxResult,
     _value: &LoxValue,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {

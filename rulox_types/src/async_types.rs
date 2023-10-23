@@ -1,15 +1,15 @@
-use crate::hash_ptr;
+use crate::functions::LoxArgs;
+use crate::hash::hash_ptr;
 use crate::write;
-use crate::LoxArgs;
 use crate::LoxError;
 use crate::LoxResult;
-use crate::LoxValue;
+use crate::Shared;
 
 use std::fmt;
 use std::fmt::Debug;
+use std::hash::Hasher;
 use std::future::Future;
 use std::hash::Hash;
-use std::ops::Deref;
 use std::ops::DerefMut;
 use std::pin::Pin;
 use std::ptr;
@@ -41,8 +41,8 @@ impl Coroutine {
         &self.params
     }
 
-    pub fn start(&self, args: LoxArgs) -> LoxFuture {
-        LoxFuture {
+    pub fn start(&self, args: LoxArgs) -> LoxFutureInner {
+        LoxFutureInner {
             handle: (self.fun)(args),
             done: false,
         }
@@ -72,27 +72,28 @@ impl Hash for Coroutine {
 }
 
 #[cfg_attr(feature = "serialise", derive(Serialize))]
-pub struct LoxFuture {
+#[doc(hidden)]
+pub struct LoxFutureInner {
     #[cfg_attr(feature = "serialise", serde(skip_serializing))]
     handle: Box<dyn Future<Output = LoxResult> + Send + Sync>,
     done: bool,
 }
 
-impl LoxFuture {
+impl LoxFutureInner {
     pub(super) fn done(&self) -> bool {
         self.done
     }
 }
 
-impl Debug for LoxFuture {
+impl Debug for LoxFutureInner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LoxFuture")
+        f.debug_struct("LoxFutureInner")
             .field("done", &self.done)
             .finish()
     }
 }
 
-impl PartialEq for LoxFuture {
+impl PartialEq for LoxFutureInner {
     fn eq(&self, other: &Self) -> bool {
         let h1: *const _ = self.handle.as_ref();
         let h2: *const _ = other.handle.as_ref();
@@ -100,13 +101,13 @@ impl PartialEq for LoxFuture {
     }
 }
 
-impl Hash for LoxFuture {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl Hash for LoxFutureInner {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         hash_ptr(self.handle.as_ref(), state);
     }
 }
 
-impl Future for LoxFuture {
+impl Future for LoxFutureInner {
     type Output = LoxResult;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -128,24 +129,26 @@ impl Future for LoxFuture {
     }
 }
 
-impl Future for LoxValue {
-    type Output = LoxResult;
+pub struct LoxFuture(Shared<LoxFutureInner>);
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.deref() {
-            LoxValue::Future(fut) => Future::poll(Pin::new(write(fut).deref_mut()), cx),
-            _ => Poll::Ready(Err(LoxError::type_error(format!("Cannot await {self}")))),
-        }
+impl LoxFuture {
+    pub(super) fn new(fut: Shared<LoxFutureInner>) -> LoxFuture {
+        LoxFuture(fut)
     }
 }
 
-impl Future for &LoxValue {
+impl Future for LoxFuture {
     type Output = LoxResult;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.deref() {
-            LoxValue::Future(fut) => Future::poll(Pin::new(write(fut).deref_mut()), cx),
-            _ => Poll::Ready(Err(LoxError::type_error(format!("Cannot await {self}")))),
-        }
+        Future::poll(Pin::new(write(&self.0).deref_mut()), cx)
+    }
+}
+
+impl Future for &LoxFuture {
+    type Output = LoxResult;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        Future::poll(Pin::new(write(&self.0).deref_mut()), cx)
     }
 }

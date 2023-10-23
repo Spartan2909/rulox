@@ -10,6 +10,34 @@ pub mod async_types;
 pub use async_types::Coroutine;
 #[cfg(feature = "async")]
 pub use async_types::LoxFuture;
+#[cfg(feature = "async")]
+use async_types::LoxFutureInner;
+
+mod conversions;
+
+mod error;
+pub use error::LoxError;
+
+mod functions;
+pub use functions::LoxArgs;
+pub use functions::LoxFn;
+use functions::LoxMethod;
+
+mod hash;
+pub use hash::MapKey;
+
+mod interop;
+pub use interop::Downcast;
+pub use interop::DynLoxObject;
+pub use interop::LoxObject;
+
+mod iteration;
+pub use iteration::IntoIter;
+
+#[doc(hidden)]
+pub use interop::ToLoxResult;
+
+mod operations;
 
 #[cfg(feature = "serialise")]
 mod serialise;
@@ -27,184 +55,7 @@ pub use shared::Shared;
 
 mod to_tokens;
 
-mod primitive_methods {
-    use crate::shared::read;
-    use crate::DynLoxObject;
-    use crate::LoxArgs;
-    use crate::LoxError;
-    use crate::LoxObject;
-    use crate::LoxResult;
-    use crate::LoxValue;
-    use crate::MapKey;
-    use crate::Shared;
-
-    use std::collections::HashMap;
-
-    pub(super) fn is_bool(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::Bool(_)
-        )))
-    }
-
-    pub(super) fn is_str(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::Str(_)
-        )))
-    }
-
-    pub(super) fn is_num(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::Num(_)
-        )))
-    }
-
-    pub(super) fn is_arr(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::Arr(_)
-        )))
-    }
-
-    #[cfg(feature = "async")]
-    pub(super) fn is_function(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::BoundMethod(_, _) | LoxValue::Coroutine(_) | LoxValue::PrimitiveMethod(_, _)
-        )))
-    }
-
-    #[cfg(not(feature = "async"))]
-    pub(super) fn is_function(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::BoundMethod(_, _) | LoxValue::PrimitiveMethod(_, _)
-        )))
-    }
-
-    pub(super) fn is_class(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::Class(_)
-        )))
-    }
-
-    pub(super) fn is_map(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::Map(_)
-        )))
-    }
-
-    pub(super) fn is_bytes(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::Bytes(_)
-        )))
-    }
-
-    pub(super) fn is_error(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(
-            args.head.unwrap(),
-            LoxValue::Error(_)
-        )))
-    }
-
-    pub(super) fn is_nil(args: LoxArgs) -> LoxResult {
-        Ok(LoxValue::Bool(matches!(args.head.unwrap(), LoxValue::Nil)))
-    }
-
-    macro_rules! default_collection {
-        ( $name:ident, $inner:ty, $loxvalue_variant:ident, $( $index:tt )+ ) => {
-            #[derive(Debug, Clone)]
-            struct $name($inner, LoxValue);
-
-            impl LoxObject for $name {
-                fn name() -> String
-                where
-                    Self: Sized,
-                {
-                    stringify!($name).to_string()
-                }
-
-                fn get(
-                    &self,
-                    _this: Shared<DynLoxObject>,
-                    key: &'static str,
-                ) -> Result<LoxValue, Option<LoxError>> {
-                    Ok(LoxValue::$loxvalue_variant(self.0.clone()).get(key)?)
-                }
-
-                fn set(
-                    &mut self,
-                    _this: Shared<DynLoxObject>,
-                    key: &'static str,
-                    value: LoxValue,
-                ) -> Result<(), Option<LoxError>> {
-                    LoxValue::$loxvalue_variant(self.0.clone()).set(key, value)?;
-                    Ok(())
-                }
-
-                $( $index )+
-
-                fn index_set(
-                    &mut self,
-                    key: LoxValue,
-                    value: LoxValue,
-                ) -> Result<(), LoxError> {
-                    LoxValue::$loxvalue_variant(self.0.clone()).index_set(key, value)
-                }
-            }
-        };
-    }
-
-    pub(super) fn set_default(mut args: LoxArgs) -> LoxResult {
-        match args.head.clone().unwrap() {
-            LoxValue::Arr(arr) => {
-                default_collection!(
-                    DefaultArray,
-                    Shared<Vec<LoxValue>>,
-                    Arr,
-                    fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
-                        match read(&self.0).get(usize::try_from(key)?) {
-                            Some(value) => Ok(value.clone()),
-                            None => self.1.call([].into()),
-                        }
-                    }
-                );
-
-                Ok(LoxValue::external(DefaultArray(
-                    arr,
-                    args.drain().next().unwrap(),
-                )))
-            }
-            LoxValue::Map(map) => {
-                default_collection!(
-                    DefaultMap,
-                    Shared<HashMap<MapKey, LoxValue>>,
-                    Map,
-                    fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
-                        match read(&self.0).get(&MapKey(key.clone())) {
-                            Some(value) => Ok(value.clone()),
-                            None => self.1.call([].into()),
-                        }
-                    }
-                );
-
-                Ok(LoxValue::external(DefaultMap(
-                    map,
-                    args.drain().next().unwrap(),
-                )))
-            }
-            _ => Err(LoxError::type_error(format!(
-                "'{}' has no attribute 'set_default'",
-                args.head.unwrap()
-            ))),
-        }
-    }
-}
+mod primitive_methods;
 
 #[cfg(not(feature = "sync"))]
 #[doc(hidden)]
@@ -213,22 +64,14 @@ pub use std::rc::Rc as LoxRc;
 #[doc(hidden)]
 pub use std::sync::Arc as LoxRc;
 
-use std::any::Any;
-use std::any::TypeId;
 use std::cmp;
 use std::collections::HashMap;
-use std::collections::VecDeque;
-use std::convert::Infallible;
-use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
-use std::hash::Hash;
-use std::mem;
-use std::ops;
+use std::fmt::Display;
 use std::ops::Deref;
 use std::process::ExitCode;
 use std::process::Termination;
-use std::ptr;
 use std::sync::OnceLock;
 use std::vec;
 
@@ -237,235 +80,8 @@ use std::future::Future;
 
 use bytes::Bytes;
 
-use castaway::cast;
-
 #[cfg(feature = "serialise")]
 use serde::Serialize;
-
-#[derive(Debug, Clone)]
-#[cfg(feature = "sync")]
-struct ExternalError(LoxRc<dyn Error + Send + Sync>);
-
-#[derive(Debug, Clone)]
-#[cfg(not(feature = "sync"))]
-struct ExternalError(LoxRc<dyn Error>);
-
-impl Hash for ExternalError {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        LoxRc::as_ptr(&self.0).hash(state);
-    }
-}
-
-impl PartialEq for ExternalError {
-    fn eq(&self, other: &Self) -> bool {
-        LoxRc::ptr_eq(&self.0, &other.0)
-    }
-}
-
-/// An error raised during compilation or execution.
-#[derive(Debug, Clone, PartialEq, Hash)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
-pub struct LoxError {
-    inner: LoxErrorInner,
-    trace: VecDeque<&'static str>,
-}
-
-impl LoxError {
-    fn type_error(message: String) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::TypeError(message),
-            trace: VecDeque::new(),
-        }
-    }
-
-    fn undefined_variable(kind: &'static str) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::UndefinedVariable(kind),
-            trace: VecDeque::new(),
-        }
-    }
-
-    fn invalid_property(property: &'static str, object: String) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::InvalidProperty { property, object },
-            trace: VecDeque::new(),
-        }
-    }
-
-    fn non_existent_super(name: &'static str) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::NonExistentSuper(name),
-            trace: VecDeque::new(),
-        }
-    }
-
-    fn index_out_of_range(index: usize) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::IndexOutOfRange(index),
-            trace: VecDeque::new(),
-        }
-    }
-
-    /// Returns an error corresponding to an invalid key in a map or array.
-    pub fn invalid_key(key: LoxValue) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::InvalidKey(Box::new(key)),
-            trace: VecDeque::new(),
-        }
-    }
-
-    fn incorrect_arity(expected: usize, found: usize) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::IncorrectArity { expected, found },
-            trace: VecDeque::new(),
-        }
-    }
-
-    fn value(value: LoxValue) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::Value(Box::new(value)),
-            trace: VecDeque::new(),
-        }
-    }
-
-    #[cfg(feature = "async")]
-    fn finished_coroutine() -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::FinishedCoroutine,
-            trace: VecDeque::new(),
-        }
-    }
-
-    /// Pushes a new function to this error's stack trace.
-    #[cold]
-    pub fn push_trace(&mut self, value: &'static str) {
-        self.trace.push_front(value);
-    }
-
-    #[doc(hidden)]
-    pub fn push_trace_front(&mut self, value: &'static str) {
-        self.trace.push_front(value);
-    }
-
-    #[doc(hidden)] // Not public API.
-    pub fn with_trace(mut self, trace: Vec<&'static str>) -> LoxError {
-        self.trace = trace.into();
-        self
-    }
-
-    #[doc(hidden)] // Not public API.
-    pub fn into_value(self) -> LoxValue {
-        if let LoxErrorInner::Value(value) = self.inner {
-            *value
-        } else {
-            LoxValue::Error(self)
-        }
-    }
-
-    /// Creates a [`LoxError`] from another error.
-    #[cfg(feature = "sync")]
-    pub fn external<E: Error + Send + Sync + 'static>(value: E) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::External(ExternalError(LoxRc::new(value))),
-            trace: VecDeque::new(),
-        }
-    }
-
-    /// Creates a [`LoxError`] from another error.
-    #[cfg(not(feature = "sync"))]
-    pub fn external<E: Error + 'static>(value: E) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::External(ExternalError(LoxRc::new(value))),
-            trace: VecDeque::new(),
-        }
-    }
-}
-
-impl From<Infallible> for LoxError {
-    fn from(value: Infallible) -> Self {
-        match value {}
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Hash)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
-enum LoxErrorInner {
-    /// An error that occurs when attempting to use a LoxValue with an invalid type.
-    TypeError(String),
-    /// An error that occurs when attempting to convert a LoxValue into a Rust type that is too small.
-    SizeError {
-        found: usize,
-    },
-    /// An error that occurs when variables are accessed without first being defined.
-    UndefinedVariable(&'static str),
-    InvalidProperty {
-        property: &'static str,
-        object: String,
-    },
-    NonExistentSuper(&'static str),
-    IndexOutOfRange(usize),
-    InvalidKey(Box<LoxValue>),
-    IncorrectArity {
-        expected: usize,
-        found: usize,
-    },
-    Value(Box<LoxValue>),
-    #[cfg_attr(
-        feature = "serialise",
-        serde(serialize_with = "serialise::external_error")
-    )]
-    External(ExternalError),
-    #[cfg(feature = "serialise")]
-    #[doc(hidden)]
-    Arbitrary(String),
-    #[cfg(feature = "async")]
-    FinishedCoroutine,
-}
-
-impl fmt::Display for LoxError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "traceback (most recent call last):")?;
-        for &fun in self.trace.iter() {
-            writeln!(f, "in '{fun}'")?;
-        }
-        writeln!(f)?;
-
-        match &self.inner {
-            LoxErrorInner::TypeError(message) => {
-                write!(f, "{}", message)
-            }
-            LoxErrorInner::SizeError { found } => {
-                write!(
-                    f,
-                    "could not convert LoxValue to value of size {:?} (LoxValue too large)",
-                    found
-                )
-            }
-            LoxErrorInner::UndefinedVariable(name) => write!(f, "undefined variable '{name}'"),
-            LoxErrorInner::InvalidProperty { property, object } => {
-                write!(f, "invalid property '{property}' on {object}")
-            }
-            LoxErrorInner::NonExistentSuper(name) => {
-                write!(f, "function '{name}' has no super function")
-            }
-            LoxErrorInner::IndexOutOfRange(index) => write!(f, "index out of range: {index}"),
-            LoxErrorInner::InvalidKey(key) => write!(f, "invalid key: {key}"),
-            LoxErrorInner::IncorrectArity { expected, found } => {
-                write!(f, "expected {expected} arguments, found {found}")
-            }
-            LoxErrorInner::Value(value) => {
-                write!(f, "error: {value}")
-            }
-            LoxErrorInner::External(err) => fmt::Display::fmt(&err.0, f),
-            #[cfg(feature = "serialise")]
-            LoxErrorInner::Arbitrary(string) => f.write_str(string),
-            #[cfg(feature = "async")]
-            LoxErrorInner::FinishedCoroutine => write!(f, "cannot await a finished coroutine"),
-        }
-    }
-}
-
-impl Error for LoxError {}
 
 #[doc(hidden)] // Not public API.
 #[macro_export]
@@ -534,7 +150,7 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Str(_) => Self::Str,
                     LoxValue::Num(_) => Self::Num,
                     LoxValue::Arr(_) => Self::Arr,
-                    LoxValue::Function(f) => Self::Function(f.params.to_vec()),
+                    LoxValue::Function(f) => Self::Function(f.params().to_vec()),
                     LoxValue::BoundMethod(f, _) => Self::Function(f.params().to_vec()),
                     LoxValue::PrimitiveMethod(_, _) => Self::Function(vec![]),
                     LoxValue::Class(_) => Self::Class,
@@ -559,56 +175,6 @@ loxvalue_to_loxvaluetype! { LoxValue, &LoxValue, &mut LoxValue }
 
 /// A result returned from most Lox operations.
 pub type LoxResult = Result<LoxValue, LoxError>;
-
-/// An hashmap key.
-#[derive(Clone, PartialEq, PartialOrd, Hash)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
-#[repr(transparent)]
-pub struct MapKey(LoxValue);
-
-impl MapKey {
-    /// Creates a [`MapKey`] from a [`LoxValue`] if it is a valid key.
-    pub fn verify_key(key: LoxValue) -> Result<MapKey, LoxError> {
-        match key {
-            LoxValue::Num(n) if n.is_nan() => Err(LoxError::invalid_key(key)),
-            LoxValue::Bool(_) | LoxValue::Num(_) | LoxValue::Str(_) => Ok(MapKey(key)),
-            _ => Err(LoxError::invalid_key(key)),
-        }
-    }
-
-    /// Extracts the [`LoxValue`] from `self`.
-    pub fn into_inner(self) -> LoxValue {
-        self.0
-    }
-
-    /// Borrows the [`LoxValue`] in `self`.
-    pub fn as_inner(&self) -> &LoxValue {
-        &self.0
-    }
-}
-
-impl TryFrom<LoxValue> for MapKey {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        MapKey::verify_key(value)
-    }
-}
-
-impl From<MapKey> for LoxValue {
-    fn from(value: MapKey) -> Self {
-        value.into_inner()
-    }
-}
-
-impl Debug for MapKey {
-    #[inline(always)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Debug::fmt(&self.0, f)
-    }
-}
-
-impl Eq for MapKey {}
 
 /// A dynamically typed value used by Lox programs.
 #[non_exhaustive]
@@ -648,7 +214,7 @@ pub enum LoxValue {
     Coroutine(LoxRc<async_types::Coroutine>),
     /// A value returned from an async function.
     #[cfg(feature = "async")]
-    Future(Shared<async_types::LoxFuture>),
+    Future(Shared<LoxFutureInner>),
     /// Nothing.
     Nil,
     /// An object that couldn't normally be represented in Lox.
@@ -762,14 +328,16 @@ impl LoxValue {
 
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Future`.
     #[cfg(feature = "async")]
-    pub fn as_future(&self) -> Result<Shared<LoxFuture>, LoxError> {
+    pub fn as_future(&self) -> Result<LoxFuture, LoxError> {
         if let LoxValue::Future(value) = self {
-            Ok(LoxRc::clone(value))
+            Ok(LoxFuture::new(LoxRc::clone(value)))
         } else {
             Err(LoxError::type_error(format!("{self} is not a future")))
         }
     }
+}
 
+impl LoxValue {
     /// Gets the element of `self` corresponding to `index`.
     pub fn index(&self, index: LoxValue) -> Result<LoxValue, LoxError> {
         let output = match self {
@@ -784,7 +352,7 @@ impl LoxValue {
                     .clone()
             }
             LoxValue::Map(map) => read(map)
-                .get(&MapKey(index.clone()))
+                .get(&MapKey::verify_key(index.clone())?)
                 .ok_or(LoxError::invalid_key(index))?
                 .clone(),
             LoxValue::External(external) => read(external).index(index)?,
@@ -816,7 +384,7 @@ impl LoxValue {
                 Ok(())
             }
             LoxValue::Map(map) => {
-                write(map).insert(MapKey(index), value);
+                write(map).insert(MapKey::verify_key(index)?, value);
 
                 Ok(())
             }
@@ -968,10 +536,10 @@ impl LoxValue {
     /// class.
     pub fn call(&self, mut args: LoxArgs) -> LoxResult {
         match self {
-            Self::Function(func) => (func.fun)(args.check_arity(func.params.len())?),
+            Self::Function(func) => func.call(args),
             Self::BoundMethod(func, instance) => {
                 args.head = Some(LoxValue::Instance(instance.clone()));
-                func.call(args.check_arity(func.params().len() - 1)?)
+                func.call(args)
             }
             Self::Class(class) => {
                 let instance = LoxValue::Instance(Shared::new(
@@ -984,7 +552,7 @@ impl LoxValue {
                 let mut args = args.check_arity(class.arity())?;
                 if let Some(initialiser) = &class.initialiser {
                     args.head = Some(instance.clone());
-                    (initialiser.fun)(args)
+                    initialiser.call(args)
                 } else {
                     Ok(instance)
                 }
@@ -1048,14 +616,14 @@ impl LoxValue {
     }
 }
 
-impl fmt::Debug for LoxValue {
+impl Debug for LoxValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Bool(b) => write!(f, "Bool({b})"),
             Self::Str(s) => write!(f, "Str({})", s),
             Self::Num(n) => write!(f, "Num({n})"),
             Self::Arr(a) => write!(f, "Arr({:#?})", a),
-            Self::Function(func) => write!(f, "Function({:#?})", func.params),
+            Self::Function(func) => write!(f, "Function({:#?})", func.params()),
             Self::BoundMethod(func, instance) => {
                 write!(f, "BoundMethod({:#?}, {:#?})", func.params(), instance)
             }
@@ -1109,51 +677,7 @@ where
     }
 }
 
-fn hash_ptr<T: ?Sized, H: std::hash::Hasher>(ptr: *const T, state: &mut H) {
-    (ptr as *const ()).hash(state)
-}
-
-impl Hash for LoxValue {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            Self::Bool(b) => b.hash(state),
-            Self::Str(s) => s.hash(state),
-            &Self::Num(mut n) => {
-                if n.is_nan() {
-                    n = fastrand::f64();
-                }
-                let bits = n.to_bits();
-                let sign: i8 = if bits >> 63 == 0 { 1 } else { -1 };
-                let mut exponent = ((bits >> 52) & 0x7ff) as i16;
-                let mantissa = if exponent == 0 {
-                    (bits & 0xfffffffffffff) << 1
-                } else {
-                    (bits & 0xfffffffffffff) | 0x10000000000000
-                };
-                exponent -= 1023 + 52;
-                (mantissa, exponent, sign).hash(state);
-            }
-            Self::Arr(arr) => read(arr).hash(state),
-            Self::Function(func) => hash_ptr(func.fun.as_ref(), state),
-            Self::BoundMethod(func, _) => func.hash(state),
-            Self::PrimitiveMethod(func, _) => func.hash(state),
-            Self::Class(class) => class.hash(state),
-            Self::Instance(instance) => read(instance).hash(state),
-            Self::Map(_) => panic!("cannot hash a hashmap"),
-            Self::Bytes(bytes) => bytes.hash(state),
-            Self::Error(err) => err.hash(state),
-            #[cfg(feature = "async")]
-            Self::Coroutine(func) => func.hash(state),
-            #[cfg(feature = "async")]
-            Self::Future(fut) => read(fut).hash(state),
-            Self::Nil => {}
-            Self::External(external) => LoxRc::as_ptr(external).hash(state),
-            Self::Undefined(_) => unreachable!(),
-        }
-    }
-}
-
-impl fmt::Display for LoxValue {
+impl Display for LoxValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Bool(value) => {
@@ -1188,7 +712,7 @@ impl fmt::Display for LoxValue {
                 let mut buf = "{\n".to_string();
                 for (key, value) in read(map).deref() {
                     buf.push_str("    \n");
-                    buf += &(key.0.to_string() + ": ");
+                    buf += &(key.as_inner().to_string() + ": ");
                     buf += &value.to_string();
                 }
                 buf.push('}');
@@ -1205,411 +729,6 @@ impl fmt::Display for LoxValue {
             }
             Self::External(external) => f.write_str(&read(external).representation()),
             Self::Undefined(_) => unreachable!(),
-        }
-    }
-}
-
-impl From<bool> for LoxValue {
-    fn from(value: bool) -> Self {
-        Self::Bool(value)
-    }
-}
-
-impl From<char> for LoxValue {
-    fn from(value: char) -> Self {
-        Self::Str(value.to_string().into())
-    }
-}
-
-impl From<Vec<char>> for LoxValue {
-    fn from(chars: Vec<char>) -> Self {
-        Self::Str(chars.into_iter().collect::<String>().into())
-    }
-}
-
-impl From<String> for LoxValue {
-    fn from(value: String) -> Self {
-        Self::from(Vec::from_iter(value.chars()))
-    }
-}
-
-impl From<&str> for LoxValue {
-    fn from(value: &str) -> Self {
-        Self::from(value.to_string())
-    }
-}
-
-impl From<Vec<LoxValue>> for LoxValue {
-    fn from(values: Vec<LoxValue>) -> Self {
-        Self::Arr(Shared::new(values.into()))
-    }
-}
-
-impl<const N: usize> From<[LoxValue; N]> for LoxValue {
-    fn from(values: [LoxValue; N]) -> Self {
-        Self::from(Vec::from(values))
-    }
-}
-
-impl From<LoxError> for LoxValue {
-    fn from(value: LoxError) -> Self {
-        LoxValue::Error(value)
-    }
-}
-
-impl From<()> for LoxValue {
-    fn from(_value: ()) -> Self {
-        LoxValue::Nil
-    }
-}
-
-impl From<LoxRc<LoxClass>> for LoxValue {
-    fn from(value: LoxRc<LoxClass>) -> Self {
-        LoxValue::Class(value)
-    }
-}
-
-impl From<HashMap<MapKey, LoxValue>> for LoxValue {
-    fn from(value: HashMap<MapKey, LoxValue>) -> Self {
-        LoxValue::Map(LoxRc::new(value.into()))
-    }
-}
-
-impl From<Bytes> for LoxValue {
-    fn from(value: Bytes) -> Self {
-        LoxValue::Bytes(value)
-    }
-}
-
-#[cfg(feature = "sync")]
-impl<T: LoxObject + Send + Sync> From<T> for LoxValue {
-    fn from(value: T) -> Self {
-        LoxValue::external(value)
-    }
-}
-
-#[cfg(not(feature = "sync"))]
-impl<T: LoxObject> From<T> for LoxValue {
-    fn from(value: T) -> Self {
-        LoxValue::external(value)
-    }
-}
-
-impl TryFrom<LoxValue> for bool {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        if let LoxValue::Bool(b) = value {
-            Ok(b)
-        } else {
-            Err(LoxError::type_error(format!(
-                "expected bool, found {}",
-                LoxValueType::from(value)
-            )))
-        }
-    }
-}
-
-impl TryFrom<LoxValue> for String {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        if let LoxValue::Str(string) = value {
-            Ok(string.to_string())
-        } else {
-            Err(LoxError::type_error(format!(
-                "expected string, found {}",
-                LoxValueType::from(value)
-            )))
-        }
-    }
-}
-
-impl TryFrom<LoxValue> for LoxRc<String> {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        if let LoxValue::Str(string) = value {
-            Ok(string)
-        } else {
-            Err(LoxError::type_error(format!(
-                "expected string, found {}",
-                LoxValueType::from(value)
-            )))
-        }
-    }
-}
-
-impl TryFrom<LoxValue> for LoxRc<LoxFn> {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        if let LoxValue::Function(fun) = value {
-            Ok(fun)
-        } else {
-            Err(LoxError::type_error(format!(
-                "expected function, found {}",
-                LoxValueType::from(value)
-            )))
-        }
-    }
-}
-
-impl TryFrom<LoxValue> for Shared<HashMap<MapKey, LoxValue>> {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.as_map()
-    }
-}
-
-impl TryFrom<LoxValue> for HashMap<MapKey, LoxValue> {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.as_map().map(|value| read(&value).clone())
-    }
-}
-
-impl TryFrom<LoxValue> for Bytes {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.as_bytes()
-    }
-}
-
-#[cfg(feature = "async")]
-impl TryFrom<LoxValue> for LoxRc<async_types::Coroutine> {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        if let LoxValue::Coroutine(fun) = value {
-            Ok(fun)
-        } else {
-            Err(LoxError::type_error(format!(
-                "expected coroutine, found {}",
-                LoxValueType::from(value)
-            )))
-        }
-    }
-}
-
-impl TryFrom<LoxValue> for Shared<LoxInstance> {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        if let LoxValue::Instance(fun) = value {
-            Ok(fun)
-        } else {
-            Err(LoxError::type_error(format!(
-                "expected instance, found {}",
-                LoxValueType::from(value)
-            )))
-        }
-    }
-}
-
-macro_rules! impl_tryfrom_borrowed_loxvalue {
-    ( $($t:ty),* ) => { $(
-        impl TryFrom<&LoxValue> for $t {
-            type Error = LoxError;
-
-            fn try_from(value: &LoxValue) -> Result<Self, Self::Error> {
-                value.clone().try_into()
-            }
-        }
-    ) *
-    };
-}
-
-impl_tryfrom_borrowed_loxvalue! { bool, String, f32, f64, u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize }
-
-macro_rules! impl_numeric {
-    ( $($t:ty),* ) => {
-    $(
-        impl From<$t> for LoxValue {
-            fn from(value: $t) -> Self {
-                Self::Num(value as f64)
-            }
-        }
-
-        impl TryFrom<LoxValue> for $t {
-            type Error = LoxError;
-
-            fn try_from(value: LoxValue) -> Result<Self, LoxError> {
-                match value {
-                    LoxValue::Num(ref num) => {
-                        if *num > Self::MAX as f64 {
-                            Err(LoxError {
-                                    inner: LoxErrorInner::SizeError {
-                                        found: mem::size_of::<Self>(),
-                                    },
-                                    trace: VecDeque::new(),
-                                }
-                            )
-                        } else {
-                            Ok(*num as Self)
-                        }
-                    },
-                    _ => Err(LoxError::type_error(format!("expected number, found {}", LoxValueType::from(value))))
-                }
-            }
-        }
-
-        impl ops::Add<$t> for LoxValue {
-            type Output = LoxResult;
-
-            fn add(self, rhs: $t) -> Self::Output {
-                match self {
-                    Self::Num(num) => Ok(Self::Num(num + rhs as f64)),
-                    _ => Err(LoxError::type_error(format!("cannot add number to {}", LoxValueType::from(self)))),
-                }
-            }
-        }
-
-        impl ops::Sub<$t> for LoxValue {
-            type Output = LoxResult;
-
-            fn sub(self, rhs: $t) -> Self::Output {
-                match self {
-                    Self::Num(num) => Ok(Self::Num(num - rhs as f64)),
-                    _ => Err(LoxError::type_error(format!("cannot subtract number from {}", LoxValueType::from(self)))),
-                }
-            }
-        }
-
-        impl ops::Mul<$t> for LoxValue {
-            type Output = LoxResult;
-
-            fn mul(self, rhs: $t) -> Self::Output {
-                match self {
-                    Self::Num(num) => Ok(Self::Num(num * rhs as f64)),
-                    _ => Err(LoxError::type_error(format!("cannot multiply {} by number", LoxValueType::from(self)))),
-                }
-            }
-        }
-
-        impl ops::Div<$t> for LoxValue {
-            type Output = LoxResult;
-
-            fn div(self, rhs: $t) -> Self::Output {
-                match self {
-                    Self::Num(num) => Ok(Self::Num(num / rhs as f64)),
-                    _ => Err(LoxError::type_error(format!("cannot divide {} by number", LoxValueType::from(self)))),
-                }
-            }
-        }
-    ) *
-    };
-}
-
-impl_numeric! { f32, f64, u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize }
-
-impl ops::Add for LoxValue {
-    type Output = LoxResult;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        let self_type = LoxValueType::from(&self);
-        match (self, &rhs) {
-            (LoxValue::Str(s1), LoxValue::Str(s2)) => {
-                Ok(LoxValue::Str(LoxRc::new(s1.to_string() + s2)))
-            }
-            (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
-            (LoxValue::Arr(arr1), LoxValue::Arr(ref arr2)) => {
-                write(&arr1).append(&mut write(arr2));
-                Ok(LoxValue::Arr(arr1))
-            }
-            _ => Err(LoxError::type_error(format!(
-                "cannot add {} to {}",
-                LoxValueType::from(rhs),
-                self_type,
-            ))),
-        }
-    }
-}
-
-impl ops::Add<&str> for LoxValue {
-    type Output = LoxResult;
-
-    fn add(self, rhs: &str) -> Self::Output {
-        let other: LoxValue = rhs.into();
-        self + other
-    }
-}
-
-impl ops::Sub for LoxValue {
-    type Output = LoxResult;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
-            Ok(LoxValue::Num(num1 - num2))
-        } else {
-            Err(LoxError::type_error(format!(
-                "cannot subtract {} from {}",
-                LoxValueType::from(rhs),
-                LoxValueType::from(self),
-            )))
-        }
-    }
-}
-
-impl ops::Mul for LoxValue {
-    type Output = LoxResult;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
-            Ok(LoxValue::Num(num1 * num2))
-        } else {
-            Err(LoxError::type_error(format!(
-                "cannot multiply {} by {}",
-                LoxValueType::from(self),
-                LoxValueType::from(rhs),
-            )))
-        }
-    }
-}
-
-impl ops::Div for LoxValue {
-    type Output = LoxResult;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
-            Ok(LoxValue::Num(num1 / num2))
-        } else {
-            Err(LoxError::type_error(format!(
-                "cannot divide {} by {}",
-                LoxValueType::from(self),
-                LoxValueType::from(rhs),
-            )))
-        }
-    }
-}
-
-impl ops::Neg for LoxValue {
-    type Output = LoxResult;
-
-    fn neg(self) -> Self::Output {
-        match self {
-            Self::Num(num) => Ok(Self::Num(-num)),
-            _ => Err(LoxError::type_error(format!(
-                "cannot negate {}",
-                LoxValueType::from(self)
-            ))),
-        }
-    }
-}
-
-impl ops::Not for LoxValue {
-    type Output = LoxResult;
-
-    fn not(self) -> Self::Output {
-        match self {
-            Self::Bool(b) => Ok(Self::Bool(!b)),
-            _ => Err(LoxError::type_error(format!(
-                "cannot take logical not of {}",
-                LoxValueType::from(self)
-            ))),
         }
     }
 }
@@ -1643,141 +762,6 @@ impl Termination for LoxValue {
     }
 }
 
-impl IntoIterator for LoxValue {
-    type Item = Self;
-    type IntoIter = LoxIterator;
-
-    fn into_iter(self) -> Self::IntoIter {
-        match self {
-            Self::Arr(arr) => LoxIterator::Array(read(&arr).clone().into_iter()),
-            Self::Str(string) => LoxIterator::String(string.to_string().into_bytes().into_iter()),
-            _ => panic!("cannot convert {} into iterator", LoxValueType::from(self)),
-        }
-    }
-}
-
-/// An iterator over a `LoxValue::Array` or a `LoxValue::String`.
-#[non_exhaustive]
-pub enum LoxIterator {
-    #[doc(hidden)] // Not public API.
-    Array(vec::IntoIter<LoxValue>),
-    #[doc(hidden)] // Not public API.
-    String(vec::IntoIter<u8>),
-}
-
-const CONT_MASK: u8 = 0b0011_1111;
-
-const fn utf8_first_byte(byte: u8, width: u32) -> u32 {
-    (byte & (0x7F >> width)) as u32
-}
-
-const fn utf8_acc_cont_byte(ch: u32, byte: u8) -> u32 {
-    (ch << 6) | (byte & CONT_MASK) as u32
-}
-
-/// ## Panics
-/// Panics if `bytes` does not produce a valid UTF-8 string.
-fn next_code_point<I: Iterator<Item = u8>>(bytes: &mut I) -> Option<u32> {
-    // Decode UTF-8
-    let x = bytes.next()?;
-    if x < 128 {
-        return Some(x as u32);
-    }
-
-    // Multibyte case follows
-    // Decode from a byte combination out of: [[[x y] z] w]
-    let init = utf8_first_byte(x, 2);
-    let y = bytes.next().unwrap();
-    let mut ch = utf8_acc_cont_byte(init, y);
-    if x >= 0xE0 {
-        // [[x y z] w] case
-        // 5th bit in 0xE0 .. 0xEF is always clear, so `init` is still valid
-        let z = bytes.next().unwrap();
-        let y_z = utf8_acc_cont_byte((y & CONT_MASK) as u32, z);
-        ch = init << 12 | y_z;
-        if x >= 0xF0 {
-            // [x y z w] case
-            // use only the lower 3 bits of `init`
-            let w = bytes.next().unwrap();
-            ch = (init & 7) << 18 | utf8_acc_cont_byte(y_z, w);
-        }
-    }
-
-    Some(ch)
-}
-
-impl Iterator for LoxIterator {
-    type Item = LoxValue;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            LoxIterator::Array(iter) => iter.next(),
-            LoxIterator::String(bytes) => Some(LoxValue::Str(
-                char::from_u32(next_code_point(bytes)?)
-                    .unwrap()
-                    .to_string()
-                    .into(),
-            )),
-        }
-    }
-}
-
-/// A function defined in Lox code.
-#[cfg_attr(feature = "serialise", derive(Serialize))]
-pub struct LoxFn {
-    #[cfg(feature = "sync")]
-    #[cfg_attr(feature = "serialise", serde(skip_serializing))]
-    fun: Box<dyn Fn(LoxArgs) -> LoxResult + Send + Sync>,
-    #[cfg(not(feature = "sync"))]
-    fun: Box<dyn Fn(LoxArgs) -> LoxResult>,
-    params: Vec<&'static str>,
-}
-
-impl LoxFn {
-    /// Creates a new [`LoxFn`] with the given body and parameter names.
-    #[cfg(not(feature = "sync"))]
-    pub fn new<F: Fn(LoxArgs) -> LoxResult + 'static>(fun: F, params: Vec<&'static str>) -> Self {
-        Self {
-            fun: Box::new(fun),
-            params,
-        }
-    }
-
-    /// Creates a new [`LoxFn`] with the given body and parameter names.
-    #[cfg(feature = "sync")]
-    pub fn new<F: Fn(LoxArgs) -> LoxResult + Send + Sync + 'static>(
-        fun: F,
-        params: Vec<&'static str>,
-    ) -> Self {
-        Self {
-            fun: Box::new(fun),
-            params,
-        }
-    }
-}
-
-impl fmt::Debug for LoxFn {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LoxFn")
-            .field("params", &self.params)
-            .finish()
-    }
-}
-
-impl PartialEq for LoxFn {
-    fn eq(&self, other: &Self) -> bool {
-        let ptr1: *const _ = self.fun.as_ref();
-        let ptr2: *const _ = other.fun.as_ref();
-        ptr::eq(ptr1 as *const (), ptr2 as *const ()) && self.params == other.params
-    }
-}
-
-impl Hash for LoxFn {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        hash_ptr(self.fun.as_ref(), state);
-    }
-}
-
 /// An instance of a Lox class.
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serialise", derive(Serialize))]
@@ -1799,93 +783,6 @@ impl LoxInstance {
             }
         }
         false
-    }
-}
-
-impl Hash for LoxInstance {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.class.hash(state);
-        let mut attributes: Vec<_> = self.attributes.iter().collect();
-        attributes.sort_unstable_by(|(name1, _), (name2, _)| name1.cmp(name2));
-        for attributes in attributes {
-            attributes.hash(state);
-        }
-    }
-}
-
-#[derive(Clone, PartialEq, Hash)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
-#[doc(hidden)] // Not public API.
-pub enum LoxMethod {
-    Sync(LoxRc<LoxFn>),
-    #[cfg(feature = "async")]
-    Async(LoxRc<async_types::Coroutine>),
-}
-
-impl LoxMethod {
-    fn params(&self) -> &[&'static str] {
-        match self {
-            LoxMethod::Sync(fun) => &fun.params,
-            #[cfg(feature = "async")]
-            LoxMethod::Async(fun) => fun.params(),
-        }
-    }
-
-    fn get_sync(self) -> Option<LoxRc<LoxFn>> {
-        match self {
-            LoxMethod::Sync(fun) => Some(fun),
-            #[cfg(feature = "async")]
-            LoxMethod::Async(_) => None,
-        }
-    }
-
-    fn call(&self, args: LoxArgs) -> LoxResult {
-        match self {
-            LoxMethod::Sync(fun) => (fun.fun)(args),
-            #[cfg(feature = "async")]
-            LoxMethod::Async(fun) => Ok(LoxValue::Future(Shared::new(fun.start(args).into()))),
-        }
-    }
-}
-
-#[doc(hidden)]
-impl Debug for LoxMethod {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LoxMethod::Sync(fun) => write!(f, "Sync({:#?})", fun.params),
-            #[cfg(feature = "async")]
-            LoxMethod::Async(fun) => write!(f, "Async({:#?})", fun.params()),
-        }
-    }
-}
-
-#[doc(hidden)] // Not public API.
-impl From<LoxFn> for LoxMethod {
-    fn from(value: LoxFn) -> Self {
-        LoxMethod::Sync(LoxRc::new(value))
-    }
-}
-
-#[doc(hidden)] // Not public API.
-impl From<LoxRc<LoxFn>> for LoxMethod {
-    fn from(value: LoxRc<LoxFn>) -> Self {
-        LoxMethod::Sync(value)
-    }
-}
-
-#[doc(hidden)] // Not public API.
-#[cfg(feature = "async")]
-impl From<async_types::Coroutine> for LoxMethod {
-    fn from(value: async_types::Coroutine) -> Self {
-        LoxMethod::Async(LoxRc::new(value))
-    }
-}
-
-#[doc(hidden)] // Not public API.
-#[cfg(feature = "async")]
-impl From<LoxRc<async_types::Coroutine>> for LoxMethod {
-    fn from(value: LoxRc<async_types::Coroutine>) -> Self {
-        LoxMethod::Async(value)
     }
 }
 
@@ -1923,10 +820,10 @@ impl LoxClass {
                     initialiser: None,
                     methods: HashMap::from_iter([(
                         "instance_of",
-                        LoxMethod::Sync(LoxRc::new(LoxFn {
-                            fun: Box::new(instance_of),
-                            params: vec!["class"],
-                        })),
+                        LoxMethod::Sync(LoxRc::new(LoxFn::new(
+                            Box::new(instance_of),
+                            vec!["class"],
+                        ))),
                     )]),
                     superclass: None,
                 })
@@ -1950,310 +847,12 @@ impl LoxClass {
 
     fn arity(&self) -> usize {
         if let Some(initialiser) = &self.initialiser {
-            initialiser.params.len() - 1
+            initialiser.params().len() - 1
         } else {
             0
         }
     }
 }
-
-impl Hash for LoxClass {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.initialiser.hash(state);
-        self.superclass.hash(state);
-        let mut methods: Vec<_> = self
-            .methods
-            .iter()
-            .map(|(&name, method)| (name, method))
-            .collect();
-        methods.sort_unstable_by(|(name1, _), (name2, _)| name1.cmp(name2));
-        for method in methods {
-            method.hash(state);
-        }
-    }
-}
-
-/// Arguments to a Lox function.
-#[cfg_attr(feature = "serialise", derive(Serialize))]
-pub struct LoxArgs {
-    head: Option<LoxValue>,
-    main: Vec<LoxValue>,
-}
-
-impl LoxArgs {
-    /// Creates a new set of arguments from a `Vec<LoxValue>`.
-    ///
-    /// See also the various [`From`] implementations.
-    pub fn new(values: Vec<LoxValue>) -> LoxArgs {
-        LoxArgs {
-            head: None,
-            main: values,
-        }
-    }
-
-    /// Returns an iterator that moves values out of `self`.
-    pub fn drain(&mut self) -> Drain {
-        Drain {
-            head: &mut self.head,
-            main: self.main.drain(..),
-        }
-    }
-
-    /// Returns the number of items in `self`.
-    pub fn len(&self) -> usize {
-        if self.head.is_some() {
-            self.main.len() + 1
-        } else {
-            self.main.len()
-        }
-    }
-
-    /// Returns `true` if `self.len()` equals 0, and false, otherwise
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Gets the `index`th element of `self`, if it exists.
-    pub fn get(&self, index: usize) -> Option<&LoxValue> {
-        if let Some(head) = &self.head {
-            if index == 0 {
-                Some(head)
-            } else {
-                self.main.get(index - 1)
-            }
-        } else {
-            self.main.get(index)
-        }
-    }
-
-    fn check_arity(self, arity: usize) -> Result<LoxArgs, LoxError> {
-        if self.main.len() == arity {
-            Ok(self)
-        } else {
-            Err(LoxError::incorrect_arity(arity, self.main.len()))
-        }
-    }
-
-    fn with_head(mut self, value: LoxValue) -> LoxArgs {
-        self.head = Some(value);
-        self
-    }
-}
-
-impl From<Vec<LoxValue>> for LoxArgs {
-    fn from(value: Vec<LoxValue>) -> Self {
-        LoxArgs::new(value)
-    }
-}
-
-impl<const N: usize> From<[LoxValue; N]> for LoxArgs {
-    fn from(value: [LoxValue; N]) -> Self {
-        value.to_vec().into()
-    }
-}
-
-/// A moving iterator over [`LoxArgs`].
-pub struct Drain<'a> {
-    head: &'a mut Option<LoxValue>,
-    main: vec::Drain<'a, LoxValue>,
-}
-
-impl Iterator for Drain<'_> {
-    type Item = LoxValue;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.head.take().or_else(|| self.main.next())
-    }
-}
-
-#[doc(hidden)]
-pub trait ToLoxResult {
-    fn to_lox_result(self) -> LoxResult;
-}
-
-#[doc(hidden)]
-impl<T: Into<LoxValue>> ToLoxResult for T {
-    fn to_lox_result(self) -> LoxResult {
-        let value: LoxValue = self.into();
-        if let LoxValue::Error(err) = value {
-            Err(err)
-        } else {
-            Ok(value)
-        }
-    }
-}
-
-#[cfg(feature = "sync")]
-#[doc(hidden)]
-impl<T: Into<LoxValue>, E: Error + Send + Sync + 'static> ToLoxResult for Result<T, E> {
-    fn to_lox_result(self) -> LoxResult {
-        self.map(|value| value.into()).map_err(|err| {
-            if cast!(&err, &LoxError).is_ok() {
-                cast!(err, LoxError).unwrap()
-            } else {
-                LoxError::external(err)
-            }
-        })
-    }
-}
-
-#[cfg(not(feature = "sync"))]
-#[doc(hidden)]
-impl<T: Into<LoxValue>, E: Error + 'static> ToLoxResult for Result<T, E> {
-    fn to_lox_result(self) -> LoxResult {
-        self.map(|value| value.into()).map_err(|err| {
-            if let Ok(lox_error) = cast!(&err, &LoxError) {
-                lox_error.clone()
-            } else {
-                LoxError::external(err)
-            }
-        })
-    }
-}
-
-/// A convenient alias for a [`LoxObject`] trait object.
-#[cfg(feature = "sync")]
-pub type DynLoxObject = dyn LoxObject + Send + Sync + 'static;
-
-/// A convenient alias for a [`LoxObject`] trait object.
-#[cfg(not(feature = "sync"))]
-pub type DynLoxObject = dyn LoxObject + 'static;
-
-/// A trait for foreign objects that can be used in Lox.
-pub trait LoxObject: Any + Debug {
-    /// A programmer-friendly name for the type.
-    fn name() -> String
-    where
-        Self: Sized;
-
-    /// A programmer-friendly representation of `self` for debugging and error
-    /// messages.
-    fn representation(&self) -> String {
-        format!("{:#?}", self)
-    }
-
-    /// Gets the field of `self` corresponding to `key`.
-    ///
-    /// This method should return `Err(None)` if the value is not found.
-    fn get(
-        &self,
-        this: Shared<DynLoxObject>,
-        key: &'static str,
-    ) -> Result<LoxValue, Option<LoxError>> {
-        let (_, _) = (this, key);
-        Err(None)
-    }
-
-    /// Sets the field of `self` corresponding to `key` to the given value.
-    ///
-    /// If the key does not exist, `Err(None)` should be returned.
-    fn set(
-        &mut self,
-        this: Shared<DynLoxObject>,
-        key: &'static str,
-        value: LoxValue,
-    ) -> Result<(), Option<LoxError>> {
-        let (_, _, _) = (this, key, value);
-        Err(None)
-    }
-
-    /// Gets the element of `self` corresponding to `key`.
-    ///
-    /// Intended for objects that function as arrays or maps.
-    fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
-        drop(key);
-        Err(LoxError::type_error(format!(
-            "cannot index into '{}'",
-            self.representation()
-        )))
-    }
-
-    /// Sets the element of `self` corresponding to `key` to `value`.
-    ///
-    /// Intended for objects that function as arrays or maps.
-    fn index_set(&mut self, key: LoxValue, value: LoxValue) -> Result<(), LoxError> {
-        let (_, _) = (key, value);
-        Err(LoxError::type_error(format!(
-            "cannot index into '{}'",
-            self.representation()
-        )))
-    }
-}
-
-fn unsync_is<T: LoxObject>(value: &Shared<dyn LoxObject>) -> bool {
-    let t = TypeId::of::<T>();
-    let concrete = (*read(value).deref()).type_id();
-    t == concrete
-}
-
-fn sync_is<T: LoxObject>(value: &Shared<dyn LoxObject + Send + Sync>) -> bool {
-    let t = TypeId::of::<T>();
-    let concrete = (*read(value).deref()).type_id();
-    t == concrete
-}
-
-/// Objects which can be downcast to a concrete type.
-///
-/// This trait is sealed, and cannot be implemented for foreign types.
-pub trait Downcast: Sized + Sealed {
-    /// Attempts to downcast `self` to a concrete type, returning `Err(self)`
-    /// if the cast fails.
-    fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Self>;
-}
-
-impl Sealed for Shared<dyn LoxObject> {}
-
-impl Downcast for Shared<dyn LoxObject> {
-    fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject>> {
-        if unsync_is::<T>(&self) {
-            let ptr = LoxRc::into_raw(self);
-            // SAFETY: The `TypeId`s are the same, therefore `self` is an
-            // instance of `T`.
-            Ok(unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) })
-        } else {
-            todo!()
-        }
-    }
-}
-
-impl Sealed for Shared<dyn LoxObject + Send + Sync> {}
-
-impl Downcast for Shared<dyn LoxObject + Send + Sync> {
-    fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject + Send + Sync>> {
-        if sync_is::<T>(&self) {
-            let ptr = LoxRc::into_raw(self);
-            // SAFETY: The `TypeId`s are the same, therefore `self` is an
-            // instance of `T`.
-            Ok(unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) })
-        } else {
-            todo!()
-        }
-    }
-}
-
-fn obj_from_value<T: LoxObject>(value: &LoxValue) -> Option<Shared<T>> {
-    match value {
-        LoxValue::External(external) => external.clone().downcast().ok(),
-        _ => None,
-    }
-}
-
-impl<T: LoxObject> TryFrom<LoxValue> for Shared<T> {
-    type Error = LoxError;
-
-    fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        obj_from_value(&value).ok_or(LoxError::type_error(format!(
-            "expected {}, found {value}",
-            T::name()
-        )))
-    }
-}
-
-mod private {
-    pub trait Sealed {}
-}
-use private::Sealed;
 
 #[cfg(test)]
 mod tests;

@@ -1,0 +1,259 @@
+use crate::LoxRc;
+use crate::LoxValue;
+use crate::MapKey;
+
+use std::collections::VecDeque;
+use std::convert::Infallible;
+use std::error::Error;
+use std::fmt;
+use std::fmt::Display;
+use std::hash::Hash;
+
+#[cfg(feature = "serialise")]
+use serde::Serialize;
+#[cfg(feature = "serialise")]
+use serde::Serializer;
+
+#[cfg(feature = "serialise")]
+fn serialise_external_error<S: Serializer>(
+    value: &ExternalError,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    LoxErrorInner::Arbitrary(value.0.to_string()).serialize(serializer)
+}
+
+#[derive(Debug, Clone)]
+#[cfg(feature = "sync")]
+struct ExternalError(LoxRc<dyn Error + Send + Sync>);
+
+#[derive(Debug, Clone)]
+#[cfg(not(feature = "sync"))]
+struct ExternalError(LoxRc<dyn Error>);
+
+impl Hash for ExternalError {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        LoxRc::as_ptr(&self.0).hash(state);
+    }
+}
+
+impl PartialEq for ExternalError {
+    fn eq(&self, other: &Self) -> bool {
+        LoxRc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+/// An error raised during compilation or execution.
+#[derive(Debug, Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
+pub struct LoxError {
+    inner: LoxErrorInner,
+    trace: VecDeque<&'static str>,
+}
+
+impl LoxError {
+    pub(crate) fn type_error(message: String) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::TypeError(message),
+            trace: VecDeque::new(),
+        }
+    }
+
+    pub(crate) fn undefined_variable(kind: &'static str) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::UndefinedVariable(kind),
+            trace: VecDeque::new(),
+        }
+    }
+
+    pub(crate) fn invalid_property(property: &'static str, object: String) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::InvalidProperty { property, object },
+            trace: VecDeque::new(),
+        }
+    }
+
+    pub(crate) fn non_existent_super(name: &'static str) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::NonExistentSuper(name),
+            trace: VecDeque::new(),
+        }
+    }
+
+    pub(crate) fn index_out_of_range(index: usize) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::IndexOutOfRange(index),
+            trace: VecDeque::new(),
+        }
+    }
+
+    /// Returns an error corresponding to an invalid key in a map or array.
+    pub fn invalid_key(key: LoxValue) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::InvalidKey(Box::new(key)),
+            trace: VecDeque::new(),
+        }
+    }
+
+    pub(crate) fn incorrect_arity(expected: usize, found: usize) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::IncorrectArity { expected, found },
+            trace: VecDeque::new(),
+        }
+    }
+
+    pub(crate) fn overflow_error(value: MapKey, target_type: &'static str) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::OverflowError {
+                value: Box::new(value),
+                target_type,
+            },
+            trace: VecDeque::new(),
+        }
+    }
+
+    pub(crate) fn value(value: LoxValue) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::Value(Box::new(value)),
+            trace: VecDeque::new(),
+        }
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) fn finished_coroutine() -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::FinishedCoroutine,
+            trace: VecDeque::new(),
+        }
+    }
+
+    /// Pushes a new function to this error's stack trace.
+    #[cold]
+    pub fn push_trace(&mut self, value: &'static str) {
+        self.trace.push_front(value);
+    }
+
+    #[doc(hidden)]
+    pub fn push_trace_front(&mut self, value: &'static str) {
+        self.trace.push_front(value);
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn with_trace(mut self, trace: Vec<&'static str>) -> LoxError {
+        self.trace = trace.into();
+        self
+    }
+
+    #[doc(hidden)] // Not public API.
+    pub fn into_value(self) -> LoxValue {
+        if let LoxErrorInner::Value(value) = self.inner {
+            *value
+        } else {
+            LoxValue::Error(self)
+        }
+    }
+
+    /// Creates a [`LoxError`] from another error.
+    #[cfg(feature = "sync")]
+    pub fn external<E: Error + Send + Sync + 'static>(value: E) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::External(ExternalError(LoxRc::new(value))),
+            trace: VecDeque::new(),
+        }
+    }
+
+    /// Creates a [`LoxError`] from another error.
+    #[cfg(not(feature = "sync"))]
+    pub fn external<E: Error + 'static>(value: E) -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::External(ExternalError(LoxRc::new(value))),
+            trace: VecDeque::new(),
+        }
+    }
+}
+
+impl From<Infallible> for LoxError {
+    fn from(value: Infallible) -> Self {
+        match value {}
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
+enum LoxErrorInner {
+    /// An error that occurs when attempting to use a LoxValue with an invalid type.
+    TypeError(String),
+    /// An error that occurs when attempting to convert a LoxValue into a Rust type that is too small.
+    OverflowError {
+        value: Box<MapKey>,
+        target_type: &'static str,
+    },
+    /// An error that occurs when variables are accessed without first being defined.
+    UndefinedVariable(&'static str),
+    InvalidProperty {
+        property: &'static str,
+        object: String,
+    },
+    NonExistentSuper(&'static str),
+    IndexOutOfRange(usize),
+    InvalidKey(Box<LoxValue>),
+    IncorrectArity {
+        expected: usize,
+        found: usize,
+    },
+    Value(Box<LoxValue>),
+    #[cfg_attr(
+        feature = "serialise",
+        serde(serialize_with = "serialise_external_error")
+    )]
+    External(ExternalError),
+    #[cfg(feature = "serialise")]
+    #[doc(hidden)]
+    Arbitrary(String),
+    #[cfg(feature = "async")]
+    FinishedCoroutine,
+}
+
+impl Display for LoxError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "traceback (most recent call last):")?;
+        for &fun in self.trace.iter() {
+            writeln!(f, "in '{fun}'")?;
+        }
+        writeln!(f)?;
+
+        match &self.inner {
+            LoxErrorInner::TypeError(message) => {
+                write!(f, "{}", message)
+            }
+            LoxErrorInner::OverflowError { value, target_type } => {
+                write!(
+                    f,
+                    "could not convert '{}' to {target_type} (value too large)",
+                    value.as_inner()
+                )
+            }
+            LoxErrorInner::UndefinedVariable(name) => write!(f, "undefined variable '{name}'"),
+            LoxErrorInner::InvalidProperty { property, object } => {
+                write!(f, "invalid property '{property}' on {object}")
+            }
+            LoxErrorInner::NonExistentSuper(name) => {
+                write!(f, "function '{name}' has no super function")
+            }
+            LoxErrorInner::IndexOutOfRange(index) => write!(f, "index out of range: {index}"),
+            LoxErrorInner::InvalidKey(key) => write!(f, "invalid key: {key}"),
+            LoxErrorInner::IncorrectArity { expected, found } => {
+                write!(f, "expected {expected} arguments, found {found}")
+            }
+            LoxErrorInner::Value(value) => {
+                write!(f, "error: {value}")
+            }
+            LoxErrorInner::External(err) => fmt::Display::fmt(&err.0, f),
+            #[cfg(feature = "serialise")]
+            LoxErrorInner::Arbitrary(string) => f.write_str(string),
+            #[cfg(feature = "async")]
+            LoxErrorInner::FinishedCoroutine => write!(f, "cannot await a finished coroutine"),
+        }
+    }
+}
+
+impl Error for LoxError {}

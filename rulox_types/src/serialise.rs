@@ -1,10 +1,8 @@
 use crate::read;
 use crate::shared::Inner;
 use crate::DynLoxObject;
-use crate::ExternalError;
 use crate::LoxArgs;
 use crate::LoxError;
-use crate::LoxErrorInner;
 use crate::LoxRc;
 use crate::LoxResult;
 use crate::LoxValue;
@@ -19,13 +17,6 @@ use serde::Serializer;
 use serde_json::Map;
 use serde_json::Number;
 use serde_json::Value;
-
-pub(super) fn external_error<S: Serializer>(
-    value: &ExternalError,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    LoxErrorInner::Arbitrary(value.0.to_string()).serialize(serializer)
-}
 
 pub(super) fn primitive_method<S: Serializer>(
     _func: &fn(LoxArgs) -> LoxResult,
@@ -55,7 +46,7 @@ impl From<&Value> for LoxValue {
             Value::Object(obj) => LoxValue::Map(LoxRc::new(
                 HashMap::from_iter(
                     obj.into_iter()
-                        .map(|(key, value)| (MapKey(key.to_string().into()), value.into())),
+                        .map(|(key, value)| (MapKey::verify_key(key.to_string().into()).unwrap(), value.into())),
                 )
                 .into(),
             )),
@@ -74,7 +65,7 @@ pub fn hashmap_to_json_map(
     map: &HashMap<MapKey, LoxValue>,
 ) -> Result<Map<String, Value>, LoxError> {
     map.iter()
-        .map(|(key, value)| Ok((key.0.as_str()?.to_string(), value.try_into()?)))
+        .map(|(key, value)| Ok((key.as_inner().as_str()?.to_string(), value.try_into()?)))
         .collect()
 }
 

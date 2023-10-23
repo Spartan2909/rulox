@@ -453,7 +453,7 @@ impl ToTokens for Expr {
 
                 tokens.append_all(quote! { __super([#inner].into())? });
             }
-            Expr::Await { left } => tokens.append_all(quote! { (#left).await? }),
+            Expr::Await { left } => tokens.append_all(quote! { (#left).as_future()?.await? }),
             Expr::Index { left, index } => tokens.append_all(quote! { (#left).index(#index)? }),
             Expr::IndexSet { left, index, value } => {
                 tokens.append_all(quote! { (#left).index_set(#index, #value)? })

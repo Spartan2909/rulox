@@ -552,7 +552,7 @@ impl LoxValue {
                 let mut args = args.check_arity(class.arity())?;
                 if let Some(initialiser) = &class.initialiser {
                     args.head = Some(instance.clone());
-                    initialiser.call(args)
+                    LoxMethod::Sync(initialiser.clone()).call(args)
                 } else {
                     Ok(instance)
                 }

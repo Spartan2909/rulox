@@ -7,9 +7,9 @@ use crate::Shared;
 
 use std::fmt;
 use std::fmt::Debug;
-use std::hash::Hasher;
 use std::future::Future;
 use std::hash::Hash;
+use std::hash::Hasher;
 use std::ops::DerefMut;
 use std::pin::Pin;
 use std::ptr;

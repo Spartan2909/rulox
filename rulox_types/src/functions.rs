@@ -9,8 +9,8 @@ use crate::async_types;
 
 use std::fmt;
 use std::fmt::Debug;
-use std::hash::Hasher;
 use std::hash::Hash;
+use std::hash::Hasher;
 use std::ptr;
 
 #[cfg(feature = "serialise")]

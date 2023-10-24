@@ -44,10 +44,12 @@ impl From<&Value> for LoxValue {
                 arr.into_iter().map(|value| value.into()).collect(),
             ))),
             Value::Object(obj) => LoxValue::Map(LoxRc::new(
-                HashMap::from_iter(
-                    obj.into_iter()
-                        .map(|(key, value)| (MapKey::verify_key(key.to_string().into()).unwrap(), value.into())),
-                )
+                HashMap::from_iter(obj.into_iter().map(|(key, value)| {
+                    (
+                        MapKey::verify_key(key.to_string().into()).unwrap(),
+                        value.into(),
+                    )
+                }))
                 .into(),
             )),
         }

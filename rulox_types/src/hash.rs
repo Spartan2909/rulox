@@ -1,13 +1,13 @@
-use crate::LoxValue;
-use crate::LoxRc;
 use crate::shared::read;
 use crate::LoxClass;
 use crate::LoxError;
 use crate::LoxInstance;
+use crate::LoxRc;
+use crate::LoxValue;
 
-use std::hash::Hash;
 use std::fmt;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::hash::Hasher;
 
 #[cfg(feature = "serialise")]

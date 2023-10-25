@@ -65,7 +65,7 @@ macro_rules! numeric_operations {
 
                 fn rem(self, rhs: $t) -> Self::Output {
                     match self {
-                        Self::Num(num) => Ok(Self::Num(num / rhs as f64)),
+                        Self::Num(num) => Ok(Self::Num(num % rhs as f64)),
                         _ => Err(LoxError::type_error(format!("cannot take the remainder of {} and a number", LoxValueType::from(self)))),
                     }
                 }

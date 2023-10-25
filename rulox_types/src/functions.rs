@@ -1,5 +1,6 @@
 use crate::error::LoxError;
 use crate::hash::hash_ptr;
+use crate::private::Sealed;
 use crate::LoxRc;
 use crate::LoxResult;
 use crate::LoxValue;
@@ -207,6 +208,29 @@ impl LoxArgs {
         }
     }
 
+    /// Attempts to extract `self` into the given tuple.
+    ///
+    /// ## Examples
+    /// ```
+    /// # use rulox_types::LoxArgs;
+    /// # use rulox_types::LoxError;
+    /// fn do_some_stuff(name: String, age: usize) {
+    ///     // ...
+    ///     # assert_eq!(name, "Jane");
+    ///     # assert_eq!(age, 45);
+    /// }
+    ///
+    /// # fn main() -> Result<(), LoxError> {
+    /// let args: LoxArgs = ["Jane".into(), 45.into()].into();
+    /// let (name, age) = args.extract()?;
+    /// do_some_stuff(name, age);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn extract<T: ConcreteLoxArgs>(self) -> Result<T, LoxError> {
+        T::extract_from_args(self)
+    }
+
     pub(crate) fn check_arity(self, arity: usize) -> Result<LoxArgs, LoxError> {
         if self.main.len() == arity {
             Ok(self)
@@ -232,3 +256,60 @@ impl<const N: usize> From<[LoxValue; N]> for LoxArgs {
         value.to_vec().into()
     }
 }
+
+/// A trait for tuples than can be extracted from a [`LoxArgs`].
+///
+/// See [`LoxArgs::extract`] for more details.
+///
+/// This trait is sealed, and cannot be implemented for types outside of rulox.
+pub trait ConcreteLoxArgs: Sealed + Sized {
+    /// Attempts to extract `Self` from the given `args`.
+    ///
+    /// See [`LoxArgs::extract`] for more details.
+    fn extract_from_args(args: LoxArgs) -> Result<Self, LoxError>;
+}
+
+macro_rules! count {
+    ( $start:ident $( $rest:ident )* ) => {
+        1 + count!( $( $rest )* )
+    };
+    () => {
+        0
+    };
+}
+
+macro_rules! impl_concrete_lox_args {
+    ( $( $ty:ident )* ) => {
+        impl_concrete_lox_args! { | $( $ty )* }
+    };
+    ( $( $start:ident )* | $next:ident $( $end:ident )* ) => {
+        impl_concrete_lox_args! { @ $( $start )* }
+        impl_concrete_lox_args! { $( $start )* $next | $( $end )* }
+    };
+    ( $( $ty:ident )* | ) => {
+        impl_concrete_lox_args! { @ $( $ty )* }
+    };
+    ( @ $( $ty:ident )* ) => {
+        impl<$( $ty: TryFrom<LoxValue>, )*> Sealed for ( $( $ty, )* )
+            where (): Eq, $( LoxError: From<<$ty as TryFrom<LoxValue>>::Error> ),* {}
+
+        impl<$( $ty: TryFrom<LoxValue>, )*> ConcreteLoxArgs for ( $( $ty, )* )
+            where (): Eq, $( LoxError: From<<$ty as TryFrom<LoxValue>>::Error> ),*
+        {
+            fn extract_from_args(mut __args: LoxArgs) -> Result<Self, LoxError> {
+                let __len = __args.main.len();
+                let mut __drain = __args.drain();
+                const __COUNT: usize = count!( $( $ty )* );
+                Ok(( $(
+                    $ty::try_from(
+                        __drain
+                        .next()
+                        .ok_or(LoxError::incorrect_arity(__COUNT, __len))?
+                    )?,
+                )* ))
+            }
+        }
+    };
+}
+
+impl_concrete_lox_args! { T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 T16 T17 T18 T19 T20 }

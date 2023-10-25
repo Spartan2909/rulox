@@ -4,7 +4,10 @@ use std::time::Duration;
 use rulox::lox_bindgen;
 use rulox::prelude::*;
 use rulox::rust_bindgen;
+use rulox::LoxArgs;
 use rulox::LoxError;
+use rulox::LoxObject;
+use rulox::LoxResult;
 
 #[test]
 fn var_declaration() {
@@ -624,6 +627,127 @@ fn map() -> Result<(), LoxError> {
 
     assert_eq!(a.get()?, 1);
     assert_eq!(b.get()?, 3);
+
+    Ok(())
+}
+
+#[test]
+fn operator_overloading() -> Result<(), LoxError> {
+    lox! {
+        class MyNum {
+            init(num) {
+                this.num = num;
+            }
+
+            +(other) {
+                return MyNum(this.num + other.num);
+            }
+
+            -(other) {
+                return MyNum(this.num - other.num);
+            }
+
+            *(other) {
+                return MyNum(this.num * other.num);
+            }
+
+            /(other) {
+                return MyNum(this.num / other.num);
+            }
+
+            %(other) {
+                return MyNum(this.num % other.num);
+            }
+
+            -@() {
+                return MyNum(-this.num);
+            }
+        }
+
+        print (MyNum(2) + MyNum(3)).num;
+        print (MyNum(2) - MyNum(3)).num;
+        print (MyNum(2) * MyNum(3)).num;
+        print (MyNum(2) / MyNum(3)).num;
+        print (MyNum(2) % MyNum(3)).num;
+        print (-MyNum(2)).num;
+
+        class MyFunc {
+            init(func) {
+                this.func = func;
+            }
+
+            ()(arg) {
+                this.func(arg);
+            }
+        }
+
+        fun my_print(arg) {
+            print arg;
+        }
+
+        MyFunc(my_print)("Hello, world!");
+
+        class MyArr {
+            init(arr) {
+                this.arr = arr;
+            }
+
+            [](index) {
+                return this.arr[index + 1];
+            }
+
+            []=(index, value) {
+                this.arr[index + 1] = value;
+            }
+        }
+
+        var my_arr = MyArr([1, 2, 3]);
+        print my_arr[0];
+        my_arr[-1] = 4;
+        print my_arr.arr;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn extract_args() -> Result<(), LoxError> {
+    #[derive(Debug)]
+    struct MyType;
+
+    impl MyType {
+        fn do_some_stuff(&self, name: String, age: u8) -> LoxValue {
+            assert_eq!(name, "Jane");
+            assert_eq!(age, 45);
+            LoxValue::Nil
+        }
+    }
+
+    impl LoxObject for MyType {
+        fn type_name() -> String
+        where
+            Self: Sized,
+        {
+            "MyType".to_string()
+        }
+
+        fn call(&self, args: LoxArgs) -> LoxResult {
+            let (name, age) = args.extract()?;
+            Ok(self.do_some_stuff(name, age))
+        }
+    }
+
+    fn new_my_type() -> LoxValue {
+        LoxValue::external(MyType)
+    }
+
+    lox_bindgen!(fn new_my_type());
+
+    lox! {
+        var my_val = new_my_type();
+
+        my_val("Jane", 45);
+    }
 
     Ok(())
 }

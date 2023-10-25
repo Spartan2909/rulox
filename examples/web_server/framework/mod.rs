@@ -91,7 +91,7 @@ impl TryFrom<LoxValue> for LoxHeaders {
 }
 
 impl LoxObject for LoxHeaders {
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized,
     {
@@ -170,7 +170,7 @@ impl Routes {
 }
 
 impl LoxObject for Routes {
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized,
     {
@@ -219,7 +219,7 @@ macro_rules! handler {
 }
 
 impl LoxObject for RouteHandler {
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized,
     {
@@ -257,7 +257,7 @@ fn handler_post(handler: Arc<Coroutine>) -> LoxValue {
 struct Addr(SocketAddr);
 
 impl LoxObject for Addr {
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized,
     {

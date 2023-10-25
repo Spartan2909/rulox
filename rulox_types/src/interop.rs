@@ -1,7 +1,9 @@
 use crate::error::LoxError;
+use crate::private::Sealed;
 use crate::shared;
 use crate::shared::read;
 use crate::shared::Shared;
+use crate::LoxArgs;
 use crate::LoxRc;
 use crate::LoxResult;
 use crate::LoxValue;
@@ -64,10 +66,20 @@ pub type DynLoxObject = dyn LoxObject + Send + Sync + 'static;
 #[cfg(not(feature = "sync"))]
 pub type DynLoxObject = dyn LoxObject + 'static;
 
+pub trait Named {
+    fn type_name_of_val(&self) -> String;
+}
+
+impl<T: LoxObject> Named for T {
+    fn type_name_of_val(&self) -> String {
+        Self::type_name()
+    }
+}
+
 /// A trait for foreign objects that can be used in Lox.
-pub trait LoxObject: Any + Debug {
+pub trait LoxObject: Any + Debug + Named {
     /// A programmer-friendly name for the type.
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized;
 
@@ -109,7 +121,7 @@ pub trait LoxObject: Any + Debug {
         drop(key);
         Err(LoxError::type_error(format!(
             "cannot index into '{}'",
-            self.representation()
+            self.type_name_of_val()
         )))
     }
 
@@ -120,8 +132,49 @@ pub trait LoxObject: Any + Debug {
         let (_, _) = (key, value);
         Err(LoxError::type_error(format!(
             "cannot index into '{}'",
-            self.representation()
+            self.type_name_of_val()
         )))
+    }
+
+    /// Add `self` to `rhs`.
+    fn add(&self, rhs: LoxValue) -> LoxResult {
+        let _ = rhs;
+        Err(LoxError::not_implemented("add", self.type_name_of_val()))
+    }
+
+    /// Subtract `rhs` from `self`.
+    fn sub(&self, rhs: LoxValue) -> LoxResult {
+        let _ = rhs;
+        Err(LoxError::not_implemented("sub", self.type_name_of_val()))
+    }
+
+    /// Multiply `self` by `rhs`.
+    fn mul(&self, rhs: LoxValue) -> LoxResult {
+        let _ = rhs;
+        Err(LoxError::not_implemented("mul", self.type_name_of_val()))
+    }
+
+    /// Divide `self` by `rhs`.
+    fn div(&self, rhs: LoxValue) -> LoxResult {
+        let _ = rhs;
+        Err(LoxError::not_implemented("div", self.type_name_of_val()))
+    }
+
+    /// Take the remainder when `self` is divided by `rhs`.
+    fn rem(&self, rhs: LoxValue) -> LoxResult {
+        let _ = rhs;
+        Err(LoxError::not_implemented("rem", self.type_name_of_val()))
+    }
+
+    /// Negate `self`.
+    fn neg(&self) -> LoxResult {
+        Err(LoxError::not_implemented("neg", self.type_name_of_val()))
+    }
+
+    /// Call `self` like a method with the given arguments.
+    fn call(&self, args: LoxArgs) -> LoxResult {
+        let _ = args;
+        Err(LoxError::not_implemented("call", self.type_name_of_val()))
     }
 }
 
@@ -189,12 +242,7 @@ impl<T: LoxObject> TryFrom<LoxValue> for Shared<T> {
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
         obj_from_value(&value).ok_or(LoxError::type_error(format!(
             "expected {}, found {value}",
-            T::name()
+            T::type_name()
         )))
     }
 }
-
-mod private {
-    pub trait Sealed {}
-}
-use private::Sealed;

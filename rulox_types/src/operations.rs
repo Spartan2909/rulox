@@ -1,5 +1,7 @@
 use crate::error::LoxError;
+use crate::shared::read;
 use crate::shared::write;
+use crate::LoxInstance;
 use crate::LoxRc;
 use crate::LoxResult;
 use crate::LoxValue;
@@ -86,10 +88,18 @@ impl Add for LoxValue {
                 Ok(LoxValue::Str(LoxRc::new(s1.to_string() + s2)))
             }
             (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
-            (LoxValue::Arr(arr1), LoxValue::Arr(ref arr2)) => {
+            (LoxValue::Arr(arr1), LoxValue::Arr(arr2)) => {
                 write(&arr1).append(&mut write(arr2));
                 Ok(LoxValue::Arr(arr1))
             }
+            (LoxValue::Instance(instance), _) => {
+                if let Some(method) = LoxInstance::get(&instance, "+") {
+                    method.call([rhs].into())
+                } else {
+                    Err(LoxError::not_implemented("+", self_type))
+                }
+            }
+            (LoxValue::External(external), _) => read(&external).add(rhs),
             _ => Err(LoxError::type_error(format!(
                 "cannot add {} to {}",
                 LoxValueType::from(rhs),
@@ -112,14 +122,21 @@ impl Sub for LoxValue {
     type Output = LoxResult;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
-            Ok(LoxValue::Num(num1 - num2))
-        } else {
-            Err(LoxError::type_error(format!(
+        match (&self, &rhs) {
+            (&LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 - n2)),
+            (LoxValue::Instance(instance), _) => {
+                if let Some(method) = LoxInstance::get(instance, "-") {
+                    method.call([rhs].into())
+                } else {
+                    Err(LoxError::not_implemented("-", LoxValueType::from(self)))
+                }
+            }
+            (LoxValue::External(external), _) => read(external).sub(rhs),
+            _ => Err(LoxError::type_error(format!(
                 "cannot subtract {} from {}",
                 LoxValueType::from(rhs),
                 LoxValueType::from(self),
-            )))
+            ))),
         }
     }
 }
@@ -128,14 +145,21 @@ impl Mul for LoxValue {
     type Output = LoxResult;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
-            Ok(LoxValue::Num(num1 * num2))
-        } else {
-            Err(LoxError::type_error(format!(
+        match (&self, &rhs) {
+            (&LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 * n2)),
+            (LoxValue::Instance(instance), _) => {
+                if let Some(method) = LoxInstance::get(instance, "*") {
+                    method.call([rhs].into())
+                } else {
+                    Err(LoxError::not_implemented("*", LoxValueType::from(self)))
+                }
+            }
+            (LoxValue::External(external), _) => read(external).mul(rhs),
+            _ => Err(LoxError::type_error(format!(
                 "cannot multiply {} by {}",
                 LoxValueType::from(self),
                 LoxValueType::from(rhs),
-            )))
+            ))),
         }
     }
 }
@@ -144,14 +168,21 @@ impl Div for LoxValue {
     type Output = LoxResult;
 
     fn div(self, rhs: Self) -> Self::Output {
-        if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
-            Ok(LoxValue::Num(num1 / num2))
-        } else {
-            Err(LoxError::type_error(format!(
+        match (&self, &rhs) {
+            (&LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 / n2)),
+            (LoxValue::Instance(instance), _) => {
+                if let Some(method) = LoxInstance::get(instance, "/") {
+                    method.call([rhs].into())
+                } else {
+                    Err(LoxError::not_implemented("/", LoxValueType::from(self)))
+                }
+            }
+            (LoxValue::External(external), _) => read(external).div(rhs),
+            _ => Err(LoxError::type_error(format!(
                 "cannot divide {} by {}",
-                LoxValueType::from(self),
                 LoxValueType::from(rhs),
-            )))
+                LoxValueType::from(self),
+            ))),
         }
     }
 }
@@ -160,14 +191,21 @@ impl Rem for LoxValue {
     type Output = LoxResult;
 
     fn rem(self, rhs: Self) -> Self::Output {
-        if let (&Self::Num(num1), &Self::Num(num2)) = (&self, &rhs) {
-            Ok(LoxValue::Num(num1 % num2))
-        } else {
-            Err(LoxError::type_error(format!(
-                "cannot take remainder of {} and {}",
+        match (&self, &rhs) {
+            (&LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 % n2)),
+            (LoxValue::Instance(instance), _) => {
+                if let Some(method) = LoxInstance::get(instance, "%") {
+                    method.call([rhs].into())
+                } else {
+                    Err(LoxError::not_implemented("%", LoxValueType::from(self)))
+                }
+            }
+            (LoxValue::External(external), _) => read(external).rem(rhs),
+            _ => Err(LoxError::type_error(format!(
+                "cannot take the remainder of {} and {}",
                 LoxValueType::from(self),
                 LoxValueType::from(rhs),
-            )))
+            ))),
         }
     }
 }
@@ -178,6 +216,14 @@ impl Neg for LoxValue {
     fn neg(self) -> Self::Output {
         match self {
             Self::Num(num) => Ok(Self::Num(-num)),
+            Self::Instance(ref instance) => {
+                if let Some(method) = LoxInstance::get(instance, "- @") {
+                    method.call([].into())
+                } else {
+                    Err(LoxError::not_implemented("-@", LoxValueType::from(self)))
+                }
+            }
+            Self::External(external) => read(&external).neg(),
             _ => Err(LoxError::type_error(format!(
                 "cannot negate {}",
                 LoxValueType::from(self)
@@ -190,12 +236,6 @@ impl Not for LoxValue {
     type Output = LoxResult;
 
     fn not(self) -> Self::Output {
-        match self {
-            Self::Bool(b) => Ok(Self::Bool(!b)),
-            _ => Err(LoxError::type_error(format!(
-                "cannot take logical not of {}",
-                LoxValueType::from(self)
-            ))),
-        }
+        Ok(LoxValue::Bool(!self.is_truthy()))
     }
 }

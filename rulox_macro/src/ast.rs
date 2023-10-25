@@ -29,6 +29,8 @@ mod kw {
     syn::custom_keyword!(finally);
 }
 
+syn::custom_punctuation!(NegName, -@);
+
 pub struct LoxProgram {
     pub statements: Vec<Stmt>,
 }
@@ -45,15 +47,50 @@ impl Parse for LoxProgram {
     }
 }
 
+pub enum FunctionName {
+    Ident(Ident),
+    BinOp(BinOp),
+    Negate(NegName),
+    Call(token::Paren),
+    Index(token::Bracket),
+    IndexSet(token::Bracket, Token![=]),
+}
+
+impl Parse for FunctionName {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(Ident) {
+            Ok(FunctionName::Ident(input.parse()?))
+        } else if input.peek(NegName) {
+            Ok(FunctionName::Negate(input.parse()?))
+        } else if input.peek(token::Paren) {
+            let content;
+            let paren = parenthesized!(content in input);
+            assert!(content.is_empty(), "invalid method name");
+            Ok(FunctionName::Call(paren))
+        } else if input.peek(token::Bracket) {
+            let content;
+            let bracket = bracketed!(content in input);
+            assert!(content.is_empty(), "invalid method name");
+            if input.peek(Token![=]) {
+                Ok(FunctionName::IndexSet(bracket, input.parse()?))
+            } else {
+                Ok(FunctionName::Index(bracket))
+            }
+        } else {
+            Ok(FunctionName::BinOp(input.parse()?))
+        }
+    }
+}
+
 pub struct Function {
-    pub name: Ident,
+    pub name: FunctionName,
     pub params: Vec<Ident>,
     pub body: Box<Stmt>,
 }
 
 impl Parse for Function {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let name: Ident = input.parse()?;
+        let name = input.parse()?;
 
         let content;
         parenthesized!(content in input);
@@ -620,7 +657,7 @@ impl Expr {
     fn factor(input: ParseStream) -> syn::Result<Self> {
         let mut expr = Self::unary(input)?;
 
-        while input.peek(Token![/]) || input.peek(Token![*]) {
+        while input.peek(Token![/]) || input.peek(Token![*]) || input.peek(Token![%]) {
             let operator: BinOp = input.parse()?;
             let right = Self::unary(input)?;
             expr = Self::Binary {

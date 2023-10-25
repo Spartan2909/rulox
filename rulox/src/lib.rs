@@ -222,12 +222,9 @@ macro_rules! lox_bindgen {
     };
     ( fn $rust_name:ident $( :: $segment:ident )* ( $( $arg:ident ),* ) as $lox_name:ident ) => {
         let $lox_name = __rulox_helpers::LoxVariable::new(LoxValue::function(__rulox_helpers::LoxFn::new(
-            move |mut args: $crate::LoxArgs| -> __rulox_helpers::LoxResult {
-                let mut __drain = args.drain();
-                $(
-                    let $arg = __drain.next().unwrap();
-                )*
-                $crate::ToLoxResult::to_lox_result($rust_name $( :: $segment )* ( $( $arg.try_into()? ),* ))
+            move |__args: $crate::LoxArgs| -> __rulox_helpers::LoxResult {
+                let ( $( $arg, )* ) = __args.extract()?;
+                $crate::ToLoxResult::to_lox_result($rust_name $( :: $segment )* ( $( $arg ),* ))
             },
             vec![$( stringify!($arg) ),*]
         )));
@@ -237,13 +234,10 @@ macro_rules! lox_bindgen {
     };
     ( async fn $rust_name:ident $( :: $segment:ident )* ( $( $arg:ident ),* ) as $lox_name:ident ) => {
         let $lox_name = __rulox_helpers::LoxVariable::new(LoxValue::coroutine(
-            move |mut args: $crate::LoxArgs| -> Box<dyn $crate::prelude::__rulox_helpers::Future<Output = $crate::LoxResult> + Send + Sync + 'static> {
-                let mut __drain = args.drain();
-                $(
-                    let $arg = __drain.next().unwrap();
-                )*
+            move |__args: $crate::LoxArgs| -> Box<dyn $crate::prelude::__rulox_helpers::Future<Output = $crate::LoxResult> + Send + Sync + 'static> {
                 Box::new(async move {
-                    $crate::ToLoxResult::to_lox_result($rust_name $( :: $segment )* ( $( $arg.try_into()? ),* ).await)
+                    let ( $( $arg, )* ) = __args.extract()?;
+                    $crate::ToLoxResult::to_lox_result($rust_name $( :: $segment )* ( $( $arg ),* ).await)
                 })
             },
             vec![$( stringify!($arg) ),*]

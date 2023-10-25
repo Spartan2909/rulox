@@ -118,6 +118,13 @@ impl LoxError {
         }
     }
 
+    pub(super) fn not_implemented<T: ToString>(method_name: &str, kind: T) -> LoxError {
+        LoxError::type_error(format!(
+            "The method '{method_name}' is not implemented for '{}'",
+            kind.to_string()
+        ))
+    }
+
     #[cfg(feature = "async")]
     pub(crate) fn finished_coroutine() -> LoxError {
         LoxError {

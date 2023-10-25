@@ -1,12 +1,15 @@
 mod codegen;
 
 use crate::ast;
+use ast::NegName;
+use syn::Token;
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use proc_macro2::Punct;
 use proc_macro2::Spacing;
+use proc_macro2::Span;
 use proc_macro2::TokenStream;
 
 use quote::quote;
@@ -15,6 +18,9 @@ use quote::TokenStreamExt;
 
 use rulox_types::LoxValue;
 
+use syn::spanned::Spanned;
+use syn::token::Bracket;
+use syn::token::Paren;
 use syn::Ident;
 
 #[derive(Debug, Clone, Copy)]
@@ -71,8 +77,58 @@ fn insert_reference(references: &mut HashSet<Ident>, declared: &HashSet<Ident>, 
     }
 }
 
+enum FunctionName {
+    Ident(Ident),
+    BinOp(BinOp, Span),
+    Neg(NegName),
+    Call(Paren),
+    Index(Bracket),
+    IndexSet(Bracket, Token![=]),
+}
+
+impl FunctionName {
+    fn ident(&self) -> Option<&Ident> {
+        if let FunctionName::Ident(ident) = &self {
+            Some(ident)
+        } else {
+            None
+        }
+    }
+
+    fn span(&self) -> Span {
+        match self {
+            FunctionName::Ident(ident) => ident.span(),
+            FunctionName::BinOp(_, span) => *span,
+            FunctionName::Neg(op) => op.span(),
+            FunctionName::Call(paren) => paren.span.span(),
+            FunctionName::Index(bracket) => bracket.span.span(),
+            FunctionName::IndexSet(bracket, equals) => bracket
+                .span
+                .span()
+                .join(equals.span)
+                .unwrap_or(bracket.span.span()),
+        }
+    }
+}
+
+impl From<ast::FunctionName> for FunctionName {
+    fn from(value: ast::FunctionName) -> Self {
+        match value {
+            ast::FunctionName::Ident(name) => FunctionName::Ident(name),
+            ast::FunctionName::BinOp(op) => FunctionName::BinOp(
+                (&op).try_into().expect("parsed invalid operator"),
+                op.span(),
+            ),
+            ast::FunctionName::Negate(op) => FunctionName::Neg(op),
+            ast::FunctionName::Call(paren) => FunctionName::Call(paren),
+            ast::FunctionName::Index(bracket) => FunctionName::Index(bracket),
+            ast::FunctionName::IndexSet(bracket, equals) => FunctionName::IndexSet(bracket, equals),
+        }
+    }
+}
+
 struct Function {
-    name: Ident,
+    name: FunctionName,
     params: VecDeque<Ident>,
     body: Box<Stmt>,
     upvalues: HashSet<Ident>,
@@ -91,7 +147,7 @@ impl From<ast::Function> for Function {
         let body: Stmt = value.body.into();
         let upvalues = get_upvalues(&body, &value.params);
         Function {
-            name: value.name,
+            name: value.name.into(),
             params: value.params.into(),
             body: Box::new(body),
             upvalues,
@@ -109,7 +165,11 @@ fn convert_block(stmts: Vec<ast::Stmt>) -> (HashSet<Ident>, Vec<Stmt>) {
         match &stmt {
             Stmt::Class { name, .. }
             | Stmt::Function {
-                function: Function { name, .. },
+                function:
+                    Function {
+                        name: FunctionName::Ident(name),
+                        ..
+                    },
                 ..
             }
             | Stmt::Var { name, .. } => {
@@ -498,7 +558,7 @@ impl From<ast::Stmt> for Stmt {
                         method
                             .params
                             .push_front(Ident::new("this", method.name.span()));
-                        if method.name == "init" {
+                        if method.name.ident().is_some_and(|ident| ident == "init") {
                             method.is_initialiser = true;
                         }
                         (is_async, method)
@@ -548,6 +608,22 @@ enum BinOp {
     Sub,
     Mul,
     Div,
+    Rem,
+}
+
+impl TryFrom<&syn::BinOp> for BinOp {
+    type Error = ();
+
+    fn try_from(value: &syn::BinOp) -> Result<Self, Self::Error> {
+        match value {
+            syn::BinOp::Add(_) => Ok(BinOp::Add),
+            syn::BinOp::Sub(_) => Ok(BinOp::Sub),
+            syn::BinOp::Mul(_) => Ok(BinOp::Mul),
+            syn::BinOp::Div(_) => Ok(BinOp::Div),
+            syn::BinOp::Rem(_) => Ok(BinOp::Rem),
+            _ => Err(()),
+        }
+    }
 }
 
 impl ToTokens for BinOp {
@@ -557,6 +633,7 @@ impl ToTokens for BinOp {
             BinOp::Sub => '-',
             BinOp::Mul => '*',
             BinOp::Div => '/',
+            BinOp::Rem => '%',
         };
         tokens.append(Punct::new(ch, Spacing::Alone));
     }
@@ -884,6 +961,11 @@ impl From<ast::Expr> for Expr {
                     syn::BinOp::Div(_) => Expr::Binary {
                         left,
                         operator: BinOp::Div,
+                        right,
+                    },
+                    syn::BinOp::Rem(_) => Expr::Binary {
+                        left,
+                        operator: BinOp::Rem,
                         right,
                     },
                     syn::BinOp::Eq(_) => Expr::Comparison {

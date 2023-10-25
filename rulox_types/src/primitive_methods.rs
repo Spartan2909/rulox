@@ -92,7 +92,7 @@ macro_rules! default_collection {
         struct $name($inner, LoxValue);
 
         impl LoxObject for $name {
-            fn name() -> String
+            fn type_name() -> String
             where
                 Self: Sized,
             {

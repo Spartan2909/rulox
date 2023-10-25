@@ -97,7 +97,7 @@ impl Debug for LoxContext {
 }
 
 impl LoxObject for LoxContext {
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized,
     {
@@ -218,7 +218,7 @@ fn into_context(value: LoxValue) -> Result<Arc<RwLock<LoxContext>>, LoxError> {
     if let LoxValue::External(external) = value {
         external.downcast::<LoxContext>().map_err(|external| {
             Error::TypeError {
-                expected: LoxContext::name(),
+                expected: LoxContext::type_name(),
                 found: external.read().unwrap().representation(),
             }
             .into()

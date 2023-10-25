@@ -39,7 +39,7 @@ fn f64_to_status_code(num: f64) -> Result<StatusCode, LoxError> {
 }
 
 impl LoxObject for LoxResponse {
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized,
     {

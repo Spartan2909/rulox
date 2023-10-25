@@ -1,6 +1,7 @@
 use super::Except;
 use super::Expr;
 use super::Function;
+use super::FunctionName;
 use super::Ir;
 use super::Stmt;
 
@@ -45,6 +46,19 @@ fn block_to_token_stream(
     }
 
     tokens
+}
+
+impl ToTokens for FunctionName {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            FunctionName::Ident(ident) => ident.to_tokens(tokens),
+            FunctionName::BinOp(op, _) => op.to_tokens(tokens),
+            FunctionName::Neg(_) => tokens.append_all(quote! { -@ }),
+            FunctionName::Call(_) => tokens.append_all(quote! { () }),
+            FunctionName::Index(_) => tokens.append_all(quote! { [] }),
+            FunctionName::IndexSet(_, _) => tokens.append_all(quote! { []= }),
+        }
+    }
 }
 
 impl ToTokens for Except {
@@ -253,8 +267,8 @@ fn function_expr_to_tokens(
     body: &Stmt,
     value_wrap: bool,
     initialiser: Option<&Ident>,
-    insert_super_fn: Option<&Ident>,
-    fn_name: Option<&Ident>,
+    insert_super_fn: Option<&FunctionName>,
+    fn_name: Option<&FunctionName>,
     is_async: bool,
 ) -> TokenStream {
     let mut inner = TokenStream::new();
@@ -352,7 +366,10 @@ fn function_expr_to_tokens(
     } else {
         let mut closes = TokenStream::new();
         for upvalue in upvalues {
-            closes.append_all(quote! { let #upvalue = #upvalue.close_over(); });
+            closes.append_all(quote! {
+                #[allow(non_snake_case)]
+                let #upvalue = #upvalue.close_over();
+            });
         }
         quote! { {
             #closes

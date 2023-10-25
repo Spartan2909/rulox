@@ -59,7 +59,7 @@ impl LoxParamDict {
 }
 
 impl LoxObject for LoxParamDict {
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized,
     {
@@ -110,7 +110,7 @@ impl Debug for LoxParamView {
 }
 
 impl LoxObject for LoxParamView {
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized,
     {
@@ -172,7 +172,7 @@ impl Debug for LoxRequest {
 }
 
 impl LoxObject for LoxRequest {
-    fn name() -> String
+    fn type_name() -> String
     where
         Self: Sized,
     {

@@ -112,7 +112,7 @@ impl LoxMethod {
         match self {
             LoxMethod::Sync(fun) => (fun.fun)(args),
             #[cfg(feature = "async")]
-            LoxMethod::Async(fun) => Ok(LoxValue::Future(LoxRc::new(fun.start(args).into()))),
+            LoxMethod::Async(fun) => Ok(LoxValue::Future(fun.start(args).0)),
         }
     }
 }

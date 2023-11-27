@@ -249,5 +249,5 @@ pub(super) fn render_template(
     let context = into_context(context)?;
     let (tera, context) = context.write().unwrap().apply(TEMPLATES.get().unwrap())?;
     let body = tera.render(&name, &context).map_err(LoxError::external)?;
-    new_response(body)
+    Ok(LoxValue::external(new_response(body)))
 }

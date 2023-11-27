@@ -4,12 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dev-dependencies]
-"futures" = "0.3"
-"hyper" = { version = "0.14", features = ["http1", "http2", "client", "server", "runtime", "tcp"] }
-"rulox" = { path = "./rulox", features = ["serialise"] }
-"serde_json" = "1"
-"tera" = "1"
-"tokio" = { version = "1", features = ["macros", "rt", "rt-multi-thread", "signal", "time"] }
+futures = "0.3"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["http1", "http2", "client", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+rulox = { path = "./rulox", features = ["serialise"] }
+serde_json = "1"
+tera = "1"
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "signal", "time", "net"] }
 
 [workspace]
 members = ["rulox", "rulox_macro", "rulox_types"]

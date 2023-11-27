@@ -17,22 +17,26 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::sync::RwLock;
 
-use hyper::body::HttpBody;
+use http_body_util::Full;
+
+use hyper::body::Bytes;
+use hyper::body::Incoming;
 use hyper::header::HeaderName;
 use hyper::header::HeaderValue;
 use hyper::http::status::InvalidStatusCode;
-use hyper::server::conn::AddrStream;
-use hyper::service::make_service_fn;
+use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::Body;
 use hyper::HeaderMap;
 use hyper::Method;
 use hyper::Request;
 use hyper::Response;
 use hyper::StatusCode;
+
+use hyper_util::rt::TokioIo;
 
 use rulox::lox_bindgen;
 use rulox::prelude::*;
@@ -47,6 +51,8 @@ use rulox::LoxVariable;
 use rulox::TryFromLoxValue;
 
 use tera::Tera;
+
+use tokio::net::TcpListener;
 
 static TEMPLATES: OnceLock<Tera> = OnceLock::new();
 
@@ -271,29 +277,17 @@ fn parse_addr(addr: String) -> LoxResult {
     )))
 }
 
-struct ValidatedRequest(Request<Body>);
-
-macro_rules! validate_request {
-    ( $request:ident ) => {{
-        let __upper = $request.body().size_hint().upper().unwrap_or(u64::MAX);
-        if __upper > 1024 * 64 {
-            let mut resp = Response::new(Body::from("Body too big"));
-            *resp.status_mut() = StatusCode::PAYLOAD_TOO_LARGE;
-            return Ok(resp);
-        }
-        ValidatedRequest($request)
-    }};
-}
-
 async fn handle_method(
     handler: Option<&Arc<Coroutine>>,
     request: LoxValue,
-    response: &mut Response<Body>,
+    response: &mut Response<Full<Bytes>>,
 ) -> Result<(), LoxError> {
     match handler {
         Some(handler) => match handler.start([request].into()).await {
             Ok(value) => match value {
-                LoxValue::Str(string) => *response.body_mut() = Body::from(string.to_string()),
+                LoxValue::Str(string) => {
+                    *response.body_mut() = Full::new(Bytes::from(string.to_string()))
+                }
                 LoxValue::External(external)
                     if external.clone().downcast::<LoxResponse>().is_ok() =>
                 {
@@ -304,7 +298,7 @@ async fn handle_method(
                         .unwrap()
                         .clone();
 
-                    *response.body_mut() = Body::from(lox_response.body);
+                    *response.body_mut() = Bytes::from(lox_response.body).into();
                     *response.status_mut() = lox_response.status_code;
                     for (header_name, header) in &lox_response.headers.read().unwrap().0 {
                         response.headers_mut().insert(
@@ -322,7 +316,7 @@ async fn handle_method(
                 err.push_trace("handle_request");
                 let err = err.to_string();
                 eprintln!("{err}");
-                *response.body_mut() = Body::from(err);
+                *response.body_mut() = Bytes::from(err).into();
             }
             #[cfg(not(debug_assertions))]
             Err(_) => {
@@ -336,16 +330,16 @@ async fn handle_method(
 }
 
 async fn handle_request(
-    request: Request<Body>,
-    routes: Arc<Routes>,
-) -> Result<Response<Body>, LoxError> {
+    request: Request<Incoming>,
+    routes: &Routes,
+) -> Result<Response<Full<Bytes>>, LoxError> {
     let handler = match routes.route_handlers.get(request.uri().path()) {
         Some(route) => route,
         None => {
             if let Some(handler) = &routes.handler_404 {
-                let mut response = Response::new(Body::empty());
+                let mut response = Response::new(Bytes::new().into());
                 *response.status_mut() = StatusCode::NOT_FOUND;
-                let request = new_request(validate_request!(request)).await?;
+                let request = new_request(request).await?;
                 handle_method(Some(handler), request, &mut response).await?;
                 return Ok(response);
             } else {
@@ -357,9 +351,9 @@ async fn handle_request(
     };
 
     let method = request.method().clone();
-    let request = new_request(validate_request!(request)).await?;
+    let request = new_request(request).await?;
 
-    let mut response = Response::new(Body::empty());
+    let mut response = Response::new(Bytes::new().into());
     match method {
         Method::GET => handle_method(handler.get.as_ref(), request, &mut response).await?,
         Method::POST => handle_method(handler.post.as_ref(), request, &mut response).await?,
@@ -375,28 +369,44 @@ async fn shutdown_signal() {
 }
 
 async fn start_server(addr: Addr, routes: Routes, shutdown_signal: Arc<Coroutine>) -> LoxResult {
-    let routes = Arc::new(routes);
-    let server =
-        hyper::Server::bind(&addr.0).serve(make_service_fn(move |_socket: &AddrStream| {
-            let routes = Arc::clone(&routes);
-            async move {
-                Ok::<_, LoxError>(service_fn(move |request: Request<Body>| {
-                    let routes = Arc::clone(&routes);
-                    async move { handle_request(request, Arc::clone(&routes)).await }
-                }))
-            }
-        }));
-
-    server
-        .with_graceful_shutdown(async {
-            if let Err(err) = shutdown_signal.start([].into()).await {
-                eprintln!("{err}");
-            }
-        })
+    let listener = TcpListener::bind(addr.0)
         .await
         .map_err(LoxError::external)?;
+    let routes = Arc::new(routes);
+    let shutdown_signal = shutdown_signal.start([].into());
 
-    Ok(LoxValue::Nil)
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let tx = Arc::new(Mutex::new(Some(tx)));
+
+    let server = async {
+        loop {
+            let routes = Arc::clone(&routes);
+            let (stream, _) = listener.accept().await.map_err(LoxError::external)?;
+            let tx = Arc::clone(&tx);
+
+            let io = TokioIo::new(stream);
+
+            tokio::task::spawn(async move {
+                if let Err(err) = http1::Builder::new()
+                    .serve_connection(
+                        io,
+                        service_fn(|request| async { handle_request(request, &routes).await }),
+                    )
+                    .await
+                {
+                    if let Some(tx) = tx.lock().unwrap().take() {
+                        let _ = tx.send(LoxError::external(err));
+                    }
+                }
+            });
+        }
+    };
+
+    tokio::select! {
+        r = server => r,
+        r = shutdown_signal => r,
+        e = rx => Err(e.unwrap()),
+    }
 }
 
 /// Returns a module containing the following objects:
@@ -408,6 +418,10 @@ async fn start_server(addr: Addr, routes: Routes, shutdown_signal: Arc<Coroutine
 ///     for the relevant request method.
 /// - `Response`: A class representing an HTTP response from a handler.
 /// - `JsonResponse`: A class representing an HTTP response with a body of JSON.
+/// - `render`: A function that accepts a template path, the incoming request,
+///     and a map or a `Context` object, and returns a response with a rendered
+///     template.
+/// - `Context`: A class created from a map of strings to values.
 pub fn get_module(templates_dir: &str) -> Result<LoxVariable, LoxError> {
     TEMPLATES
         .set(Tera::new(templates_dir).map_err(LoxError::external)?)
@@ -422,7 +436,7 @@ pub fn get_module(templates_dir: &str) -> Result<LoxVariable, LoxError> {
         fn parse_addr(addr);
         fn new_response(body);
         fn new_json_response(body);
-        fn render_template(name, template, context);
+        fn render_template(name, request, context);
         fn new_context(value);
         async fn shutdown_signal();
         async fn start_server(addr, routes, shutdown_signal);

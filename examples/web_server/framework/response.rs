@@ -13,7 +13,6 @@ use rulox::prelude::*;
 use rulox::DynLoxObject;
 use rulox::LoxError;
 use rulox::LoxObject;
-use rulox::LoxResult;
 use rulox::MapKey;
 use rulox::TryFromLoxValue;
 
@@ -86,7 +85,7 @@ impl LoxObject for LoxResponse {
 fn response_from_body_headers<const N: usize>(
     body: String,
     headers: [(&str, &str); N],
-) -> LoxResult {
+) -> Result<LoxResponse, LoxError> {
     let headers: Result<HeaderMap<_>, LoxError> = headers
         .into_iter()
         .map(|(key, value)| {
@@ -96,18 +95,20 @@ fn response_from_body_headers<const N: usize>(
             ))
         })
         .collect();
-    Ok(LoxValue::external(LoxResponse {
+    Ok(LoxResponse {
         status_code: StatusCode::OK,
         body,
         headers: Arc::new(RwLock::new(LoxHeaders(headers?))),
-    }))
+    })
 }
 
-pub fn new_response(body: String) -> LoxResult {
-    response_from_body_headers(body, [("Content-Type", "text/html")])
+pub fn new_response(body: String) -> LoxResponse {
+    response_from_body_headers(body, [("Content-Type", "text/html")]).unwrap()
 }
 
-pub fn new_json_response(body: Arc<RwLock<HashMap<MapKey, LoxValue>>>) -> LoxResult {
+pub fn new_json_response(
+    body: Arc<RwLock<HashMap<MapKey, LoxValue>>>,
+) -> Result<LoxResponse, LoxError> {
     response_from_body_headers(
         Value::Object(hashmap_to_json_map(&body.read().unwrap())?).to_string(),
         [("Content-Type", "application/json")],

@@ -335,7 +335,7 @@ impl LoxValue {
     #[cfg(feature = "async")]
     pub fn as_future(&self) -> Result<LoxFuture, LoxError> {
         if let LoxValue::Future(value) = self {
-            Ok(LoxFuture::new(LoxRc::clone(value)))
+            Ok(LoxFuture(LoxRc::clone(value)))
         } else {
             Err(LoxError::type_error(format!("{self} is not a future")))
         }
@@ -568,9 +568,9 @@ impl LoxValue {
             }
             Self::PrimitiveMethod(func, object) => func(args.with_head((**object).clone())),
             #[cfg(feature = "async")]
-            Self::Coroutine(func) => Ok(LoxValue::Future(Shared::new(
-                func.start(args.check_arity(func.params().len())?).into(),
-            ))),
+            Self::Coroutine(func) => Ok(LoxValue::Future(
+                func.start(args.check_arity(func.params().len())?).0,
+            )),
             Self::Instance(instance) => {
                 if let Some(method) = LoxInstance::get(instance, "()") {
                     method.call(args)

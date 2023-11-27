@@ -1,15 +1,21 @@
+use super::response;
 use super::Error;
 use super::LoxHeaders;
-use super::ValidatedRequest;
 
 use std::collections::HashMap;
 use std::fmt;
-use std::fmt::Debug;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 
+use http_body_util::BodyExt;
+
+use hyper::Request;
+use hyper::body::Body;
 use hyper::body::Bytes;
+use hyper::body::Incoming;
 use hyper::Method;
+use hyper::StatusCode;
 
 use rulox::lox_bindgen;
 use rulox::prelude::*;
@@ -20,14 +26,16 @@ use rulox::LoxObject;
 use rulox::LoxValue;
 use rulox::TryFromLoxValue;
 
+use tokio::runtime::Handle;
+
 #[derive(Clone, Default, TryFromLoxValue)]
 struct LoxParamDict {
     dict: HashMap<Arc<String>, Arc<Vec<Arc<String>>>>,
 }
 
-impl Debug for LoxParamDict {
+impl fmt::Debug for LoxParamDict {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Debug::fmt(&self.dict, f)
+        fmt::Debug::fmt(&self.dict, f)
     }
 }
 
@@ -103,9 +111,9 @@ impl LoxObject for LoxParamDict {
 #[derive(Clone)]
 struct LoxParamView(Arc<Vec<Arc<String>>>);
 
-impl Debug for LoxParamView {
+impl fmt::Debug for LoxParamView {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Debug::fmt(&self.0, f)
+        fmt::Debug::fmt(&self.0, f)
     }
 }
 
@@ -152,14 +160,29 @@ impl TryFrom<hyper::Uri> for Uri {
     }
 }
 
+enum RequestBody {
+    Bytes(Bytes),
+    Incoming(Option<Incoming>),
+}
+
+impl fmt::Debug for RequestBody {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let RequestBody::Bytes(bytes) = self {
+            write!(f, "{bytes:?}")
+        } else {
+            f.write_str("<incoming>")
+        }
+    }
+}
+
 pub struct LoxRequest {
     headers: Arc<RwLock<LoxHeaders>>,
-    body: Bytes,
+    body: Mutex<RequestBody>,
     uri: Uri,
     method: Method,
 }
 
-impl Debug for LoxRequest {
+impl fmt::Debug for LoxRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Request")
             .field("headers", &self.headers.read().unwrap())
@@ -186,7 +209,29 @@ impl LoxObject for LoxRequest {
     ) -> Result<LoxValue, Option<LoxError>> {
         match key {
             "headers" => Ok(LoxValue::External(self.headers.clone())),
-            "body" => Ok(self.body.clone().into()),
+            "body" => {
+                let mut body = self.body.lock().unwrap();
+                match &mut *body {
+                    RequestBody::Bytes(bytes) => Ok(bytes.clone().into()),
+                    RequestBody::Incoming(incoming) => {
+                        let incoming = incoming.as_mut().unwrap();
+                        let upper = incoming.size_hint().upper().unwrap_or(u64::MAX);
+                        if upper > 1024 * 64 {
+                            let mut resp = response::new_response("Body too big".to_string());
+                            resp.status_code = StatusCode::PAYLOAD_TOO_LARGE;
+                            Err(Some(LoxError::value(LoxValue::external(resp))))
+                        } else {
+                            let handle = Handle::current();
+                            let bytes = handle
+                                .block_on(incoming.collect())
+                                .map_err(LoxError::external)?
+                                .to_bytes();
+                            *body = RequestBody::Bytes(bytes.clone());
+                            Ok(bytes.into())
+                        }
+                    }
+                }
+            }
             "path" => Ok(self.uri.path.to_owned().into()),
             "GET" => Ok(LoxValue::external(
                 self.uri.query.clone().unwrap_or_default(),
@@ -208,7 +253,7 @@ impl LoxObject for LoxRequest {
                 Ok(())
             }
             "body" => {
-                self.body = value.try_into()?;
+                self.body = RequestBody::Bytes(value.try_into()?).into();
                 Ok(())
             }
             "path" => {
@@ -239,14 +284,12 @@ impl LoxObject for LoxRequest {
     }
 }
 
-pub(super) async fn new_request(value: ValidatedRequest) -> Result<LoxValue, LoxError> {
-    let (parts, body) = value.0.into_parts();
+pub(super) async fn new_request(value: Request<Incoming>) -> Result<LoxValue, LoxError> {
+    let (parts, body) = value.into_parts();
 
     let request = LoxRequest {
         headers: Arc::new(RwLock::new(LoxHeaders(parts.headers))),
-        body: hyper::body::to_bytes(body)
-            .await
-            .map_err(LoxError::external)?,
+        body: Mutex::new(RequestBody::Incoming(Some(body))),
         uri: parts.uri.try_into().map_err(LoxError::external)?,
         method: parts.method,
     };

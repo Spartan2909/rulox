@@ -41,11 +41,18 @@ impl Coroutine {
         &self.params
     }
 
-    pub fn start(&self, args: LoxArgs) -> LoxFutureInner {
-        LoxFutureInner {
-            handle: (self.fun)(args),
-            done: false,
-        }
+    /// Creates a future that executes `self`.
+    /// 
+    /// Note that the future returned by this function will not do anything
+    /// unless `await`ed.
+    pub fn start(&self, args: LoxArgs) -> LoxFuture {
+        LoxFuture(Shared::new(
+            LoxFutureInner {
+                handle: (self.fun)(args),
+                done: false,
+            }
+            .into(),
+        ))
     }
 }
 
@@ -129,13 +136,8 @@ impl Future for LoxFutureInner {
     }
 }
 
-pub struct LoxFuture(Shared<LoxFutureInner>);
-
-impl LoxFuture {
-    pub(super) fn new(fut: Shared<LoxFutureInner>) -> LoxFuture {
-        LoxFuture(fut)
-    }
-}
+#[derive(Debug, Clone)]
+pub struct LoxFuture(pub(super) Shared<LoxFutureInner>);
 
 impl Future for LoxFuture {
     type Output = LoxResult;

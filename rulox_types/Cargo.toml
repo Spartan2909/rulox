@@ -26,3 +26,6 @@ bytes = "1"
 sync = []
 async = ["sync"]
 serialise = ["dep:serde", "dep:serde_json", "bytes/serde"]
+
+[lints]
+workspace = true

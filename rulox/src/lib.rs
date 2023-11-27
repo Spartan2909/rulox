@@ -304,10 +304,12 @@ macro_rules! rust_bindgen {
 /// and can be used instead.
 ///
 /// This macro requires that the input type implement both
-/// [`LoxObject`][rulox_types::LoxObject] and [`Clone`].
+/// [`LoxObject`] and [`Clone`].
 pub use rulox_macro::TryFromLoxValue;
 
+#[cfg(feature = "async")]
 pub use rulox_types::async_types::Coroutine;
+#[cfg(feature = "async")]
 pub use rulox_types::async_types::LoxFuture;
 pub use rulox_types::Downcast;
 pub use rulox_types::DynLoxObject;

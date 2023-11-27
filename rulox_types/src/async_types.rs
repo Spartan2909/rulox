@@ -6,11 +6,9 @@ use crate::LoxResult;
 use crate::Shared;
 
 use std::fmt;
-use std::fmt::Debug;
 use std::future::Future;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::ops::DerefMut;
 use std::pin::Pin;
 use std::ptr;
 use std::task::Context;
@@ -42,7 +40,7 @@ impl Coroutine {
     }
 
     /// Creates a future that executes `self`.
-    /// 
+    ///
     /// Note that the future returned by this function will not do anything
     /// unless `await`ed.
     pub fn start(&self, args: LoxArgs) -> LoxFuture {
@@ -56,11 +54,11 @@ impl Coroutine {
     }
 }
 
-impl Debug for Coroutine {
+impl fmt::Debug for Coroutine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Coroutine")
             .field("params", &self.params)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -68,7 +66,7 @@ impl PartialEq for Coroutine {
     fn eq(&self, other: &Self) -> bool {
         let f1: *const _ = self.fun.as_ref();
         let f2: *const _ = other.fun.as_ref();
-        ptr::eq(f1 as *const (), f2 as *const ())
+        ptr::eq(f1.cast::<()>(), f2.cast())
     }
 }
 
@@ -87,16 +85,16 @@ pub struct LoxFutureInner {
 }
 
 impl LoxFutureInner {
-    pub(super) fn done(&self) -> bool {
+    pub(super) const fn done(&self) -> bool {
         self.done
     }
 }
 
-impl Debug for LoxFutureInner {
+impl fmt::Debug for LoxFutureInner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LoxFutureInner")
             .field("done", &self.done)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -104,7 +102,7 @@ impl PartialEq for LoxFutureInner {
     fn eq(&self, other: &Self) -> bool {
         let h1: *const _ = self.handle.as_ref();
         let h2: *const _ = other.handle.as_ref();
-        ptr::eq(h1 as *const (), h2 as *const ())
+        ptr::eq(h1.cast::<()>(), h2.cast())
     }
 }
 
@@ -125,7 +123,7 @@ impl Future for LoxFutureInner {
         // SAFETY: `self` is not moved out of.
         let this = unsafe { self.get_unchecked_mut() };
         // SAFETY: `self.handle` will not be moved as `self` is pinned.
-        let handle = unsafe { Pin::new_unchecked(this.handle.deref_mut()) };
+        let handle = unsafe { Pin::new_unchecked(&mut *this.handle) };
         match Future::poll(handle, cx) {
             Poll::Ready(result) => {
                 this.done = true;
@@ -137,13 +135,14 @@ impl Future for LoxFutureInner {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serialise", derive(Serialize))]
 pub struct LoxFuture(pub(super) Shared<LoxFutureInner>);
 
 impl Future for LoxFuture {
     type Output = LoxResult;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Future::poll(Pin::new(write(&self.0).deref_mut()), cx)
+        Future::poll(Pin::new(&mut *write(&self.0)), cx)
     }
 }
 
@@ -151,6 +150,6 @@ impl Future for &LoxFuture {
     type Output = LoxResult;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Future::poll(Pin::new(write(&self.0).deref_mut()), cx)
+        Future::poll(Pin::new(&mut *write(&self.0)), cx)
     }
 }

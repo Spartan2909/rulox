@@ -1,3 +1,6 @@
+#![allow(clippy::redundant_pub_crate)]
+#![allow(clippy::unnecessary_wraps)]
+
 use crate::functions::LoxArgs;
 use crate::shared::read;
 use crate::DynLoxObject;
@@ -138,10 +141,9 @@ pub(super) fn set_default(mut args: LoxArgs) -> LoxResult {
                 Shared<Vec<LoxValue>>,
                 Arr,
                 fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
-                    match read(&self.0).get(usize::try_from(key)?) {
-                        Some(value) => Ok(value.clone()),
-                        None => self.1.call([].into()),
-                    }
+                    read(&self.0)
+                        .get(usize::try_from(key)?)
+                        .map_or_else(|| self.1.call([].into()), |value| Ok(value.clone()))
                 }
             );
 
@@ -156,10 +158,9 @@ pub(super) fn set_default(mut args: LoxArgs) -> LoxResult {
                 Shared<HashMap<MapKey, LoxValue>>,
                 Map,
                 fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
-                    match read(&self.0).get(&MapKey::verify_key(key.clone())?) {
-                        Some(value) => Ok(value.clone()),
-                        None => self.1.call([].into()),
-                    }
+                    read(&self.0)
+                        .get(&MapKey::verify_key(key)?)
+                        .map_or_else(|| self.1.call([].into()), |value| Ok(value.clone()))
                 }
             );
 

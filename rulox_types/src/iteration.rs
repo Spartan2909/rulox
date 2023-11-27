@@ -29,7 +29,7 @@ fn next_code_point<I: Iterator<Item = u8>>(bytes: &mut I) -> Option<u32> {
     // Decode UTF-8
     let x = bytes.next()?;
     if x < 128 {
-        return Some(x as u32);
+        return Some(u32::from(x));
     }
 
     // Multibyte case follows
@@ -41,7 +41,7 @@ fn next_code_point<I: Iterator<Item = u8>>(bytes: &mut I) -> Option<u32> {
         // [[x y z] w] case
         // 5th bit in 0xE0 .. 0xEF is always clear, so `init` is still valid
         let z = bytes.next().unwrap();
-        let y_z = utf8_acc_cont_byte((y & CONT_MASK) as u32, z);
+        let y_z = utf8_acc_cont_byte(u32::from(y & CONT_MASK), z);
         ch = init << 12 | y_z;
         if x >= 0xF0 {
             // [x y z w] case

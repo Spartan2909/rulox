@@ -66,11 +66,11 @@ impl LoxObject for LoxResponse {
     ) -> Result<(), Option<LoxError>> {
         match key {
             "status_code" => {
-                self.status_code = f64_to_status_code(value.as_num()?)?;
+                self.status_code = f64_to_status_code(value.expect_num()?)?;
                 Ok(())
             }
             "body" => {
-                self.body = value.as_str()?.to_string();
+                self.body = value.expect_str()?.to_string();
                 Ok(())
             }
             "headers" => {

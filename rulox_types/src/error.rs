@@ -120,7 +120,7 @@ impl LoxError {
         }
     }
 
-    pub(super) fn not_implemented<T: ToString>(method_name: &str, kind: T) -> LoxError {
+    pub(super) fn not_implemented<T: ToString>(method_name: &str, kind: &T) -> LoxError {
         LoxError::type_error(format!(
             "The method '{method_name}' is not implemented for '{}'",
             kind.to_string()
@@ -141,12 +141,13 @@ impl LoxError {
         self.trace.push_front(value);
     }
 
-    #[doc(hidden)]
+    #[doc(hidden)] // Not public API.
     pub fn push_trace_front(&mut self, value: &'static str) {
         self.trace.push_front(value);
     }
 
     #[doc(hidden)] // Not public API.
+    #[must_use]
     pub fn with_trace(mut self, trace: Vec<&'static str>) -> LoxError {
         self.trace = trace.into();
         self
@@ -225,14 +226,14 @@ enum LoxErrorInner {
 impl Display for LoxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "traceback (most recent call last):")?;
-        for &fun in self.trace.iter() {
+        for &fun in &self.trace {
             writeln!(f, "in '{fun}'")?;
         }
         writeln!(f)?;
 
         match &self.inner {
             LoxErrorInner::TypeError(message) => {
-                write!(f, "{}", message)
+                write!(f, "{message}")
             }
             LoxErrorInner::OverflowError { value, target_type } => {
                 write!(

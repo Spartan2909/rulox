@@ -6,15 +6,14 @@ use crate::LoxRc;
 use crate::LoxValue;
 
 use std::fmt;
-use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 
 #[cfg(feature = "serialise")]
 use serde::Serialize;
 
-pub(super) fn hash_ptr<T: ?Sized, H: Hasher>(ptr: *const T, state: &mut H) {
-    (ptr as *const ()).hash(state)
+pub fn hash_ptr<T: ?Sized, H: Hasher>(ptr: *const T, state: &mut H) {
+    (ptr.cast::<()>()).hash(state);
 }
 
 impl Hash for LoxValue {
@@ -30,9 +29,9 @@ impl Hash for LoxValue {
                 let sign: i8 = if bits >> 63 == 0 { 1 } else { -1 };
                 let mut exponent = ((bits >> 52) & 0x7ff) as i16;
                 let mantissa = if exponent == 0 {
-                    (bits & 0xfffffffffffff) << 1
+                    (bits & 0x000f_ffff_ffff_ffff) << 1
                 } else {
-                    (bits & 0xfffffffffffff) | 0x10000000000000
+                    (bits & 0x000f_ffff_ffff_ffff) | 0x0010_0000_0000_0000
                 };
                 exponent -= 1023 + 52;
                 (mantissa, exponent, sign).hash(state);
@@ -49,7 +48,7 @@ impl Hash for LoxValue {
             #[cfg(feature = "async")]
             Self::Coroutine(func) => func.hash(state),
             #[cfg(feature = "async")]
-            Self::Future(fut) => read(fut).hash(state),
+            Self::Future(fut) => read(&fut.0).hash(state),
             Self::Nil => {}
             Self::External(external) => LoxRc::as_ptr(external).hash(state),
             Self::Undefined(_) => unreachable!(),
@@ -93,6 +92,10 @@ pub struct MapKey(LoxValue);
 
 impl MapKey {
     /// Creates a [`MapKey`] from a [`LoxValue`] if it is a valid key.
+    ///
+    /// ## Errors
+    /// Returns an error if `self` is not a boolean, number, or string, or if
+    /// `self` is `NaN`.
     pub fn verify_key(key: LoxValue) -> Result<MapKey, LoxError> {
         match key {
             LoxValue::Num(n) if n.is_nan() => Err(LoxError::invalid_key(key)),
@@ -107,7 +110,7 @@ impl MapKey {
     }
 
     /// Borrows the [`LoxValue`] in `self`.
-    pub fn as_inner(&self) -> &LoxValue {
+    pub const fn as_inner(&self) -> &LoxValue {
         &self.0
     }
 }
@@ -126,10 +129,9 @@ impl From<MapKey> for LoxValue {
     }
 }
 
-impl Debug for MapKey {
-    #[inline(always)]
+impl fmt::Debug for MapKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Debug::fmt(&self.0, f)
+        fmt::Debug::fmt(&self.0, f)
     }
 }
 

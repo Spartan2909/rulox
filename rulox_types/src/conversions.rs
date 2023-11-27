@@ -1,3 +1,5 @@
+#![allow(clippy::implicit_hasher)]
+
 use crate::error::LoxError;
 use crate::interop::LoxObject;
 use crate::shared::read;
@@ -37,7 +39,7 @@ impl From<Vec<char>> for LoxValue {
 
 impl From<String> for LoxValue {
     fn from(value: String) -> Self {
-        Self::from(Vec::from_iter(value.chars()))
+        Self::Str((value.chars()).collect::<String>().into())
     }
 }
 
@@ -167,7 +169,7 @@ impl TryFrom<LoxValue> for Shared<HashMap<MapKey, LoxValue>> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.as_map()
+        value.expect_map().map(LoxRc::clone)
     }
 }
 
@@ -175,7 +177,7 @@ impl TryFrom<LoxValue> for HashMap<MapKey, LoxValue> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.as_map().map(|value| read(&value).clone())
+        value.expect_map().map(|value| read(value).clone())
     }
 }
 
@@ -183,7 +185,7 @@ impl TryFrom<LoxValue> for Bytes {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.as_bytes()
+        value.expect_bytes().map(Clone::clone)
     }
 }
 

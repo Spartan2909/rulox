@@ -63,7 +63,7 @@ impl Debug for LoxFn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LoxFn")
             .field("params", &self.params)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -71,7 +71,7 @@ impl PartialEq for LoxFn {
     fn eq(&self, other: &Self) -> bool {
         let ptr1: *const _ = self.fun.as_ref();
         let ptr2: *const _ = other.fun.as_ref();
-        ptr::eq(ptr1 as *const (), ptr2 as *const ()) && self.params == other.params
+        ptr::eq(ptr1.cast::<()>(), ptr2.cast::<()>()) && self.params == other.params
     }
 }
 
@@ -99,6 +99,7 @@ impl LoxMethod {
         }
     }
 
+    #[cfg_attr(not(feature = "async"), allow(clippy::unnecessary_wraps))]
     pub(super) fn get_sync(self) -> Option<LoxRc<LoxFn>> {
         match self {
             LoxMethod::Sync(fun) => Some(fun),
@@ -112,7 +113,7 @@ impl LoxMethod {
         match self {
             LoxMethod::Sync(fun) => (fun.fun)(args),
             #[cfg(feature = "async")]
-            LoxMethod::Async(fun) => Ok(LoxValue::Future(fun.start(args).0)),
+            LoxMethod::Async(fun) => Ok(LoxValue::Future(fun.start(args))),
         }
     }
 }
@@ -197,18 +198,23 @@ impl LoxArgs {
 
     /// Gets the `index`th element of `self`, if it exists.
     pub fn get(&self, index: usize) -> Option<&LoxValue> {
-        if let Some(head) = &self.head {
-            if index == 0 {
-                Some(head)
-            } else {
-                self.main.get(index - 1)
-            }
-        } else {
-            self.main.get(index)
-        }
+        self.head.as_ref().map_or_else(
+            || self.main.get(index),
+            |head| {
+                if index == 0 {
+                    Some(head)
+                } else {
+                    self.main.get(index - 1)
+                }
+            },
+        )
     }
 
     /// Attempts to extract `self` into the given tuple.
+    ///
+    /// ## Errors
+    /// Errors if the types of the values in `self` do not match those in the
+    /// target.
     ///
     /// ## Examples
     /// ```
@@ -266,6 +272,7 @@ pub trait ConcreteLoxArgs: Sealed + Sized {
     /// Attempts to extract `Self` from the given `args`.
     ///
     /// See [`LoxArgs::extract`] for more details.
+    #[allow(clippy::missing_errors_doc)]
     fn extract_from_args(args: LoxArgs) -> Result<Self, LoxError>;
 }
 
@@ -291,15 +298,15 @@ macro_rules! impl_concrete_lox_args {
     };
     ( @ $( $ty:ident )* ) => {
         impl<$( $ty: TryFrom<LoxValue>, )*> Sealed for ( $( $ty, )* )
-            where (): Eq, $( LoxError: From<<$ty as TryFrom<LoxValue>>::Error> ),* {}
+            where $( LoxError: From<<$ty as TryFrom<LoxValue>>::Error> ),* {}
 
         impl<$( $ty: TryFrom<LoxValue>, )*> ConcreteLoxArgs for ( $( $ty, )* )
-            where (): Eq, $( LoxError: From<<$ty as TryFrom<LoxValue>>::Error> ),*
+            where $( LoxError: From<<$ty as TryFrom<LoxValue>>::Error> ),*
         {
             fn extract_from_args(mut __args: LoxArgs) -> Result<Self, LoxError> {
+                const __COUNT: usize = count!( $( $ty )* );
                 let __len = __args.main.len();
                 let mut __drain = __args.drain();
-                const __COUNT: usize = count!( $( $ty )* );
                 Ok(( $(
                     $ty::try_from(
                         __drain

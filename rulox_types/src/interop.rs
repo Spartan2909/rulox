@@ -1,6 +1,5 @@
 use crate::error::LoxError;
 use crate::private::Sealed;
-use crate::shared;
 use crate::shared::read;
 use crate::shared::Shared;
 use crate::LoxArgs;
@@ -12,7 +11,6 @@ use std::any::Any;
 use std::any::TypeId;
 use std::error::Error;
 use std::fmt::Debug;
-use std::ops::Deref;
 
 use castaway::cast;
 
@@ -35,7 +33,7 @@ impl<T: Into<LoxValue>> ToLoxResult for T {
 #[cfg(feature = "sync")]
 impl<T: Into<LoxValue>, E: Error + Send + Sync + 'static> ToLoxResult for Result<T, E> {
     fn to_lox_result(self) -> LoxResult {
-        self.map(|value| value.into()).map_err(|err| {
+        self.map(Into::into).map_err(|err| {
             if cast!(&err, &LoxError).is_ok() {
                 cast!(err, LoxError).unwrap()
             } else {
@@ -48,9 +46,9 @@ impl<T: Into<LoxValue>, E: Error + Send + Sync + 'static> ToLoxResult for Result
 #[cfg(not(feature = "sync"))]
 impl<T: Into<LoxValue>, E: Error + 'static> ToLoxResult for Result<T, E> {
     fn to_lox_result(self) -> LoxResult {
-        self.map(|value| value.into()).map_err(|err| {
-            if let Ok(lox_error) = cast!(&err, &LoxError) {
-                lox_error.clone()
+        self.map(Into::into).map_err(|err| {
+            if cast!(&err, &LoxError).is_ok() {
+                cast!(err, LoxError).unwrap()
             } else {
                 LoxError::external(err)
             }
@@ -66,7 +64,12 @@ pub type DynLoxObject = dyn LoxObject + Send + Sync + 'static;
 #[cfg(not(feature = "sync"))]
 pub type DynLoxObject = dyn LoxObject + 'static;
 
+/// A trait for getting the name of a type from a reference.
 pub trait Named {
+    /// A programmer-friendly name for the type.
+    ///
+    /// Where an implementation of [`LoxObject`] exists, this function should be
+    /// consistent with [`LoxObject::type_name`].
     fn type_name_of_val(&self) -> String;
 }
 
@@ -86,11 +89,13 @@ pub trait LoxObject: Any + Debug + Named {
     /// A programmer-friendly representation of `self` for debugging and error
     /// messages.
     fn representation(&self) -> String {
-        format!("{:#?}", self)
+        format!("{self:#?}")
     }
 
     /// Gets the field of `self` corresponding to `key`.
     ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     /// This method should return `Err(None)` if the value is not found.
     fn get(
         &self,
@@ -103,6 +108,8 @@ pub trait LoxObject: Any + Debug + Named {
 
     /// Sets the field of `self` corresponding to `key` to the given value.
     ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     /// If the key does not exist, `Err(None)` should be returned.
     fn set(
         &mut self,
@@ -117,6 +124,9 @@ pub trait LoxObject: Any + Debug + Named {
     /// Gets the element of `self` corresponding to `key`.
     ///
     /// Intended for objects that function as arrays or maps.
+    ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
         drop(key);
         Err(LoxError::type_error(format!(
@@ -128,6 +138,9 @@ pub trait LoxObject: Any + Debug + Named {
     /// Sets the element of `self` corresponding to `key` to `value`.
     ///
     /// Intended for objects that function as arrays or maps.
+    ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     fn index_set(&mut self, key: LoxValue, value: LoxValue) -> Result<(), LoxError> {
         let (_, _) = (key, value);
         Err(LoxError::type_error(format!(
@@ -137,56 +150,77 @@ pub trait LoxObject: Any + Debug + Named {
     }
 
     /// Add `self` to `rhs`.
+    ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     fn add(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
-        Err(LoxError::not_implemented("add", self.type_name_of_val()))
+        Err(LoxError::not_implemented("add", &self.type_name_of_val()))
     }
 
     /// Subtract `rhs` from `self`.
+    ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     fn sub(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
-        Err(LoxError::not_implemented("sub", self.type_name_of_val()))
+        Err(LoxError::not_implemented("sub", &self.type_name_of_val()))
     }
 
     /// Multiply `self` by `rhs`.
+    ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     fn mul(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
-        Err(LoxError::not_implemented("mul", self.type_name_of_val()))
+        Err(LoxError::not_implemented("mul", &self.type_name_of_val()))
     }
 
     /// Divide `self` by `rhs`.
+    ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     fn div(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
-        Err(LoxError::not_implemented("div", self.type_name_of_val()))
+        Err(LoxError::not_implemented("div", &self.type_name_of_val()))
     }
 
     /// Take the remainder when `self` is divided by `rhs`.
+    ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     fn rem(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
-        Err(LoxError::not_implemented("rem", self.type_name_of_val()))
+        Err(LoxError::not_implemented("rem", &self.type_name_of_val()))
     }
 
     /// Negate `self`.
+    ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     fn neg(&self) -> LoxResult {
-        Err(LoxError::not_implemented("neg", self.type_name_of_val()))
+        Err(LoxError::not_implemented("neg", &self.type_name_of_val()))
     }
 
     /// Call `self` like a method with the given arguments.
+    ///
+    /// ## Errors
+    /// Returns an error if this functionality is not implemented for this type.
     fn call(&self, args: LoxArgs) -> LoxResult {
         let _ = args;
-        Err(LoxError::not_implemented("call", self.type_name_of_val()))
+        Err(LoxError::not_implemented("call", &self.type_name_of_val()))
     }
 }
 
 fn unsync_is<T: LoxObject>(value: &Shared<dyn LoxObject>) -> bool {
     let t = TypeId::of::<T>();
-    let concrete = (*read(value).deref()).type_id();
+    let concrete = (*read(value)).type_id();
     t == concrete
 }
 
 fn sync_is<T: LoxObject>(value: &Shared<dyn LoxObject + Send + Sync>) -> bool {
     let t = TypeId::of::<T>();
-    let concrete = (*read(value).deref()).type_id();
+    let concrete = (*read(value)).type_id();
     t == concrete
 }
 
@@ -194,8 +228,10 @@ fn sync_is<T: LoxObject>(value: &Shared<dyn LoxObject + Send + Sync>) -> bool {
 ///
 /// This trait is sealed, and cannot be implemented for foreign types.
 pub trait Downcast: Sized + Sealed {
-    /// Attempts to downcast `self` to a concrete type, returning `Err(self)`
-    /// if the cast fails.
+    /// Attempts to downcast `self` to a concrete typ.
+    ///
+    /// ## Errors
+    /// Returns `Err(self)` if the conversion failed.
     fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Self>;
 }
 
@@ -207,7 +243,7 @@ impl Downcast for Shared<dyn LoxObject> {
             let ptr = LoxRc::into_raw(self);
             // SAFETY: The `TypeId`s are the same, therefore `self` is an
             // instance of `T`.
-            Ok(unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) })
+            Ok(unsafe { Shared::from_raw(ptr.cast()) })
         } else {
             todo!()
         }
@@ -222,7 +258,7 @@ impl Downcast for Shared<dyn LoxObject + Send + Sync> {
             let ptr = LoxRc::into_raw(self);
             // SAFETY: The `TypeId`s are the same, therefore `self` is an
             // instance of `T`.
-            Ok(unsafe { Shared::from_raw(ptr as *const shared::Inner<T>) })
+            Ok(unsafe { Shared::from_raw(ptr.cast()) })
         } else {
             todo!()
         }

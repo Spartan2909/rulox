@@ -69,22 +69,22 @@ impl TryFrom<LoxValue> for LoxHeaders {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        if value.clone().as_external().is_ok() {
+        if value.clone().expect_external().is_ok() {
             let this: Arc<RwLock<LoxHeaders>> = value.try_into()?;
             let this = this.read().unwrap().clone();
             Ok(this)
         } else {
             let headers: Result<_, LoxError> = value
-                .as_map()?
+                .expect_map()?
                 .read()
                 .unwrap()
                 .iter()
                 .map(|(name, value)| {
                     Ok((
-                        HeaderName::try_from(name.clone().into_inner().as_str()?.to_string())
+                        HeaderName::try_from(name.clone().into_inner().expect_str()?.to_string())
                             .map_err(LoxError::external)?,
                         value
-                            .as_str()?
+                            .expect_str()?
                             .to_string()
                             .try_into()
                             .map_err(LoxError::external)?,
@@ -107,7 +107,7 @@ impl LoxObject for LoxHeaders {
     fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
         Ok(LoxValue::Str(Arc::new(
             self.0
-                .get(&key.as_str()?.to_lowercase())
+                .get(&key.expect_str()?.to_lowercase())
                 .ok_or(LoxError::invalid_key(key))?
                 .to_str()
                 .map_err(LoxError::external)?
@@ -117,9 +117,9 @@ impl LoxObject for LoxHeaders {
 
     fn index_set(&mut self, key: LoxValue, value: LoxValue) -> Result<(), LoxError> {
         self.0.insert(
-            HeaderName::try_from(key.as_str()?.as_str()).map_err(LoxError::external)?,
+            HeaderName::try_from(key.expect_str()?.as_str()).map_err(LoxError::external)?,
             value
-                .as_str()?
+                .expect_str()?
                 .to_string()
                 .try_into()
                 .map_err(LoxError::external)?,
@@ -134,7 +134,7 @@ enum Error {
     MethodAlreadySet(&'static str),
     InvalidGetParam(String),
     InvalidGetParams(LoxValue),
-    TypeError { expected: String, found: String },
+    IncorrectType { expected: String, found: String },
 }
 
 impl Display for Error {
@@ -144,7 +144,7 @@ impl Display for Error {
             Error::MethodAlreadySet(method) => write!(f, "request method '{method}' already set"),
             Error::InvalidGetParam(param) => write!(f, "invalid GET parameter: '{param}'"),
             Error::InvalidGetParams(params) => write!(f, "invalid GET parameters: {params}"),
-            Error::TypeError { expected, found } => {
+            Error::IncorrectType { expected, found } => {
                 write!(f, "type error: expected '{expected}', found '{found}'")
             }
         }

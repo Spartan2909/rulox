@@ -125,7 +125,7 @@ impl LoxObject for LoxContext {
                                     .map(|(key, value)| {
                                         Ok((
                                             MapKey::verify_key(key.to_owned().into())?,
-                                            value.into(),
+                                            value.try_into()?,
                                         ))
                                     })
                                     .collect();
@@ -133,16 +133,16 @@ impl LoxObject for LoxContext {
                                 let value = fun
                                     .call(
                                         [
-                                            input.into(),
+                                            input.try_into().map_err(tera::Error::msg)?,
                                             LoxValue::Map(Arc::new(
-                                                args.map_err(|err| tera::Error::msg(err))?.into(),
+                                                args.map_err(tera::Error::msg)?.into(),
                                             )),
                                         ]
                                         .into(),
                                     )
-                                    .map_err(|err| tera::Error::msg(err))?;
+                                    .map_err(tera::Error::msg)?;
 
-                                value.try_into().map_err(|err| tera::Error::msg(err))
+                                value.try_into().map_err(tera::Error::msg)
                             },
                         )),
                     );
@@ -158,18 +158,23 @@ impl LoxObject for LoxContext {
                             move |input: Option<&Value>,
                                   args: &[Value]|
                                   -> Result<bool, tera::Error> {
+                                let input: Option<LoxValue> = input
+                                    .map(TryInto::try_into)
+                                    .transpose()
+                                    .map_err(tera::Error::msg)?;
+                                let args = [
+                                    input.unwrap_or(LoxValue::Nil),
+                                    LoxValue::arr(
+                                        args.iter()
+                                            .map(|value| {
+                                                LoxValue::try_from(value).map_err(tera::Error::msg)
+                                            })
+                                            .collect::<Result<Vec<_>, _>>()?,
+                                    ),
+                                ]
+                                .into();
                                 function
-                                    .call(
-                                        [
-                                            input.map(Into::into).unwrap_or(LoxValue::Nil),
-                                            LoxValue::arr(
-                                                args.into_iter()
-                                                    .map(|value| value.into())
-                                                    .collect(),
-                                            ),
-                                        ]
-                                        .into(),
-                                    )
+                                    .call(args)
                                     .map(|value| value.is_truthy())
                                     .map_err(tera::Error::msg)
                             },
@@ -185,21 +190,21 @@ impl LoxObject for LoxContext {
                         name,
                         LoxFunction(Box::new(
                             move |args: &HashMap<String, Value>| -> Result<Value, tera::Error> {
+                                let args = [LoxValue::Map(Arc::new(RwLock::new(
+                                    args.iter()
+                                        .map(|(key, value)| {
+                                            Ok((
+                                                MapKey::verify_key(key.to_owned().into()).unwrap(),
+                                                LoxValue::try_from(value)
+                                                    .map_err(tera::Error::msg)?,
+                                            ))
+                                        })
+                                        .collect::<Result<HashMap<MapKey, LoxValue>, tera::Error>>(
+                                        )?,
+                                )))]
+                                .into();
                                 function
-                                    .call(
-                                        [LoxValue::Map(Arc::new(RwLock::new(
-                                            args.iter()
-                                                .map(|(key, value)| {
-                                                    (
-                                                        MapKey::verify_key(key.to_owned().into())
-                                                            .unwrap(),
-                                                        value.into(),
-                                                    )
-                                                })
-                                                .collect(),
-                                        )))]
-                                        .into(),
-                                    )
+                                    .call(args)
                                     .and_then(|value| value.try_into())
                                     .map_err(tera::Error::msg)
                             },
@@ -217,7 +222,7 @@ impl LoxObject for LoxContext {
 fn into_context(value: LoxValue) -> Result<Arc<RwLock<LoxContext>>, LoxError> {
     if let LoxValue::External(external) = value {
         external.downcast::<LoxContext>().map_err(|external| {
-            Error::TypeError {
+            Error::IncorrectType {
                 expected: LoxContext::type_name(),
                 found: external.read().unwrap().representation(),
             }
@@ -226,7 +231,7 @@ fn into_context(value: LoxValue) -> Result<Arc<RwLock<LoxContext>>, LoxError> {
     } else {
         Ok(Arc::new(
             LoxContext {
-                context: hashmap_to_json_map(&value.as_map()?.read().unwrap())?,
+                context: hashmap_to_json_map(&value.expect_map()?.read().unwrap())?,
                 filters: HashMap::new(),
                 tests: HashMap::new(),
                 functions: HashMap::new(),

@@ -18,6 +18,7 @@ use serde_json::Map;
 use serde_json::Number;
 use serde_json::Value;
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 pub(super) fn primitive_method<S: Serializer>(
     _func: &fn(LoxArgs) -> LoxResult,
     _value: &LoxValue,
@@ -33,41 +34,53 @@ pub(super) fn external<S: Serializer>(
     LoxValue::Str(LoxRc::new("<external object>".to_string())).serialize(serializer)
 }
 
-impl From<&Value> for LoxValue {
-    fn from(value: &Value) -> Self {
+impl TryFrom<&Value> for LoxValue {
+    type Error = LoxError;
+
+    fn try_from(value: &Value) -> Result<Self, LoxError> {
         match value {
-            Value::Null => LoxValue::Nil,
-            Value::Bool(b) => LoxValue::Bool(*b),
-            Value::Number(num) => LoxValue::Num(num.as_f64().unwrap()),
-            Value::String(string) => LoxValue::Str(LoxRc::new(string.clone())),
-            Value::Array(arr) => LoxValue::Arr(LoxRc::new(Inner::new(
-                arr.into_iter().map(|value| value.into()).collect(),
+            Value::Null => Ok(LoxValue::Nil),
+            Value::Bool(b) => Ok(LoxValue::Bool(*b)),
+            Value::Number(num) => Ok(LoxValue::Num(num.as_f64().unwrap())),
+            Value::String(string) => Ok(LoxValue::Str(LoxRc::new(string.clone()))),
+            Value::Array(arr) => Ok(LoxValue::Arr(LoxRc::new(Inner::new(
+                arr.iter()
+                    .map(TryInto::<LoxValue>::try_into)
+                    .collect::<Result<Vec<_>, _>>()?,
+            )))),
+            Value::Object(obj) => Ok(LoxValue::Map(LoxRc::new(
+                obj.into_iter()
+                    .map(|(key, value)| {
+                        Ok((
+                            MapKey::verify_key(key.to_string().into()).unwrap(),
+                            value.try_into()?,
+                        ))
+                    })
+                    .collect::<Result<HashMap<MapKey, LoxValue>, LoxError>>()?
+                    .into(),
             ))),
-            Value::Object(obj) => LoxValue::Map(LoxRc::new(
-                HashMap::from_iter(obj.into_iter().map(|(key, value)| {
-                    (
-                        MapKey::verify_key(key.to_string().into()).unwrap(),
-                        value.into(),
-                    )
-                }))
-                .into(),
-            )),
         }
     }
 }
 
-impl From<Value> for LoxValue {
-    fn from(value: Value) -> Self {
-        (&value).into()
+impl TryFrom<Value> for LoxValue {
+    type Error = LoxError;
+
+    fn try_from(value: Value) -> Result<Self, LoxError> {
+        (&value).try_into()
     }
 }
 
-/// Attempts to convert a Lox hashmap to a JSON map.
+/// Converts a Lox hashmap to a JSON map.
+///
+/// ## Errors
+/// Returns an error if any of the keys are not strings or if the values are not
+/// valid JSON values.
 pub fn hashmap_to_json_map(
     map: &HashMap<MapKey, LoxValue>,
 ) -> Result<Map<String, Value>, LoxError> {
     map.iter()
-        .map(|(key, value)| Ok((key.as_inner().as_str()?.to_string(), value.try_into()?)))
+        .map(|(key, value)| Ok((key.as_inner().expect_str()?.to_string(), value.try_into()?)))
         .collect()
 }
 
@@ -84,7 +97,7 @@ impl TryFrom<&LoxValue> for Value {
             )),
             LoxValue::Arr(arr) => {
                 let arr: Result<Vec<Value>, LoxError> =
-                    read(arr).iter().map(|value| value.try_into()).collect();
+                    read(arr).iter().map(TryInto::try_into).collect();
                 Ok(Value::Array(arr?))
             }
             LoxValue::Map(map) => Ok(Value::Object(hashmap_to_json_map(&read(map))?)),

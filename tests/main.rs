@@ -1,3 +1,6 @@
+#![allow(clippy::cmp_owned)]
+#![allow(clippy::needless_question_mark)]
+
 use std::convert::Infallible;
 use std::time::Duration;
 

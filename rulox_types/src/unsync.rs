@@ -13,7 +13,8 @@ use std::rc::Rc;
 /// A shared, mutable pointer to `T`.
 pub type Shared<T> = Rc<RefCell<T>>;
 
-pub(super) type Inner<T> = RefCell<T>;
+#[cfg_attr(not(feature = "serialise"), allow(dead_code))]
+pub type Inner<T> = RefCell<T>;
 
 /// Returns a read-only RAII guard for the shared pointer.
 pub fn read<T: ?Sized>(ptr: &Shared<T>) -> ReadGuard<T> {
@@ -32,7 +33,7 @@ pub struct WriteGuard<'a, T: ?Sized>(RefMut<'a, T>);
 struct CloneCell<T: Clone>(UnsafeCell<T>);
 
 impl<T: Clone> CloneCell<T> {
-    fn new(value: T) -> CloneCell<T> {
+    const fn new(value: T) -> CloneCell<T> {
         CloneCell(UnsafeCell::new(value))
     }
 
@@ -59,7 +60,10 @@ impl LoxVariable {
         LoxVariable(Rc::new(CloneCell::new(value.into())))
     }
 
-    /// Gets the value of `self`, returning an error if it is not defined.
+    /// Gets the value of `self`.
+    ///
+    /// ## Errors
+    /// Returns an error if `self` is not defined.
     pub fn get(&self) -> LoxResult {
         let inner = self.0.get();
         if let LoxValue::Undefined(name) = inner {
@@ -75,6 +79,7 @@ impl LoxVariable {
     }
 
     #[doc(hidden)] // Not public API.
+    #[must_use]
     pub fn close_over(&self) -> LoxVariable {
         LoxVariable(Rc::clone(&self.0))
     }

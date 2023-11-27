@@ -10,11 +10,11 @@ use std::sync::RwLock;
 
 use http_body_util::BodyExt;
 
-use hyper::Request;
 use hyper::body::Body;
 use hyper::body::Bytes;
 use hyper::body::Incoming;
 use hyper::Method;
+use hyper::Request;
 use hyper::StatusCode;
 
 use rulox::lox_bindgen;
@@ -83,7 +83,7 @@ impl LoxObject for LoxParamDict {
             let get_or = move |key: LoxValue, default: LoxValue| -> Result<LoxValue, LoxError> {
                 let this: Arc<RwLock<LoxParamDict>> = this.clone().downcast().unwrap();
                 let this = this.read().unwrap();
-                let value = this.dict.get(&key.as_str()?);
+                let value = this.dict.get(&**key.expect_str()?);
                 if let Some(values) = value {
                     Ok(LoxValue::Str(values.first().unwrap().clone()))
                 } else {
@@ -98,7 +98,7 @@ impl LoxObject for LoxParamDict {
     }
 
     fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
-        let param_view = if let Some(param_view) = self.dict.get(&key.as_str()?) {
+        let param_view = if let Some(param_view) = self.dict.get(&**key.expect_str()?) {
             LoxParamView(param_view.clone())
         } else {
             return Err(LoxError::invalid_key(key));
@@ -275,8 +275,8 @@ impl LoxObject for LoxRequest {
                 value => Err(Some(LoxError::external(Error::InvalidGetParams(value)))),
             },
             "method" => {
-                self.method =
-                    Method::from_bytes(value.as_str()?.as_bytes()).map_err(LoxError::external)?;
+                self.method = Method::from_bytes(value.expect_str()?.as_bytes())
+                    .map_err(LoxError::external)?;
                 Ok(())
             }
             _ => Err(None),

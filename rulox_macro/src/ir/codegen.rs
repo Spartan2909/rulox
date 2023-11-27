@@ -63,17 +63,17 @@ impl ToTokens for FunctionName {
 
 impl ToTokens for Except {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let pattern = if let Some(binding) = &self.binding {
-            if let Some(guard) = &self.guard {
-                quote! { Err(#binding) if (#guard).is_truthy() }
-            } else {
-                quote! { Err(#binding) }
-            }
-        } else {
-            quote! { Err(_) }
-        };
+        let pattern = self.binding.as_ref().map_or_else(
+            || quote! { Err(_) },
+            |binding| {
+                self.guard.as_ref().map_or(
+                    quote! { Err(#binding) },
+                    |guard| quote! { Err(#binding) if (#guard).is_truthy() },
+                )
+            },
+        );
         let body = &self.body;
-        tokens.append_all(quote! { #pattern => { #body } })
+        tokens.append_all(quote! { #pattern => { #body } });
     }
 }
 
@@ -99,11 +99,9 @@ impl ToTokens for Stmt {
                 }
             }
             Stmt::Return(expr) => {
-                let expr = if let Some(expr) = expr {
-                    quote! { #expr }
-                } else {
-                    quote! { LoxValue::Nil }
-                };
+                let expr = expr
+                    .as_ref()
+                    .map_or(quote! { LoxValue::Nil }, |expr| quote! { #expr });
                 tokens.append_all(quote! { return Ok(#expr); });
             }
             Stmt::Function {
@@ -151,14 +149,14 @@ impl ToTokens for Stmt {
                 then_branch,
                 else_branch,
             } => {
-                let condition = wrap_extract(quote! { #condition.try_into() });
+                let condition = wrap_extract(&quote! { #condition.try_into() });
                 tokens.append_all(quote! { if #condition { #then_branch } });
                 if let Some(branch) = else_branch {
                     tokens.append_all(quote! { else { #branch } });
                 }
             }
             Stmt::While { condition, body } => {
-                let condition = wrap_extract(quote! { #condition.try_into() });
+                let condition = wrap_extract(&quote! { #condition.try_into() });
                 tokens.append_all(quote! { while #condition { #body } });
             }
             Stmt::For {
@@ -179,15 +177,16 @@ impl ToTokens for Stmt {
                 methods,
                 superclass,
             } => {
-                let superclass = if let Some(superclass) = superclass {
-                    let get = wrap_extract(quote! { #superclass.get() });
-                    let class = wrap_extract(quote! { #get.expect_class() });
-                    quote! {
-                        Some(__rulox_helpers::LoxRc::clone(#class))
-                    }
-                } else {
-                    quote! { None }
-                };
+                let superclass = superclass.as_ref().map_or_else(
+                    || quote! { None },
+                    |superclass| {
+                        let get = wrap_extract(&quote! { #superclass.get() });
+                        let class = wrap_extract(&quote! { #get.expect_as_superclass() });
+                        quote! {
+                                Some(__rulox_helpers::LoxRc::clone(#class))
+                        }
+                    },
+                );
 
                 let mut methods_tokens = TokenStream::new();
                 for (is_async, method) in methods {
@@ -196,7 +195,7 @@ impl ToTokens for Stmt {
                     } else {
                         None
                     };
-                    let method_tokens = function_expr_to_tokens(
+                    let current_method = function_expr_to_tokens(
                         &method.upvalues,
                         &method.params,
                         &method.body,
@@ -208,7 +207,7 @@ impl ToTokens for Stmt {
                     );
                     let method_name = &method.name;
                     methods_tokens.append_all(
-                        quote! { (stringify!(#method_name), __rulox_helpers::LoxRc::new(#method_tokens).into()), },
+                        quote! { (stringify!(#method_name), __rulox_helpers::LoxRc::new(#current_method).into()), },
                     );
                 }
 
@@ -231,7 +230,7 @@ impl ToTokens for Stmt {
             } => {
                 let else_block = else_block
                     .as_ref()
-                    .map_or(TokenStream::new(), |block| block.to_token_stream());
+                    .map_or(TokenStream::new(), ToTokens::to_token_stream);
                 let mut catches = TokenStream::new();
                 for except in excepts {
                     except.to_tokens(&mut catches);
@@ -289,24 +288,23 @@ fn function_expr_to_tokens(
     }
 
     if let Some(name) = insert_super_fn {
-        let this = wrap_extract(quote! { this.get() });
-        let fun = wrap_extract(quote! { _this.clone().super_fn(stringify!(#name)) });
+        let this = wrap_extract(&quote! { this.get() });
+        let fun = wrap_extract(&quote! { _this.clone().super_fn(stringify!(#name)) });
         expr_body.append_all(quote! {
             let __super = |args: __rulox_helpers::LoxArgs| -> __rulox_helpers::LoxResult {
                 let _this = #this;
                 let fun = #fun;
-                let bound = LoxValue::bind(fun, _this);
+                let bound = LoxValue::bind(fun, &_this);
                 bound.call(args)
             };
         });
     }
 
     let fn_name = fn_name.map_or(quote! { "<anonymous function>" }, |name| {
-        if let Some(class_name) = initialiser {
-            quote! { stringify!(#class_name) }
-        } else {
-            quote! { stringify!(#name) }
-        }
+        initialiser.map_or_else(
+            || quote! { stringify!(#name) },
+            |class_name| quote! { stringify!(#class_name) },
+        )
     });
 
     expr_body.append_all(quote! { let __rulox_fn_name = #fn_name; });
@@ -343,7 +341,7 @@ fn function_expr_to_tokens(
                    #expr_body
                    #[allow(unreachable_code)] #tail
                })
-            } })
+            } });
         }
 
         let mut value =
@@ -378,7 +376,7 @@ fn function_expr_to_tokens(
     }
 }
 
-fn wrap_extract(tokens: TokenStream) -> TokenStream {
+fn wrap_extract(tokens: &TokenStream) -> TokenStream {
     quote! { __rulox_helpers::extract!((#tokens), __rulox_fn_name) }
 }
 
@@ -392,7 +390,7 @@ impl ToTokens for Expr {
                 let mut inner = TokenStream::new();
                 inner.append_separated(arr, Punct::new(',', Spacing::Alone));
 
-                tokens.append_all(quote! { LoxValue::from(vec![#inner]) })
+                tokens.append_all(quote! { LoxValue::from(vec![#inner]) });
             }
             Expr::Function {
                 upvalues,
@@ -405,23 +403,23 @@ impl ToTokens for Expr {
                 ));
             }
             Expr::Variable(var) => {
-                tokens.append_all(wrap_extract(quote! { #var.get() }));
+                tokens.append_all(wrap_extract(&quote! { #var.get() }));
             }
             Expr::Call { callee, arguments } => {
                 let mut inner = TokenStream::new();
                 inner.append_separated(arguments, Punct::new(',', Spacing::Alone));
 
-                tokens.append_all(wrap_extract(quote! { #callee.call([#inner].into()) }));
+                tokens.append_all(wrap_extract(&quote! { #callee.call([#inner].into()) }));
             }
             Expr::Unary { operator, right } => {
-                tokens.append_all(wrap_extract(quote! { #operator #right }));
+                tokens.append_all(wrap_extract(&quote! { #operator #right }));
             }
             Expr::Binary {
                 left,
                 operator,
                 right,
             } => {
-                tokens.append_all(wrap_extract(quote! { #left #operator #right }));
+                tokens.append_all(wrap_extract(&quote! { #left #operator #right }));
             }
             Expr::Comparison {
                 left,
@@ -451,9 +449,9 @@ impl ToTokens for Expr {
                 } });
             }
             Expr::Assign { name, value } => tokens.append_all(quote! { #name.overwrite(#value) }),
-            Expr::This => tokens.append_all(wrap_extract(quote! { this.get() })),
+            Expr::This => tokens.append_all(wrap_extract(&quote! { this.get() })),
             Expr::Get { object, name } => {
-                tokens.append_all(wrap_extract(quote! { (#object).get(stringify!(#name)) }));
+                tokens.append_all(wrap_extract(&quote! { (#object).get(stringify!(#name)) }));
             }
             Expr::Set {
                 object,
@@ -461,7 +459,7 @@ impl ToTokens for Expr {
                 value,
             } => {
                 tokens.append_all(wrap_extract(
-                    quote! { (#object).set(stringify!(#name), #value) },
+                    &quote! { (#object).set(stringify!(#name), #value) },
                 ));
             }
             Expr::Super { arguments } => {
@@ -470,10 +468,10 @@ impl ToTokens for Expr {
 
                 tokens.append_all(quote! { __super([#inner].into())? });
             }
-            Expr::Await { left } => tokens.append_all(quote! { (#left).as_future()?.await? }),
+            Expr::Await { left } => tokens.append_all(quote! { (#left).expect_future()?.await? }),
             Expr::Index { left, index } => tokens.append_all(quote! { (#left).index(#index)? }),
             Expr::IndexSet { left, index, value } => {
-                tokens.append_all(quote! { (#left).index_set(#index, #value)? })
+                tokens.append_all(quote! { (#left).index_set(#index, #value)? });
             }
             Expr::Map(map) => {
                 let mut inner = TokenStream::new();

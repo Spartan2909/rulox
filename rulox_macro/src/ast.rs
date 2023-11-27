@@ -434,7 +434,7 @@ impl Stmt {
                 binding,
                 guard,
                 body,
-            })
+            });
         }
 
         let else_block = if input.peek(Token![else]) {

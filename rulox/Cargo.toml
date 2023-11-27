@@ -23,3 +23,6 @@ default = ["sync", "async"]
 sync = ["rulox_types/sync"]
 async = ["sync", "rulox_types/async"]
 serialise = ["rulox_types/serialise"]
+
+[lints]
+workspace = true

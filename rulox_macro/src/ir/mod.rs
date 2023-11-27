@@ -32,7 +32,7 @@ enum FunctionType {
 }
 
 impl FunctionType {
-    fn is_method(self) -> bool {
+    const fn is_method(self) -> bool {
         matches!(self, FunctionType::Initialiser | FunctionType::Method)
     }
 }
@@ -43,7 +43,7 @@ struct Resolver {
 }
 
 impl Resolver {
-    fn new() -> Resolver {
+    const fn new() -> Resolver {
         Resolver {
             function_type: FunctionType::None,
             in_loop: false,
@@ -87,7 +87,7 @@ enum FunctionName {
 }
 
 impl FunctionName {
-    fn ident(&self) -> Option<&Ident> {
+    const fn ident(&self) -> Option<&Ident> {
         if let FunctionName::Ident(ident) = &self {
             Some(ident)
         } else {
@@ -137,7 +137,7 @@ struct Function {
 
 fn get_upvalues(body: &Stmt, params: &[Ident]) -> HashSet<Ident> {
     let mut upvalues = HashSet::new();
-    let mut declared = HashSet::from_iter(params.iter().cloned());
+    let mut declared = params.iter().cloned().collect();
     body.undeclared_references(&mut declared, &mut upvalues);
     upvalues
 }
@@ -214,7 +214,7 @@ impl From<ast::Except> for Except {
     fn from(value: ast::Except) -> Self {
         Except {
             binding: value.binding,
-            guard: value.guard.map(|expr| expr.into()),
+            guard: value.guard.map(Into::into),
             body: Box::new(value.body.into()),
         }
     }
@@ -276,7 +276,7 @@ impl Stmt {
     ) {
         match self {
             Stmt::Expr(expr) | Stmt::Print(expr) | Stmt::Throw(expr) => {
-                expr.undeclared_references(declared, references)
+                expr.undeclared_references(declared, references);
             }
             Stmt::Var { name, initialiser } => {
                 if let Some(initialiser) = initialiser {
@@ -383,16 +383,16 @@ impl Stmt {
 
     fn resolve(&mut self, resolver: &mut Resolver) {
         match self {
-            Stmt::Expr(expr) | Stmt::Print(expr) | Stmt::Throw(expr) => expr.resolve(resolver),
-            Stmt::Break => {
-                if !resolver.in_loop {
-                    panic!("cannot use 'break' outside of loop");
-                }
-            }
-            Stmt::Var {
+            Stmt::Expr(expr)
+            | Stmt::Print(expr)
+            | Stmt::Throw(expr)
+            | Stmt::Var {
                 name: _,
                 initialiser: Some(expr),
             } => expr.resolve(resolver),
+            Stmt::Break => {
+                assert!(resolver.in_loop, "cannot use 'break' outside of loop");
+            }
             Stmt::Return(expr) => match resolver.function_type {
                 FunctionType::None => panic!("cannot return from a top-level script"),
                 FunctionType::Initialiser if expr.is_some() => {
@@ -505,9 +505,9 @@ impl From<ast::Stmt> for Stmt {
             ast::Stmt::Break => Stmt::Break,
             ast::Stmt::Var { name, initialiser } => Stmt::Var {
                 name,
-                initialiser: initialiser.map(|expr| expr.into()),
+                initialiser: initialiser.map(Into::into),
             },
-            ast::Stmt::Return(expr) => Stmt::Return(expr.map(|expr| expr.into())),
+            ast::Stmt::Return(expr) => Stmt::Return(expr.map(Into::into)),
             ast::Stmt::Function { is_async, function } => Stmt::Function {
                 is_async,
                 function: function.into(),
@@ -574,7 +574,7 @@ impl From<ast::Stmt> for Stmt {
                 finally,
             } => Stmt::Try {
                 body: Box::new(body.into()),
-                excepts: excepts.into_iter().map(|x| x.into()).collect(),
+                excepts: excepts.into_iter().map(Into::into).collect(),
                 else_block: else_block.map(|block| Box::new(block.into())),
                 finally: finally.map(|block| Box::new(block.into())),
             },
@@ -871,9 +871,10 @@ impl Expr {
                 value.resolve(resolver);
             }
             Expr::Super { arguments } => {
-                if !resolver.function_type.is_method() {
-                    panic!("cannot use 'super' outside of a method");
-                }
+                assert!(
+                    resolver.function_type.is_method(),
+                    "cannot use 'super' outside of a method"
+                );
                 for argument in arguments {
                     argument.resolve(resolver);
                 }
@@ -899,13 +900,12 @@ impl Expr {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<ast::Expr> for Expr {
     fn from(value: ast::Expr) -> Self {
         match value {
             ast::Expr::Literal(value) => Expr::Literal(value),
-            ast::Expr::Array(array) => {
-                Expr::Array(array.into_iter().map(|expr| expr.into()).collect())
-            }
+            ast::Expr::Array(array) => Expr::Array(array.into_iter().map(Into::into).collect()),
             ast::Expr::Function {
                 is_async,
                 params,
@@ -922,13 +922,13 @@ impl From<ast::Expr> for Expr {
             ast::Expr::Variable(name) => Expr::Variable(name),
             ast::Expr::Call { callee, arguments } => Expr::Call {
                 callee: Box::new(callee.into()),
-                arguments: arguments.into_iter().map(|expr| expr.into()).collect(),
+                arguments: arguments.into_iter().map(Into::into).collect(),
             },
             ast::Expr::Unary { operator, expr } => {
                 let operator = match operator {
                     syn::UnOp::Neg(_) => UnOp::Neg,
                     syn::UnOp::Not(_) => UnOp::Not,
-                    _ => panic!("invalid operator '{:?}' parsed", operator),
+                    _ => panic!("invalid operator '{operator:?}' parsed"),
                 };
                 Expr::Unary {
                     operator,
@@ -1000,7 +1000,7 @@ impl From<ast::Expr> for Expr {
                     },
                     syn::BinOp::And(_) => Expr::And { left, right },
                     syn::BinOp::Or(_) => Expr::Or { left, right },
-                    _ => panic!("invalid operator '{:?}' parsed", operator),
+                    _ => panic!("invalid operator '{operator:?}' parsed"),
                 }
             }
             ast::Expr::Assign { name, value } => Expr::Assign {
@@ -1022,7 +1022,7 @@ impl From<ast::Expr> for Expr {
                 value: Box::new(value.into()),
             },
             ast::Expr::Super { arguments } => Expr::Super {
-                arguments: arguments.into_iter().map(|expr| expr.into()).collect(),
+                arguments: arguments.into_iter().map(Into::into).collect(),
             },
             ast::Expr::Await { left } => Expr::Await {
                 left: Box::new(left.into()),

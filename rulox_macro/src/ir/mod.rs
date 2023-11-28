@@ -106,7 +106,7 @@ impl FunctionName {
                 .span
                 .span()
                 .join(equals.span)
-                .unwrap_or(bracket.span.span()),
+                .unwrap_or_else(|| bracket.span.span()),
         }
     }
 }

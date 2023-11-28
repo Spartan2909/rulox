@@ -93,7 +93,7 @@ impl TryFrom<&LoxValue> for Value {
             LoxValue::Str(s) => Ok(Value::String(s.to_string())),
             LoxValue::Num(n) => Ok(Value::Number(
                 Number::from_f64(*n)
-                    .ok_or(LoxError::type_error(format!("invalid json value: '{n}'")))?,
+                    .ok_or_else(|| LoxError::type_error(format!("invalid json value: '{n}'")))?,
             )),
             LoxValue::Arr(arr) => {
                 let arr: Result<Vec<Value>, LoxError> =

@@ -230,7 +230,7 @@ impl ToTokens for Stmt {
             } => {
                 let else_block = else_block
                     .as_ref()
-                    .map_or(TokenStream::new(), ToTokens::to_token_stream);
+                    .map_or_else(TokenStream::new, ToTokens::to_token_stream);
                 let mut catches = TokenStream::new();
                 for except in excepts {
                     except.to_tokens(&mut catches);

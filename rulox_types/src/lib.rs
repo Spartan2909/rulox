@@ -474,12 +474,12 @@ impl LoxValue {
                 read(arr)
                     .get(index)
                     .cloned()
-                    .ok_or(LoxError::index_out_of_range(index))
+                    .ok_or_else(|| LoxError::index_out_of_range(index))
             }
             LoxValue::Map(map) => read(map)
                 .get(&MapKey::verify_key(index.clone())?)
                 .cloned()
-                .ok_or(LoxError::invalid_key(index)),
+                .ok_or_else(|| LoxError::invalid_key(index)),
             LoxValue::Instance(instance) => LoxInstance::get(instance, "[]").map_or_else(
                 || Err(LoxError::not_implemented("[]", &LoxValueType::from(self))),
                 |method| method.call([index].into()),
@@ -602,7 +602,7 @@ impl LoxValue {
     /// Returns an error if the attribute cannot be read.
     pub fn get(&self, key: &'static str) -> LoxResult {
         self.get_impl(key)
-            .map_err(|err| err.unwrap_or(LoxError::invalid_property(key, self.to_string())))
+            .map_err(|err| err.unwrap_or_else(|| LoxError::invalid_property(key, self.to_string())))
     }
 
     /// Gets the attribute corresponding to `self.key` to `value`.
@@ -650,7 +650,7 @@ impl LoxValue {
     #[doc(hidden)] // Not public API.
     pub fn super_fn(&self, name: &'static str) -> Result<LoxMethod, LoxError> {
         self.super_fn_impl(name)
-            .ok_or(LoxError::non_existent_super(name))
+            .ok_or_else(|| LoxError::non_existent_super(name))
     }
 
     #[doc(hidden)] // Not public API.

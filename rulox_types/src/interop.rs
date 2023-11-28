@@ -276,7 +276,7 @@ impl<T: LoxObject> TryFrom<LoxValue> for Shared<T> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        obj_from_value(&value).ok_or(LoxError::type_error(format!(
+        obj_from_value(&value).ok_or_else(|| LoxError::type_error(format!(
             "expected {}, found {value}",
             T::type_name()
         )))

@@ -377,7 +377,7 @@ fn throw() {
 }
 
 #[test]
-fn catch() -> Result<(), LoxError> {
+fn catch() -> Result<LoxValue, LoxError> {
     lox! {
         try {
             throw 3;
@@ -386,11 +386,11 @@ fn catch() -> Result<(), LoxError> {
         }
     }
 
-    Ok(())
+    Ok(LoxValue::Nil)
 }
 
 #[test]
-fn except_guards() -> Result<(), LoxError> {
+fn except_guards() -> Result<LoxValue, LoxError> {
     lox! {
         var result;
         try {
@@ -406,11 +406,11 @@ fn except_guards() -> Result<(), LoxError> {
 
     assert_eq!(result.get()?, "three");
 
-    Ok(())
+    Ok(LoxValue::Nil)
 }
 
 #[test]
-fn try_else() -> Result<(), LoxError> {
+fn try_else() -> Result<LoxValue, LoxError> {
     lox! {
         var result = 1;
         try {
@@ -424,11 +424,11 @@ fn try_else() -> Result<(), LoxError> {
 
     assert_eq!(result.get()?, 4);
 
-    Ok(())
+    Ok(LoxValue::Nil)
 }
 
 #[test]
-fn try_finally_error() -> Result<(), LoxError> {
+fn try_finally_error() -> Result<LoxValue, LoxError> {
     lox! {
         var except_ran = false;
         var else_ran = false;
@@ -452,11 +452,11 @@ fn try_finally_error() -> Result<(), LoxError> {
     assert_eq!(else_ran.get()?, false);
     assert_eq!(finally_ran.get()?, true);
 
-    Ok(())
+    Ok(LoxValue::Nil)
 }
 
 #[test]
-fn try_finally_ok() -> Result<(), LoxError> {
+fn try_finally_ok() -> Result<LoxValue, LoxError> {
     lox! {
         var except_ran = false;
         var else_ran = false;
@@ -477,6 +477,32 @@ fn try_finally_ok() -> Result<(), LoxError> {
 
     assert_eq!(except_ran.get()?, false);
     assert_eq!(else_ran.get()?, true);
+    assert_eq!(finally_ran.get()?, true);
+
+    Ok(LoxValue::Nil)
+}
+
+#[test]
+fn try_finally_throw() -> Result<(), LoxError> {
+    lox! {
+        var finally_ran = false;
+    }
+
+    let inner = || {
+        lox! {
+            try {
+                throw nil;
+            } except {
+                throw nil;
+            } finally {
+                finally_ran = true;
+            }
+        }
+
+        Ok(LoxValue::Nil)
+    };
+
+    assert!(inner().is_err());
     assert_eq!(finally_ran.get()?, true);
 
     Ok(())
@@ -570,7 +596,7 @@ fn primitive_methods() -> Result<(), LoxError> {
 }
 
 #[test]
-fn index() -> Result<(), LoxError> {
+fn index() -> Result<LoxValue, LoxError> {
     lox! {
         var list = ["a", "b", "c"];
         var a = list[0];
@@ -591,7 +617,7 @@ fn index() -> Result<(), LoxError> {
     assert_eq!(c.get()?, "c");
     assert_eq!(d.get()?, "failed");
 
-    Ok(())
+    Ok(LoxValue::Nil)
 }
 
 #[test]

@@ -230,28 +230,39 @@ impl ToTokens for Stmt {
             } => {
                 let else_block = else_block
                     .as_ref()
-                    .map_or_else(TokenStream::new, ToTokens::to_token_stream);
+                    .map_or_else(TokenStream::new, |block| quote! {
+                        Err(__e) if __e.get().unwrap().as_error().unwrap().is_pass() => { #block }
+                    });
                 let mut catches = TokenStream::new();
                 for except in excepts {
                     except.to_tokens(&mut catches);
                 }
                 let match_block = quote! {
                     match
-                        (|| -> Result<(), LoxError> { #body #[allow(unreachable_code)] Ok(()) })()
+                        (|| -> Result<LoxValue, __rulox_helpers::LoxError> {
+                            #body
+                            #[allow(unreachable_code)] Err(__rulox_helpers::LoxError::pass())
+                        })()
                             .map_err(|err| __rulox_helpers::LoxVariable::new(err.into_value()))
                     {
-                        Ok(()) => { #else_block }
+                        Ok(val) => return Ok(val),
+                        #else_block
                         #catches
                         #[allow(unreachable_code)]
-                        Err(_) => {}
+                        _ => {}
                     }
                 };
                 if let Some(finally) = finally {
                     tokens.append_all(quote! { {
-                        let __result = #match_block;
+                        let __result = (|| -> Result<__rulox_helpers::LoxValue, __rulox_helpers::LoxError> {
+                            #match_block
+                            #[allow(unreachable_code)] Err(__rulox_helpers::LoxError::pass())
+                        })();
                         { #finally }
-                        __result
-                    } });
+                        if let Some(r) = __rulox_helpers::LoxError::result_filter_pass(__result) {
+                            return r;
+                        }
+                    }; });
                 } else {
                     tokens.append_all(match_block);
                 }

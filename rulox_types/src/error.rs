@@ -135,6 +135,35 @@ impl LoxError {
         }
     }
 
+    #[doc(hidden)]
+    pub fn pass() -> LoxError {
+        LoxError {
+            inner: LoxErrorInner::ControlFlow,
+            trace: VecDeque::new(),
+        }
+    }
+
+    fn filter_pass(self) -> Option<LoxError> {
+        if matches!(&self.inner, LoxErrorInner::ControlFlow) {
+            None
+        } else {
+            Some(self)
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn is_pass(&self) -> bool {
+        matches!(&self.inner, LoxErrorInner::ControlFlow)
+    }
+
+    #[doc(hidden)]
+    pub fn result_filter_pass(r: Result<LoxValue, LoxError>) -> Option<Result<LoxValue, LoxError>> {
+        match r {
+            Ok(v) => Some(Ok(v)),
+            Err(e) => e.filter_pass().map(Err),
+        }
+    }
+
     /// Pushes a new function to this error's stack trace.
     #[cold]
     pub fn push_trace(&mut self, value: &'static str) {
@@ -221,6 +250,7 @@ enum LoxErrorInner {
     Arbitrary(String),
     #[cfg(feature = "async")]
     FinishedCoroutine,
+    ControlFlow,
 }
 
 impl Display for LoxError {
@@ -262,6 +292,7 @@ impl Display for LoxError {
             LoxErrorInner::Arbitrary(string) => f.write_str(string),
             #[cfg(feature = "async")]
             LoxErrorInner::FinishedCoroutine => write!(f, "cannot await a finished coroutine"),
+            LoxErrorInner::ControlFlow => unreachable!(),
         }
     }
 }

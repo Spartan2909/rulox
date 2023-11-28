@@ -1,6 +1,6 @@
 [package]
 name = "rulox"
-version = "0.8.1"
+version = "0.9.0"
 edition = "2021"
 description = "A lightweight scripting language embedded in Rust."
 documentation = "https://docs.rs/rulox/latest"
@@ -15,8 +15,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-"rulox_macro" = { path = "../rulox_macro", version = "0.8" }
-"rulox_types" = { path ="../rulox_types", version = "0.5" }
+"rulox_macro" = { path = "../rulox_macro", version = "0.9" }
+"rulox_types" = { path ="../rulox_types", version = "0.6" }
 
 [features]
 default = ["sync", "async"]

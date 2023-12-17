@@ -228,11 +228,11 @@ impl ToTokens for Stmt {
                 else_block,
                 finally,
             } => {
-                let else_block = else_block
-                    .as_ref()
-                    .map_or_else(TokenStream::new, |block| quote! {
+                let else_block = else_block.as_ref().map_or_else(TokenStream::new, |block| {
+                    quote! {
                         Err(__e) if __e.get().unwrap().as_error().unwrap().is_pass() => { #block }
-                    });
+                    }
+                });
                 let mut catches = TokenStream::new();
                 for except in excepts {
                     except.to_tokens(&mut catches);

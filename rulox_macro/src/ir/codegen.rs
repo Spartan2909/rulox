@@ -164,10 +164,12 @@ impl ToTokens for Stmt {
                 iterable,
                 body,
             } => {
-                tokens.append_all(quote! { for __tmp in #iterable.into_iter() {
-                    let #name = __rulox_helpers::LoxVariable::new(__tmp);
-                    { #body }
-                } });
+                tokens.append_all(quote! {
+                    for __tmp in #iterable.into_iter() {
+                        let #name = __rulox_helpers::LoxVariable::new(__tmp);
+                        { #body }
+                    }
+                });
             }
             Stmt::Loop { body } => {
                 tokens.append_all(quote! { loop { #body } });
@@ -230,7 +232,7 @@ impl ToTokens for Stmt {
             } => {
                 let else_block = else_block.as_ref().map_or_else(TokenStream::new, |block| {
                     quote! {
-                        Err(__e) if __e.get().unwrap().as_error().unwrap().is_pass() => { #block }
+                        Err(__e) if __e.get().unwrap().as_error().map_or(false, |err| err.is_pass()) => { #block }
                     }
                 });
                 let mut catches = TokenStream::new();

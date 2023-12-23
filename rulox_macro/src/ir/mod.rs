@@ -1,27 +1,26 @@
 mod codegen;
 
 use crate::ast;
-use ast::NegName;
-use syn::Token;
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
+use flexi_parse::group::Brackets;
+use flexi_parse::group::Parentheses;
+use flexi_parse::token::Ident;
+use flexi_parse::token::Token;
+use flexi_parse::Span;
+use flexi_parse::Punct;
+
+use proc_macro2::TokenStream;
 use proc_macro2::Punct;
 use proc_macro2::Spacing;
-use proc_macro2::Span;
-use proc_macro2::TokenStream;
 
 use quote::quote;
 use quote::ToTokens;
 use quote::TokenStreamExt;
 
 use rulox_types::LoxValue;
-
-use syn::spanned::Spanned;
-use syn::token::Bracket;
-use syn::token::Paren;
-use syn::Ident;
 
 #[derive(Debug, Clone, Copy)]
 enum FunctionType {
@@ -51,6 +50,7 @@ impl Resolver {
     }
 }
 
+#[derive(Debug)]
 pub struct Ir {
     forward_declarations: HashSet<Ident>,
     statements: Vec<Stmt>,
@@ -77,13 +77,14 @@ fn insert_reference(references: &mut HashSet<Ident>, declared: &HashSet<Ident>, 
     }
 }
 
+#[derive(Debug, Clone)]
 enum FunctionName {
     Ident(Ident),
     BinOp(BinOp, Span),
-    Neg(NegName),
-    Call(Paren),
-    Index(Bracket),
-    IndexSet(Bracket, Token![=]),
+    Neg(Punct!["-", "@"]),
+    Call(Parentheses),
+    Index(Brackets),
+    IndexSet(Brackets, Punct!["="]),
 }
 
 impl FunctionName {
@@ -97,16 +98,12 @@ impl FunctionName {
 
     fn span(&self) -> Span {
         match self {
-            FunctionName::Ident(ident) => ident.span(),
-            FunctionName::BinOp(_, span) => *span,
-            FunctionName::Neg(op) => op.span(),
-            FunctionName::Call(paren) => paren.span.span(),
-            FunctionName::Index(bracket) => bracket.span.span(),
-            FunctionName::IndexSet(bracket, equals) => bracket
-                .span
-                .span()
-                .join(equals.span)
-                .unwrap_or_else(|| bracket.span.span()),
+            FunctionName::Ident(ident) => ident.span().clone(),
+            FunctionName::BinOp(_, span) => span.clone(),
+            FunctionName::Neg(op) => op.span().clone(),
+            FunctionName::Call(paren) => paren.0.clone(),
+            FunctionName::Index(bracket) => bracket.0.clone(),
+            FunctionName::IndexSet(bracket, equals) => Span::across(&bracket.0, &equals.span),
         }
     }
 }
@@ -117,7 +114,7 @@ impl From<ast::FunctionName> for FunctionName {
             ast::FunctionName::Ident(name) => FunctionName::Ident(name),
             ast::FunctionName::BinOp(op) => FunctionName::BinOp(
                 (&op).try_into().expect("parsed invalid operator"),
-                op.span(),
+                op.span().clone(),
             ),
             ast::FunctionName::Negate(op) => FunctionName::Neg(op),
             ast::FunctionName::Call(paren) => FunctionName::Call(paren),
@@ -127,6 +124,7 @@ impl From<ast::FunctionName> for FunctionName {
     }
 }
 
+#[derive(Debug, Clone)]
 struct Function {
     name: FunctionName,
     params: VecDeque<Ident>,
@@ -183,6 +181,7 @@ fn convert_block(stmts: Vec<ast::Stmt>) -> (HashSet<Ident>, Vec<Stmt>) {
     (forward_declarations, body)
 }
 
+#[derive(Debug, Clone)]
 struct Except {
     binding: Option<Ident>,
     guard: Option<Expr>,
@@ -220,6 +219,7 @@ impl From<ast::Except> for Except {
     }
 }
 
+#[derive(Debug, Clone)]
 enum Stmt {
     Expr(Expr),
     Print(Expr),
@@ -557,8 +557,8 @@ impl From<ast::Stmt> for Stmt {
                         let mut method: Function = method.into();
                         method
                             .params
-                            .push_front(Ident::new("this", method.name.span()));
-                        if method.name.ident().is_some_and(|ident| ident == "init") {
+                            .push_front(Ident::new("this".to_string(), method.name.span()));
+                        if method.name.ident().is_some_and(|ident| ident.string() == "init") {
                             method.is_initialiser = true;
                         }
                         (is_async, method)
@@ -588,6 +588,7 @@ impl From<Box<ast::Stmt>> for Stmt {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 enum UnOp {
     Neg,
     Not,
@@ -603,6 +604,7 @@ impl ToTokens for UnOp {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 enum BinOp {
     Add,
     Sub,
@@ -611,16 +613,16 @@ enum BinOp {
     Rem,
 }
 
-impl TryFrom<&syn::BinOp> for BinOp {
+impl TryFrom<&ast::BinOp> for BinOp {
     type Error = ();
 
-    fn try_from(value: &syn::BinOp) -> Result<Self, Self::Error> {
+    fn try_from(value: &ast::BinOp) -> Result<Self, Self::Error> {
         match value {
-            syn::BinOp::Add(_) => Ok(BinOp::Add),
-            syn::BinOp::Sub(_) => Ok(BinOp::Sub),
-            syn::BinOp::Mul(_) => Ok(BinOp::Mul),
-            syn::BinOp::Div(_) => Ok(BinOp::Div),
-            syn::BinOp::Rem(_) => Ok(BinOp::Rem),
+            ast::BinOp::Add(_) => Ok(BinOp::Add),
+            ast::BinOp::Sub(_) => Ok(BinOp::Sub),
+            ast::BinOp::Mul(_) => Ok(BinOp::Mul),
+            ast::BinOp::Div(_) => Ok(BinOp::Div),
+            ast::BinOp::Rem(_) => Ok(BinOp::Rem),
             _ => Err(()),
         }
     }
@@ -639,6 +641,7 @@ impl ToTokens for BinOp {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 enum Comparison {
     Eq,
     Ne,
@@ -662,6 +665,7 @@ impl ToTokens for Comparison {
     }
 }
 
+#[derive(Debug, Clone)]
 enum Expr {
     Literal(LoxValue),
     Array(Vec<Expr>),
@@ -926,9 +930,8 @@ impl From<ast::Expr> for Expr {
             },
             ast::Expr::Unary { operator, expr } => {
                 let operator = match operator {
-                    syn::UnOp::Neg(_) => UnOp::Neg,
-                    syn::UnOp::Not(_) => UnOp::Not,
-                    _ => panic!("invalid operator '{operator:?}' parsed"),
+                    ast::UnOp::Neg(_) => UnOp::Neg,
+                    ast::UnOp::Not(_) => UnOp::Not,
                 };
                 Expr::Unary {
                     operator,
@@ -943,64 +946,63 @@ impl From<ast::Expr> for Expr {
                 let left = Box::new(left.into());
                 let right = Box::new(right.into());
                 match operator {
-                    syn::BinOp::Add(_) => Expr::Binary {
+                    ast::BinOp::Add(_) => Expr::Binary {
                         left,
                         operator: BinOp::Add,
                         right,
                     },
-                    syn::BinOp::Sub(_) => Expr::Binary {
+                    ast::BinOp::Sub(_) => Expr::Binary {
                         left,
                         operator: BinOp::Sub,
                         right,
                     },
-                    syn::BinOp::Mul(_) => Expr::Binary {
+                    ast::BinOp::Mul(_) => Expr::Binary {
                         left,
                         operator: BinOp::Mul,
                         right,
                     },
-                    syn::BinOp::Div(_) => Expr::Binary {
+                    ast::BinOp::Div(_) => Expr::Binary {
                         left,
                         operator: BinOp::Div,
                         right,
                     },
-                    syn::BinOp::Rem(_) => Expr::Binary {
+                    ast::BinOp::Rem(_) => Expr::Binary {
                         left,
                         operator: BinOp::Rem,
                         right,
                     },
-                    syn::BinOp::Eq(_) => Expr::Comparison {
+                    ast::BinOp::Eq(_) => Expr::Comparison {
                         left,
                         operator: Comparison::Eq,
                         right,
                     },
-                    syn::BinOp::Ne(_) => Expr::Comparison {
+                    ast::BinOp::Ne(_) => Expr::Comparison {
                         left,
                         operator: Comparison::Ne,
                         right,
                     },
-                    syn::BinOp::Gt(_) => Expr::Comparison {
+                    ast::BinOp::Gt(_) => Expr::Comparison {
                         left,
                         operator: Comparison::Gt,
                         right,
                     },
-                    syn::BinOp::Ge(_) => Expr::Comparison {
+                    ast::BinOp::Ge(_) => Expr::Comparison {
                         left,
                         operator: Comparison::Ge,
                         right,
                     },
-                    syn::BinOp::Lt(_) => Expr::Comparison {
+                    ast::BinOp::Lt(_) => Expr::Comparison {
                         left,
                         operator: Comparison::Lt,
                         right,
                     },
-                    syn::BinOp::Le(_) => Expr::Comparison {
+                    ast::BinOp::Le(_) => Expr::Comparison {
                         left,
                         operator: Comparison::Le,
                         right,
                     },
-                    syn::BinOp::And(_) => Expr::And { left, right },
-                    syn::BinOp::Or(_) => Expr::Or { left, right },
-                    _ => panic!("invalid operator '{operator:?}' parsed"),
+                    ast::BinOp::And(_) => Expr::And { left, right },
+                    ast::BinOp::Or(_) => Expr::Or { left, right },
                 }
             }
             ast::Expr::Assign { name, value } => Expr::Assign {

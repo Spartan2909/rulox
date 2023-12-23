@@ -8,6 +8,10 @@ use super::Stmt;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
+use flexi_parse::token::Ident;
+use flexi_parse::token::LitStrDoubleQuote as LitStr;
+use flexi_parse::token::Token;
+
 use proc_macro2::Punct;
 use proc_macro2::Spacing;
 use proc_macro2::TokenStream;
@@ -15,8 +19,6 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
 use quote::TokenStreamExt;
-
-use syn::Ident;
 
 impl ToTokens for Ir {
     fn to_tokens(&self, tokens: &mut TokenStream) {
@@ -128,8 +130,7 @@ impl ToTokens for Stmt {
 
                 let mut params_tokens = TokenStream::new();
                 for param in params {
-                    let name = param.to_string();
-                    let name = syn::LitStr::new(&name, param.span());
+                    let name = LitStr::new(param.string().clone(), param.span().clone());
                     params_tokens.append_all(quote! { #name, });
                 }
 
@@ -332,8 +333,7 @@ fn function_expr_to_tokens(
 
     let mut params_tokens = TokenStream::new();
     for param in params {
-        let name = param.to_string();
-        let name = syn::LitStr::new(&name, param.span());
+        let name = LitStr::new(param.string().clone(), param.span().clone());
         params_tokens.append_all(quote! { #name, });
     }
 

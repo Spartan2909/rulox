@@ -2,9 +2,12 @@
 //!
 //! This crate should be used through [`rulox`](https://docs.rs/rulox/latest).
 
+use flexi_parse::parse;
+
 extern crate proc_macro;
 
 use proc_macro2::TokenStream;
+
 use quote::quote;
 use quote::ToTokens;
 use quote::TokenStreamExt;
@@ -19,7 +22,7 @@ mod ir;
 
 #[proc_macro]
 pub fn lox(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(tokens as ast::LoxProgram);
+    let input: ast::LoxProgram = parse(tokens.into()).unwrap();
 
     let program: ir::Ir = input.into();
 

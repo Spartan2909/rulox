@@ -1,42 +1,60 @@
-use bytes::Bytes;
+use flexi_parse::group;
+use flexi_parse::Parse;
+use flexi_parse::ParseStream;
+use flexi_parse::group::Braces;
+use flexi_parse::Punct;
+use flexi_parse::punctuated::Punctuated;
+use flexi_parse::token::Token;
+use flexi_parse::token::Ident;
+use flexi_parse::group::Parentheses;
+use flexi_parse::token::LeftBrace;
+use flexi_parse::token::LitInt;
+use flexi_parse::token::LeftParen;
+use flexi_parse::token::LeftBracket;
+use flexi_parse::group::Brackets;
+use flexi_parse::token::LitFloat;
+use flexi_parse::token::LitStrDoubleQuote as LitStr;
+use flexi_parse::Span;
 
 use rulox_types::LoxValue;
 
-use syn::braced;
-use syn::bracketed;
-use syn::parenthesized;
-use syn::parse::Parse;
-use syn::parse::ParseStream;
-use syn::spanned::Spanned;
-use syn::token;
-use syn::token::Paren;
-use syn::BinOp;
-use syn::Ident;
-use syn::Token;
-use syn::UnOp;
-
 mod kw {
-    syn::custom_keyword!(nil);
-    syn::custom_keyword!(print);
-    syn::custom_keyword!(var);
-    syn::custom_keyword!(and);
-    syn::custom_keyword!(or);
-    syn::custom_keyword!(fun);
-    syn::custom_keyword!(class);
-    syn::custom_keyword!(this);
-    syn::custom_keyword!(throw);
-    syn::custom_keyword!(except);
-    syn::custom_keyword!(finally);
+    flexi_parse::keywords![
+        and,
+        async as kw_async,
+        await as kw_await,
+        break as kw_break,
+        class,
+        else as kw_else,
+        except,
+        false as kw_false,
+        finally,
+        for as kw_for,
+        fun,
+        if as kw_if,
+        in as kw_in,
+        loop as kw_loop,
+        nil,
+        or,
+        print,
+        return as kw_return,
+        super as kw_super,
+        this,
+        throw,
+        true as kw_true,
+        try as kw_try,
+        var,
+        while as kw_while,
+    ];
 }
 
-syn::custom_punctuation!(NegName, -@);
-
+#[derive(Debug)]
 pub struct LoxProgram {
     pub statements: Vec<Stmt>,
 }
 
 impl Parse for LoxProgram {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> flexi_parse::Result<Self> {
         let mut statements: Vec<Stmt> = vec![];
 
         while !input.is_empty() {
@@ -47,31 +65,120 @@ impl Parse for LoxProgram {
     }
 }
 
+#[derive(Debug)]
+pub enum BinOp {
+    Add(Punct!["+"]),
+    Sub(Punct!["-"]),
+    Mul(Punct!["*"]),
+    Div(Punct!["/"]),
+    Rem(Punct!["%"]),
+
+    Eq(Punct!["=="]),
+    Ne(Punct!["!="]),
+    Lt(Punct!["<"]),
+    Le(Punct!["<="]),
+    Gt(Punct![">"]),
+    Ge(Punct![">="]),
+
+    And(Punct!["&&"]),
+    Or(Punct!["||"]),
+}
+
+impl BinOp {
+    pub(crate) fn span(&self) -> &Span {
+        macro_rules! generate_match {
+            ($($name:ident),+ $(,)?) => {
+                match self {
+                    $(
+                        BinOp::$name(token) => token.span(),
+                    )+
+                }
+            };
+        }
+        generate_match!(Add, Sub, Mul, Div, Rem, Eq, Ne, Lt, Le, Gt, Ge, And, Or)
+    }
+}
+
+impl Parse for BinOp {
+    fn parse(input: ParseStream) -> flexi_parse::Result<Self> {
+        let lookahead = input.lookahead();
+        if lookahead.peek(Punct!["+"]) {
+            Ok(BinOp::Add(input.parse()?))
+        } else if lookahead.peek(Punct!["-"]) {
+            Ok(BinOp::Sub(input.parse()?))
+        } else if lookahead.peek(Punct!["*"]) {
+            Ok(BinOp::Mul(input.parse()?))
+        } else if lookahead.peek(Punct!["/"]) {
+            Ok(BinOp::Div(input.parse()?))
+        } else if lookahead.peek(Punct!["%"]) {
+            Ok(BinOp::Rem(input.parse()?))
+        } else if lookahead.peek(Punct!["=="]) {
+            Ok(BinOp::Eq(input.parse()?))
+        } else if lookahead.peek(Punct!["!="]) {
+            Ok(BinOp::Ne(input.parse()?))
+        } else if lookahead.peek(Punct!["<"]) {
+            Ok(BinOp::Lt(input.parse()?))
+        } else if lookahead.peek(Punct!["<="]) {
+            Ok(BinOp::Le(input.parse()?))
+        } else if lookahead.peek(Punct![">"]) {
+            Ok(BinOp::Gt(input.parse()?))
+        } else if lookahead.peek(Punct![">="]) {
+            Ok(BinOp::Ge(input.parse()?))
+        } else if lookahead.peek(Punct!["&&"]) {
+            Ok(BinOp::And(input.parse()?))
+        } else if lookahead.peek(Punct!["||"]) {
+            Ok(BinOp::Or(input.parse()?))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum UnOp {
+    Neg(Punct!["-"]),
+    Not(Punct!["!"]),
+}
+
+impl Parse for UnOp {
+    fn parse(input: ParseStream) -> flexi_parse::Result<Self> {
+        let lookahead = input.lookahead();
+        if lookahead.peek(Punct!["-"]) {
+            Ok(UnOp::Neg(input.parse()?))
+        } else if lookahead.peek(Punct!["!"]) {
+            Ok(UnOp::Not(input.parse()?))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum FunctionName {
     Ident(Ident),
     BinOp(BinOp),
-    Negate(NegName),
-    Call(token::Paren),
-    Index(token::Bracket),
-    IndexSet(token::Bracket, Token![=]),
+    Negate(Punct!["-", "@"]),
+    Call(Parentheses),
+    Index(Brackets),
+    IndexSet(Brackets, Punct!["="]),
 }
 
 impl Parse for FunctionName {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> flexi_parse::Result<Self> {
         if input.peek(Ident) {
             Ok(FunctionName::Ident(input.parse()?))
-        } else if input.peek(NegName) {
+        } else if input.peek(Punct!["-"]) && input.peek2(Punct!["@"]) {
             Ok(FunctionName::Negate(input.parse()?))
-        } else if input.peek(token::Paren) {
+        } else if input.peek(LeftParen) {
             let content;
-            let paren = parenthesized!(content in input);
+            let paren = group!(content in input);
             assert!(content.is_empty(), "invalid method name");
             Ok(FunctionName::Call(paren))
-        } else if input.peek(token::Bracket) {
+        } else if input.peek(LeftBracket) {
             let content;
-            let bracket = bracketed!(content in input);
+            let bracket = group!(content in input);
             assert!(content.is_empty(), "invalid method name");
-            if input.peek(Token![=]) {
+            if input.peek(Punct!["="]) {
                 Ok(FunctionName::IndexSet(bracket, input.parse()?))
             } else {
                 Ok(FunctionName::Index(bracket))
@@ -82,6 +189,7 @@ impl Parse for FunctionName {
     }
 }
 
+#[derive(Debug)]
 pub struct Function {
     pub name: FunctionName,
     pub params: Vec<Ident>,
@@ -89,12 +197,12 @@ pub struct Function {
 }
 
 impl Parse for Function {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> flexi_parse::Result<Self> {
         let name = input.parse()?;
 
         let content;
-        parenthesized!(content in input);
-        let parameters = content.parse_terminated(Ident::parse, Token![,])?;
+        let _: Parentheses = group!(content in input);
+        let parameters: Punctuated<Ident, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
 
         let body = Stmt::block(input)?;
 
@@ -106,12 +214,14 @@ impl Parse for Function {
     }
 }
 
+#[derive(Debug)]
 pub struct Except {
     pub binding: Option<Ident>,
     pub guard: Option<Expr>,
     pub body: Box<Stmt>,
 }
 
+#[derive(Debug)]
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),
@@ -158,19 +268,19 @@ pub enum Stmt {
 }
 
 impl Parse for Stmt {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> flexi_parse::Result<Self> {
         Self::declaration(input)
     }
 }
 
 impl Stmt {
-    fn declaration(input: ParseStream) -> syn::Result<Self> {
+    fn declaration(input: ParseStream) -> flexi_parse::Result<Self> {
         if input.peek(kw::var) {
             Self::var_declaration(input)
         } else if input.peek(kw::fun) {
             Self::function(input, false)
-        } else if input.peek(Token![async]) {
-            input.parse::<Token![async]>()?;
+        } else if input.peek(kw::kw_async) {
+            input.parse::<kw::kw_async>()?;
             Self::function(input, true)
         } else if input.peek(kw::class) {
             Self::class(input)
@@ -179,24 +289,24 @@ impl Stmt {
         }
     }
 
-    fn var_declaration(input: ParseStream) -> syn::Result<Self> {
+    fn var_declaration(input: ParseStream) -> flexi_parse::Result<Self> {
         input.parse::<kw::var>()?;
 
         let name: Ident = input.parse()?;
 
-        let initialiser = if input.peek(Token![=]) {
-            input.parse::<Token![=]>()?;
+        let initialiser = if input.peek(Punct!["="]) {
+            input.parse::<Punct!["="]>()?;
             Some(input.parse()?)
         } else {
             None
         };
 
-        input.parse::<Token![;]>()?;
+        input.parse::<Punct![";"]>()?;
 
         Ok(Self::Var { name, initialiser })
     }
 
-    fn function(input: ParseStream, is_async: bool) -> syn::Result<Self> {
+    fn function(input: ParseStream, is_async: bool) -> flexi_parse::Result<Self> {
         if !input.peek2(Ident) {
             return Ok(Self::Expr(Expr::function(input, is_async)?));
         }
@@ -209,12 +319,12 @@ impl Stmt {
         })
     }
 
-    fn class(input: ParseStream) -> syn::Result<Self> {
+    fn class(input: ParseStream) -> flexi_parse::Result<Self> {
         input.parse::<kw::class>()?;
         let name: Ident = input.parse()?;
 
-        let superclass = if input.peek(Token![>]) {
-            input.parse::<Token![>]>()?;
+        let superclass = if input.peek(Punct![">"]) {
+            input.parse::<Punct![">"]>()?;
             Some(input.parse()?)
         } else {
             None
@@ -222,10 +332,10 @@ impl Stmt {
 
         let mut methods = vec![];
         let content;
-        braced!(content in input);
+        let _: Braces = group!(content in input);
         while !content.is_empty() {
-            let is_async = if content.peek(Token![async]) {
-                content.parse::<Token![async]>()?;
+            let is_async = if content.peek(kw::kw_async) {
+                content.parse::<kw::kw_async>()?;
                 true
             } else {
                 false
@@ -240,43 +350,43 @@ impl Stmt {
         })
     }
 
-    fn statement(input: ParseStream) -> syn::Result<Self> {
-        if input.peek(Token![if]) {
+    fn statement(input: ParseStream) -> flexi_parse::Result<Self> {
+        if input.peek(kw::kw_if) {
             Self::if_statement(input)
         } else if input.peek(kw::print) {
             Self::print_statement(input)
-        } else if input.peek(Token![break]) {
+        } else if input.peek(kw::kw_break) {
             Self::break_statement(input)
-        } else if input.peek(Token![return]) {
+        } else if input.peek(kw::kw_return) {
             Self::return_statement(input)
-        } else if input.peek(Token![while]) {
+        } else if input.peek(kw::kw_while) {
             Self::while_statement(input)
-        } else if input.peek(Token![for]) {
+        } else if input.peek(kw::kw_for) {
             Self::for_statement(input)
-        } else if input.peek(Token![loop]) {
+        } else if input.peek(kw::kw_loop) {
             Self::loop_statement(input)
         } else if input.peek(kw::throw) {
             Self::throw(input)
-        } else if input.peek(Token![try]) {
+        } else if input.peek(kw::kw_try) {
             Self::try_statement(input)
-        } else if input.peek(token::Brace) {
+        } else if input.peek(LeftBrace) {
             Self::block(input)
         } else {
             Self::expression_statement(input)
         }
     }
 
-    fn if_statement(input: ParseStream) -> syn::Result<Self> {
-        input.parse::<Token![if]>()?;
+    fn if_statement(input: ParseStream) -> flexi_parse::Result<Self> {
+        input.parse::<kw::kw_if>()?;
 
         let content;
-        parenthesized!(content in input);
+        let _: Parentheses = group!(content in input);
         let condition: Expr = content.parse()?;
 
         let then_branch = Box::new(Self::statement(input)?);
 
-        let else_branch = if input.peek(Token![else]) {
-            input.parse::<Token![else]>()?;
+        let else_branch = if input.peek(kw::kw_else) {
+            input.parse::<kw::kw_else>()?;
 
             Some(Box::new(Self::statement(input)?))
         } else {
@@ -290,38 +400,38 @@ impl Stmt {
         })
     }
 
-    fn print_statement(input: ParseStream) -> syn::Result<Self> {
+    fn print_statement(input: ParseStream) -> flexi_parse::Result<Self> {
         input.parse::<kw::print>()?;
         let expr: Expr = input.parse()?;
-        input.parse::<Token![;]>()?;
+        input.parse::<Punct![";"]>()?;
         Ok(Self::Print(expr))
     }
 
-    fn break_statement(input: ParseStream) -> syn::Result<Self> {
-        input.parse::<Token![break]>()?;
-        input.parse::<Token![;]>()?;
+    fn break_statement(input: ParseStream) -> flexi_parse::Result<Self> {
+        input.parse::<kw::kw_break>()?;
+        input.parse::<Punct![";"]>()?;
         Ok(Self::Break)
     }
 
-    fn return_statement(input: ParseStream) -> syn::Result<Self> {
-        input.parse::<Token![return]>()?;
+    fn return_statement(input: ParseStream) -> flexi_parse::Result<Self> {
+        input.parse::<kw::kw_return>()?;
 
-        let value = if input.peek(Token![;]) {
+        let value = if input.peek(Punct![";"]) {
             None
         } else {
             Some(input.parse()?)
         };
 
-        input.parse::<Token![;]>()?;
+        input.parse::<Punct![";"]>()?;
 
         Ok(Self::Return(value))
     }
 
-    fn while_statement(input: ParseStream) -> syn::Result<Self> {
-        input.parse::<Token![while]>()?;
+    fn while_statement(input: ParseStream) -> flexi_parse::Result<Self> {
+        input.parse::<kw::kw_while>()?;
 
         let content;
-        parenthesized!(content in input);
+        let _: Parentheses = group!(content in input);
         let condition: Expr = content.parse()?;
 
         let body = Box::new(Self::statement(input)?);
@@ -329,16 +439,16 @@ impl Stmt {
         Ok(Self::While { condition, body })
     }
 
-    fn for_statement(input: ParseStream) -> syn::Result<Self> {
-        input.parse::<Token![for]>()?;
+    fn for_statement(input: ParseStream) -> flexi_parse::Result<Self> {
+        input.parse::<kw::kw_for>()?;
 
         let content;
-        parenthesized!(content in input);
+        let _: Parentheses = group!(content in input);
 
-        if content.peek2(Token![in]) {
+        if content.peek2(kw::kw_in) {
             let name: Ident = content.parse()?;
 
-            content.parse::<Token![in]>()?;
+            content.parse::<kw::kw_in>()?;
 
             let iterable: Expr = content.parse()?;
 
@@ -351,7 +461,7 @@ impl Stmt {
             });
         }
 
-        let initializer = if content.peek(Token![;]) {
+        let initializer = if content.peek(Punct![";"]) {
             Self::Expr(Expr::Literal(rulox_types::LoxValue::Nil))
         } else if content.peek(kw::var) {
             Self::var_declaration(&content)?
@@ -359,12 +469,12 @@ impl Stmt {
             Self::expression_statement(&content)?
         };
 
-        let condition = if content.peek(Token![;]) {
+        let condition = if content.peek(Punct![";"]) {
             Expr::Literal(rulox_types::LoxValue::Bool(true))
         } else {
             Expr::parse(&content)?
         };
-        content.parse::<Token![;]>()?;
+        content.parse::<Punct![";"]>()?;
 
         let increment = if content.is_empty() {
             Expr::Literal(rulox_types::LoxValue::Nil)
@@ -384,8 +494,8 @@ impl Stmt {
         Ok(body)
     }
 
-    fn loop_statement(input: ParseStream) -> syn::Result<Self> {
-        input.parse::<Token![loop]>()?;
+    fn loop_statement(input: ParseStream) -> flexi_parse::Result<Self> {
+        input.parse::<kw::kw_loop>()?;
 
         let body: Stmt = input.parse()?;
 
@@ -394,18 +504,18 @@ impl Stmt {
         })
     }
 
-    fn throw(input: ParseStream) -> syn::Result<Self> {
+    fn throw(input: ParseStream) -> flexi_parse::Result<Self> {
         input.parse::<kw::throw>()?;
 
         let expr = input.parse()?;
 
-        input.parse::<Token![;]>()?;
+        input.parse::<Punct![";"]>()?;
 
         Ok(Self::Throw(expr))
     }
 
-    fn try_statement(input: ParseStream) -> syn::Result<Self> {
-        input.parse::<Token![try]>()?;
+    fn try_statement(input: ParseStream) -> flexi_parse::Result<Self> {
+        input.parse::<kw::kw_try>()?;
 
         let body = input.parse()?;
 
@@ -413,12 +523,12 @@ impl Stmt {
         while input.peek(kw::except) {
             input.parse::<kw::except>()?;
 
-            let (binding, guard) = if input.peek(Paren) {
+            let (binding, guard) = if input.peek(LeftParen) {
                 let content;
-                parenthesized!(content in input);
+                let _: Parentheses = group!(content in input);
                 let binding = content.parse()?;
-                let guard = if content.peek(Token![if]) {
-                    content.parse::<Token![if]>()?;
+                let guard = if content.peek(kw::kw_if) {
+                    content.parse::<kw::kw_if>()?;
                     Some(content.parse()?)
                 } else {
                     None
@@ -437,8 +547,8 @@ impl Stmt {
             });
         }
 
-        let else_block = if input.peek(Token![else]) {
-            input.parse::<Token![else]>()?;
+        let else_block = if input.peek(kw::kw_else) {
+            input.parse::<kw::kw_else>()?;
             Some(input.parse()?)
         } else {
             None
@@ -459,9 +569,9 @@ impl Stmt {
         })
     }
 
-    fn block(input: ParseStream) -> syn::Result<Self> {
+    fn block(input: ParseStream) -> flexi_parse::Result<Self> {
         let content;
-        braced!(content in input);
+        let _: Braces = group!(content in input);
 
         let mut statements: Vec<Stmt> = vec![];
 
@@ -472,13 +582,14 @@ impl Stmt {
         Ok(Self::Block(statements))
     }
 
-    fn expression_statement(input: ParseStream) -> syn::Result<Self> {
+    fn expression_statement(input: ParseStream) -> flexi_parse::Result<Self> {
         let expr: Expr = input.parse()?;
-        input.parse::<Token![;]>()?;
+        input.parse::<Punct![";"]>()?;
         Ok(Self::Expr(expr))
     }
 }
 
+#[derive(Debug)]
 pub enum Expr {
     Literal(LoxValue),
     Array(Vec<Expr>),
@@ -534,17 +645,17 @@ pub enum Expr {
 }
 
 impl Parse for Expr {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> flexi_parse::Result<Self> {
         Self::assignment(input)
     }
 }
 
 impl Expr {
-    fn assignment(input: ParseStream) -> syn::Result<Self> {
+    fn assignment(input: ParseStream) -> flexi_parse::Result<Self> {
         let expr = Self::or(input)?;
 
-        if input.peek(Token![=]) {
-            input.parse::<Token![=]>()?;
+        if input.peek(Punct!["="]) {
+            let eq: Punct!["="] = input.parse()?;
             let value = Self::assignment(input)?;
 
             match expr {
@@ -561,20 +672,20 @@ impl Expr {
                         value: Box::new(value),
                     });
                 }
-                _ => Err(input.error("invalid assignment target"))?,
+                _ => Err(input.new_error("invalid assignment target".to_string(), &eq, 0))?,
             }
         }
 
         Ok(expr)
     }
 
-    fn or(input: ParseStream) -> syn::Result<Self> {
+    fn or(input: ParseStream) -> flexi_parse::Result<Self> {
         let mut expr = Self::and(input)?;
 
         while input.peek(kw::or) {
-            let span = input.parse::<kw::or>()?.span();
+            let span = input.parse::<kw::or>()?.span().clone();
             let right = Self::and(input)?;
-            let operator = BinOp::Or(Token![||](span));
+            let operator = BinOp::Or(<Punct!["||"]>::new(span));
             expr = Expr::Binary {
                 left: Box::new(expr),
                 operator,
@@ -585,13 +696,13 @@ impl Expr {
         Ok(expr)
     }
 
-    fn and(input: ParseStream) -> syn::Result<Self> {
+    fn and(input: ParseStream) -> flexi_parse::Result<Self> {
         let mut expr = Self::equality(input)?;
 
         while input.peek(kw::and) {
-            let span = input.parse::<kw::and>()?.span();
+            let span = input.parse::<kw::and>()?.span().clone();
             let right = Self::equality(input)?;
-            let operator = BinOp::And(Token![&&](span));
+            let operator = BinOp::And(<Punct!["&&"]>::new(span));
             expr = Expr::Binary {
                 left: Box::new(expr),
                 operator,
@@ -602,10 +713,10 @@ impl Expr {
         Ok(expr)
     }
 
-    fn equality(input: ParseStream) -> syn::Result<Self> {
+    fn equality(input: ParseStream) -> flexi_parse::Result<Self> {
         let mut expr = Self::comparison(input)?;
 
-        while input.peek(Token![!=]) || input.peek(Token![==]) {
+        while input.peek(Punct!["!="]) || input.peek(Punct!["=="]) {
             let operator: BinOp = input.parse()?;
             let right = Self::comparison(input)?;
             expr = Self::Binary {
@@ -618,13 +729,13 @@ impl Expr {
         Ok(expr)
     }
 
-    fn comparison(input: ParseStream) -> syn::Result<Self> {
+    fn comparison(input: ParseStream) -> flexi_parse::Result<Self> {
         let mut expr = Self::term(input)?;
 
-        while input.peek(Token![>])
-            || input.peek(Token![>=])
-            || input.peek(Token![<])
-            || input.peek(Token![<=])
+        while input.peek(Punct![">"])
+            || input.peek(Punct![">="])
+            || input.peek(Punct!["<"])
+            || input.peek(Punct!["<="])
         {
             let operator: BinOp = input.parse()?;
             let right = Self::term(input)?;
@@ -638,10 +749,10 @@ impl Expr {
         Ok(expr)
     }
 
-    fn term(input: ParseStream) -> syn::Result<Self> {
+    fn term(input: ParseStream) -> flexi_parse::Result<Self> {
         let mut expr = Self::factor(input)?;
 
-        while input.peek(Token![-]) || input.peek(Token![+]) {
+        while input.peek(Punct!["-"]) || input.peek(Punct!["+"]) {
             let operator: BinOp = input.parse()?;
             let right = Self::factor(input)?;
             expr = Self::Binary {
@@ -654,10 +765,10 @@ impl Expr {
         Ok(expr)
     }
 
-    fn factor(input: ParseStream) -> syn::Result<Self> {
+    fn factor(input: ParseStream) -> flexi_parse::Result<Self> {
         let mut expr = Self::unary(input)?;
 
-        while input.peek(Token![/]) || input.peek(Token![*]) || input.peek(Token![%]) {
+        while input.peek(Punct!["/"]) || input.peek(Punct!["*"]) || input.peek(Punct!["%"]) {
             let operator: BinOp = input.parse()?;
             let right = Self::unary(input)?;
             expr = Self::Binary {
@@ -670,8 +781,8 @@ impl Expr {
         Ok(expr)
     }
 
-    fn unary(input: ParseStream) -> syn::Result<Self> {
-        if input.peek(Token![!]) || input.peek(Token![-]) {
+    fn unary(input: ParseStream) -> flexi_parse::Result<Self> {
+        if input.peek(Punct!["!"]) || input.peek(Punct!["-"]) {
             let operator: UnOp = input.parse()?;
             let right = Self::unary(input)?;
             Ok(Self::Unary {
@@ -683,16 +794,16 @@ impl Expr {
         }
     }
 
-    fn call(input: ParseStream) -> syn::Result<Self> {
+    fn call(input: ParseStream) -> flexi_parse::Result<Self> {
         let mut expr = Self::primary(input)?;
 
         loop {
-            if input.peek(token::Paren) {
+            if input.peek(LeftParen) {
                 expr = Self::finish_call(input, expr)?;
-            } else if input.peek(Token![.]) {
-                input.parse::<Token![.]>()?;
-                if input.peek(Token![await]) {
-                    input.parse::<Token![await]>()?;
+            } else if input.peek(Punct!["."]) {
+                input.parse::<Punct!["."]>()?;
+                if input.peek(kw::kw_await) {
+                    input.parse::<kw::kw_await>()?;
                     expr = Self::Await {
                         left: Box::new(expr),
                     };
@@ -702,12 +813,12 @@ impl Expr {
                         name: input.parse()?,
                     };
                 }
-            } else if input.peek(token::Bracket) {
+            } else if input.peek(LeftBracket) {
                 let content;
-                bracketed!(content in input);
+                let _: Brackets = group!(content in input);
                 let index = content.parse()?;
-                if input.peek(Token![=]) {
-                    input.parse::<Token![=]>()?;
+                if input.peek(Punct!["="]) {
+                    input.parse::<Punct!["="]>()?;
                     expr = Expr::IndexSet {
                         left: Box::new(expr),
                         index: Box::new(index),
@@ -727,11 +838,11 @@ impl Expr {
         Ok(expr)
     }
 
-    fn finish_call(input: ParseStream, callee: Expr) -> syn::Result<Self> {
+    fn finish_call(input: ParseStream, callee: Expr) -> flexi_parse::Result<Self> {
         let content;
-        parenthesized!(content in input);
+        let _: Parentheses = group!(content in input);
 
-        let arguments = content.parse_terminated(Expr::parse, Token![,])?;
+        let arguments: Punctuated<Expr, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
 
         Ok(Self::Call {
             callee: Box::new(callee),
@@ -739,57 +850,57 @@ impl Expr {
         })
     }
 
-    fn primary(input: ParseStream) -> syn::Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(syn::LitBool) {
-            let value: syn::LitBool = input.parse()?;
-            Ok(Self::Literal(LoxValue::from(value.value)))
+    fn primary(input: ParseStream) -> flexi_parse::Result<Self> {
+        let lookahead = input.lookahead();
+        if lookahead.peek(kw::kw_true) {
+            let _: kw::kw_true = input.parse()?;
+            Ok(Self::Literal(LoxValue::from(true)))
+        } else if lookahead.peek(kw::kw_false) {
+            let _: kw::kw_false = input.parse()?;
+            Ok(Self::Literal(LoxValue::from(false)))
         } else if lookahead.peek(kw::nil) {
             input.parse::<kw::nil>()?;
             Ok(Self::Literal(LoxValue::Nil))
-        } else if lookahead.peek(syn::LitStr) {
-            let value: syn::LitStr = input.parse()?;
+        } else if lookahead.peek(LitStr) {
+            let value: LitStr = input.parse()?;
+            Ok(Self::Literal(LoxValue::from(value.string().clone())))
+        } else if lookahead.peek(LitFloat) {
+            let value: LitFloat = input.parse()?;
             Ok(Self::Literal(LoxValue::from(value.value())))
-        } else if lookahead.peek(syn::LitInt) {
-            let value: syn::LitInt = input.parse()?;
-            Ok(Self::Literal(LoxValue::from(value.base10_parse::<f64>()?)))
-        } else if lookahead.peek(syn::LitFloat) {
-            let value: syn::LitFloat = input.parse()?;
-            Ok(Self::Literal(LoxValue::from(value.base10_parse::<f64>()?)))
-        } else if lookahead.peek(syn::LitByteStr) {
-            let value: syn::LitByteStr = input.parse()?;
-            Ok(Self::Literal(LoxValue::Bytes(Bytes::from(value.value()))))
+        } else if lookahead.peek(LitInt) {
+            let value: LitInt = input.parse()?;
+            Ok(Self::Literal(LoxValue::from(value.value())))
         } else if lookahead.peek(kw::fun) {
             Self::function(input, false)
-        } else if lookahead.peek(Token![async]) {
-            input.parse::<Token![async]>()?;
+        } else if lookahead.peek(kw::kw_async) {
+            input.parse::<kw::kw_async>()?;
             Self::function(input, true)
         } else if lookahead.peek(kw::this) {
             input.parse::<kw::this>()?;
             Ok(Expr::This)
-        } else if lookahead.peek(Token![super]) {
-            input.parse::<Token![super]>()?;
+        } else if lookahead.peek(kw::kw_super) {
+            input.parse::<kw::kw_super>()?;
             let content;
 
-            parenthesized!(content in input);
-            let arguments = content.parse_terminated(Expr::parse, Token![,])?;
+            let _: Parentheses = group!(content in input);
+            let arguments: Punctuated<Expr, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
 
             Ok(Self::Super {
                 arguments: arguments.into_iter().collect(),
             })
-        } else if lookahead.peek(token::Bracket) {
+        } else if lookahead.peek(LeftBracket) {
             let content;
-            bracketed!(content in input);
+            let _: Brackets = group!(content in input);
 
-            let items = content.parse_terminated(Expr::parse, Token![,])?;
+            let items: Punctuated<Expr, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
             let items = Vec::from_iter(items);
 
             Ok(Self::Array(items))
-        } else if lookahead.peek(token::Paren) {
+        } else if lookahead.peek(LeftParen) {
             let content;
-            parenthesized!(content in input);
+            let _: Parentheses = group!(content in input);
             Self::parse(&content)
-        } else if lookahead.peek(token::Brace) {
+        } else if lookahead.peek(LeftBrace) {
             Self::map(input)
         } else if lookahead.peek(Ident) {
             Ok(Self::Variable(input.parse()?))
@@ -798,13 +909,13 @@ impl Expr {
         }
     }
 
-    fn function(input: ParseStream, is_async: bool) -> syn::Result<Self> {
+    fn function(input: ParseStream, is_async: bool) -> flexi_parse::Result<Self> {
         input.parse::<kw::fun>()?;
 
         let content;
-        parenthesized!(content in input);
+        let _: Parentheses = group!(content in input);
 
-        let params = content.parse_terminated(Ident::parse, Token![,])?;
+        let params: Punctuated<Ident, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
 
         let body: Stmt = input.parse()?;
 
@@ -815,16 +926,16 @@ impl Expr {
         })
     }
 
-    fn map(input: ParseStream) -> syn::Result<Self> {
+    fn map(input: ParseStream) -> flexi_parse::Result<Self> {
         let content;
-        braced!(content in input);
+        let _: Braces = group!(content in input);
         let mut map = vec![];
         while !content.is_empty() {
             let key = content.parse()?;
-            content.parse::<Token![:]>()?;
+            content.parse::<Punct![":"]>()?;
             map.push((key, content.parse()?));
             if !content.is_empty() {
-                content.parse::<Token![,]>()?;
+                content.parse::<Punct![","]>()?;
             }
         }
         Ok(Self::Map(map))

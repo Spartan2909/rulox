@@ -146,7 +146,8 @@
 //! ```
 //! # use rulox::prelude::*;
 //! # use rulox::LoxError;
-//! # fn main() -> Result<(), LoxError> {
+//! # use rulox::LoxValue;
+//! # fn main() -> Result<LoxValue, LoxError> {
 //! lox! {
 //!     var except_ran = false;
 //!     var else_ran = false;
@@ -165,7 +166,7 @@
 //!         finally_ran = true;
 //!     }
 //! }
-//! # Ok(())
+//! # Ok(LoxValue::Nil)
 //! # }
 //! ```
 

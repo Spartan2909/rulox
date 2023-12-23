@@ -20,9 +20,9 @@ license.workspace = true
 
 [features]
 default = ["sync", "async"]
-sync = ["rulox_types/sync"]
-async = ["sync", "rulox_types/async"]
-serialise = ["rulox_types/serialise"]
+sync = ["rulox_types/sync", "rulox_macro/sync"]
+async = ["sync", "rulox_types/async", "rulox_macro/async"]
+serialise = ["rulox_types/serialise", "rulox_macro/serialise"]
 
 [lints]
 workspace = true

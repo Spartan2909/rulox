@@ -24,6 +24,7 @@ pub struct LoxFn {
     #[cfg_attr(feature = "serialise", serde(skip_serializing))]
     fun: Box<dyn Fn(LoxArgs) -> LoxResult + Send + Sync>,
     #[cfg(not(feature = "sync"))]
+    #[cfg_attr(feature = "serialise", serde(skip_serializing))]
     fun: Box<dyn Fn(LoxArgs) -> LoxResult>,
     params: Vec<&'static str>,
 }

@@ -70,7 +70,7 @@ pub fn derive_try_from(item: proc_macro::TokenStream) -> proc_macro::TokenStream
 
             fn try_from(value: LoxValue) -> ::core::result::Result<Self, Self::Error> {
                 let shared: __rulox_helpers::Shared<Self> = value.try_into()?;
-                let reader = __rulox_helpers::read(&shared);
+                let reader = shared.read();
                 Ok(reader.clone())
             }
         }

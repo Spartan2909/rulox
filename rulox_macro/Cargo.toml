@@ -14,7 +14,7 @@ license.workspace = true
 
 [dependencies]
 "bytes" = "1"
-flexi-parse = { version = "0.10.0", features = ["proc-macro"], path = "../../flexi-parse" }
+flexi-parse = { version = "0.10.0", features = ["proc-macro"] }
 "rulox_types" = { path = "../rulox_types", version = "0.6" }
 "syn" = "2"
 "quote" = "1.0"

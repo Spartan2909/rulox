@@ -2,7 +2,6 @@
 #![allow(clippy::unnecessary_wraps)]
 
 use crate::functions::LoxArgs;
-use crate::shared::read;
 use crate::DynLoxObject;
 use crate::LoxError;
 use crate::LoxObject;
@@ -105,7 +104,7 @@ macro_rules! default_collection {
             fn get(
                 &self,
                 _this: Shared<DynLoxObject>,
-                key: &'static str,
+                key: &str,
             ) -> Result<LoxValue, Option<LoxError>> {
                 Ok(LoxValue::$loxvalue_variant(self.0.clone()).get(key)?)
             }
@@ -113,7 +112,7 @@ macro_rules! default_collection {
             fn set(
                 &mut self,
                 _this: Shared<DynLoxObject>,
-                key: &'static str,
+                key: &str,
                 value: LoxValue,
             ) -> Result<(), Option<LoxError>> {
                 LoxValue::$loxvalue_variant(self.0.clone()).set(key, value)?;
@@ -141,7 +140,8 @@ pub(super) fn set_default(mut args: LoxArgs) -> LoxResult {
                 Shared<Vec<LoxValue>>,
                 Arr,
                 fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
-                    read(&self.0)
+                    self.0
+                        .read()
                         .get(usize::try_from(key)?)
                         .map_or_else(|| self.1.call([].into()), |value| Ok(value.clone()))
                 }
@@ -158,7 +158,8 @@ pub(super) fn set_default(mut args: LoxArgs) -> LoxResult {
                 Shared<HashMap<MapKey, LoxValue>>,
                 Map,
                 fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
-                    read(&self.0)
+                    self.0
+                        .read()
                         .get(&MapKey::verify_key(key)?)
                         .map_or_else(|| self.1.call([].into()), |value| Ok(value.clone()))
                 }

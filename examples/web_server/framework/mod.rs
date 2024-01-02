@@ -7,6 +7,7 @@ use response::new_response;
 use response::LoxResponse;
 
 mod template;
+use rulox::Shared;
 use template::new_context;
 use template::render_template;
 
@@ -19,7 +20,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
-use std::sync::RwLock;
 
 use http_body_util::Full;
 
@@ -70,14 +70,13 @@ impl TryFrom<LoxValue> for LoxHeaders {
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
         if value.clone().expect_external().is_ok() {
-            let this: Arc<RwLock<LoxHeaders>> = value.try_into()?;
-            let this = this.read().unwrap().clone();
+            let this: Shared<LoxHeaders> = value.try_into()?;
+            let this = this.read().clone();
             Ok(this)
         } else {
             let headers: Result<_, LoxError> = value
                 .expect_map()?
                 .read()
-                .unwrap()
                 .iter()
                 .map(|(name, value)| {
                     Ok((
@@ -166,12 +165,12 @@ struct Routes {
 }
 
 impl Routes {
-    fn add_route(routes: Arc<RwLock<Routes>>, path: String, handler: RouteHandler) {
-        routes.write().unwrap().route_handlers.insert(path, handler);
+    fn add_route(routes: Shared<Routes>, path: String, handler: RouteHandler) {
+        routes.write().route_handlers.insert(path, handler);
     }
 
-    fn set_handler_404(routes: Arc<RwLock<Routes>>, handler: Arc<Coroutine>) {
-        routes.write().unwrap().handler_404 = Some(handler);
+    fn set_handler_404(routes: Shared<Routes>, handler: Arc<Coroutine>) {
+        routes.write().handler_404 = Some(handler);
     }
 }
 
@@ -197,7 +196,7 @@ struct RouteHandler {
     post: Option<Arc<Coroutine>>,
 }
 
-fn get_handler(handler: Arc<RwLock<DynLoxObject>>) -> Result<Arc<RwLock<RouteHandler>>, LoxError> {
+fn get_handler(handler: Shared<DynLoxObject>) -> Result<Shared<RouteHandler>, LoxError> {
     Ok(handler
         .downcast()
         .map_err(|_| "expected a handler object")
@@ -209,13 +208,13 @@ macro_rules! handler {
         LoxValue::Function(Arc::new(LoxFn::new(
             move |args| {
                 let handler_fn: Arc<Coroutine> = args.get(0).unwrap().clone().try_into()?;
-                let handler = get_handler(Arc::clone(&$this))?;
-                if handler.read().unwrap().$method.is_some() {
+                let handler = get_handler($this.clone())?;
+                if handler.read().$method.is_some() {
                     Err(LoxError::external(Error::MethodAlreadySet(stringify!(
                         $method
                     ))))
                 } else {
-                    handler.write().unwrap().$method = Some(handler_fn);
+                    handler.write().$method = Some(handler_fn);
                     Ok(LoxValue::Nil)
                 }
             },
@@ -232,11 +231,7 @@ impl LoxObject for RouteHandler {
         "Handler".to_string()
     }
 
-    fn get(
-        &self,
-        this: Arc<RwLock<DynLoxObject>>,
-        key: &'static str,
-    ) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         match key {
             "get" => Ok(handler!(this, get)),
             "post" => Ok(handler!(this, post)),
@@ -295,12 +290,11 @@ async fn handle_method(
                         .downcast::<LoxResponse>()
                         .unwrap_or_else(|_| unreachable!())
                         .read()
-                        .unwrap()
                         .clone();
 
                     *response.body_mut() = Bytes::from(lox_response.body).into();
                     *response.status_mut() = lox_response.status_code;
-                    for (header_name, header) in &lox_response.headers.read().unwrap().0 {
+                    for (header_name, header) in &lox_response.headers.read().0 {
                         response.headers_mut().insert(
                             HeaderName::try_from(header_name).map_err(LoxError::external)?,
                             header.try_into().map_err(LoxError::external)?,

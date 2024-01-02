@@ -1,8 +1,6 @@
-use crate::shared::read;
 use crate::LoxClass;
 use crate::LoxError;
 use crate::LoxInstance;
-use crate::LoxRc;
 use crate::LoxValue;
 
 use std::fmt;
@@ -36,21 +34,21 @@ impl Hash for LoxValue {
                 exponent -= 1023 + 52;
                 (mantissa, exponent, sign).hash(state);
             }
-            Self::Arr(arr) => read(arr).hash(state),
+            Self::Arr(arr) => arr.read().hash(state),
             Self::Function(func) => func.hash(state),
             Self::BoundMethod(func, _) => func.hash(state),
             Self::PrimitiveMethod(func, _) => func.hash(state),
             Self::Class(class) => class.hash(state),
-            Self::Instance(instance) => read(instance).hash(state),
+            Self::Instance(instance) => instance.read().hash(state),
             Self::Map(_) => panic!("cannot hash a hashmap"),
             Self::Bytes(bytes) => bytes.hash(state),
             Self::Error(err) => err.hash(state),
             #[cfg(feature = "async")]
             Self::Coroutine(func) => func.hash(state),
             #[cfg(feature = "async")]
-            Self::Future(fut) => read(&fut.0).hash(state),
+            Self::Future(fut) => fut.0.read().hash(state),
             Self::Nil => {}
-            Self::External(external) => LoxRc::as_ptr(external).hash(state),
+            Self::External(external) => external.as_ptr().hash(state),
             Self::Undefined(_) => unreachable!(),
         }
     }

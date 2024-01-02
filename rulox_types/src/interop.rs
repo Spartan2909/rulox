@@ -1,6 +1,5 @@
 use crate::error::LoxError;
 use crate::private::Sealed;
-use crate::shared::read;
 use crate::shared::Shared;
 use crate::LoxArgs;
 use crate::LoxRc;
@@ -97,11 +96,7 @@ pub trait LoxObject: Any + Debug + Named {
     /// ## Errors
     /// Returns an error if this functionality is not implemented for this type.
     /// This method should return `Err(None)` if the value is not found.
-    fn get(
-        &self,
-        this: Shared<DynLoxObject>,
-        key: &'static str,
-    ) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         let (_, _) = (this, key);
         Err(None)
     }
@@ -114,7 +109,7 @@ pub trait LoxObject: Any + Debug + Named {
     fn set(
         &mut self,
         this: Shared<DynLoxObject>,
-        key: &'static str,
+        key: &str,
         value: LoxValue,
     ) -> Result<(), Option<LoxError>> {
         let (_, _, _) = (this, key, value);
@@ -214,13 +209,13 @@ pub trait LoxObject: Any + Debug + Named {
 
 fn unsync_is<T: LoxObject>(value: &Shared<dyn LoxObject>) -> bool {
     let t = TypeId::of::<T>();
-    let concrete = (*read(value)).type_id();
+    let concrete = (*value.read()).type_id();
     t == concrete
 }
 
 fn sync_is<T: LoxObject>(value: &Shared<dyn LoxObject + Send + Sync>) -> bool {
     let t = TypeId::of::<T>();
-    let concrete = (*read(value)).type_id();
+    let concrete = (*value.read()).type_id();
     t == concrete
 }
 
@@ -228,7 +223,7 @@ fn sync_is<T: LoxObject>(value: &Shared<dyn LoxObject + Send + Sync>) -> bool {
 ///
 /// This trait is sealed, and cannot be implemented for foreign types.
 pub trait Downcast: Sized + Sealed {
-    /// Attempts to downcast `self` to a concrete typ.
+    /// Attempts to downcast `self` to a concrete type.
     ///
     /// ## Errors
     /// Returns `Err(self)` if the conversion failed.
@@ -240,12 +235,12 @@ impl Sealed for Shared<dyn LoxObject> {}
 impl Downcast for Shared<dyn LoxObject> {
     fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject>> {
         if unsync_is::<T>(&self) {
-            let ptr = LoxRc::into_raw(self);
+            let ptr = self.as_ptr();
             // SAFETY: The `TypeId`s are the same, therefore `self` is an
             // instance of `T`.
-            Ok(unsafe { Shared::from_raw(ptr.cast()) })
+            Ok(unsafe { Shared::from(LoxRc::from_raw(ptr.cast())) })
         } else {
-            todo!()
+            Err(self)
         }
     }
 }
@@ -255,12 +250,12 @@ impl Sealed for Shared<dyn LoxObject + Send + Sync> {}
 impl Downcast for Shared<dyn LoxObject + Send + Sync> {
     fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject + Send + Sync>> {
         if sync_is::<T>(&self) {
-            let ptr = LoxRc::into_raw(self);
+            let ptr = self.as_ptr();
             // SAFETY: The `TypeId`s are the same, therefore `self` is an
             // instance of `T`.
-            Ok(unsafe { Shared::from_raw(ptr.cast()) })
+            Ok(unsafe { Shared::from(LoxRc::from_raw(ptr.cast())) })
         } else {
-            todo!()
+            Err(self)
         }
     }
 }
@@ -279,5 +274,27 @@ impl<T: LoxObject> TryFrom<LoxValue> for Shared<T> {
         obj_from_value(&value).ok_or_else(|| {
             LoxError::type_error(format!("expected {}, found {value}", T::type_name()))
         })
+    }
+}
+
+/// A trait primarily intended for explicit conversions to unsized types.
+///
+/// This trait is expected to be replaced by [`std::ops::CoerceUnsized`] once
+/// it is stabilised.
+pub trait Upcast<T: ?Sized> {
+    /// Convert `self` to a pointer to the target type.
+    fn upcast(self) -> Shared<T>;
+}
+
+impl<T: LoxObject> Upcast<dyn LoxObject> for Shared<T> {
+    fn upcast(self) -> Shared<dyn LoxObject> {
+        Shared(self.into_inner() as _)
+    }
+}
+
+#[cfg(feature = "sync")]
+impl<T: LoxObject + Send + Sync> Upcast<dyn LoxObject + Send + Sync> for Shared<T> {
+    fn upcast(self) -> Shared<dyn LoxObject + Send + Sync> {
+        Shared(self.into_inner() as _)
     }
 }

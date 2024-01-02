@@ -8,7 +8,6 @@ use std::fmt;
 use std::fmt::Debug;
 use std::mem;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use rulox::hashmap_to_json_map;
 use rulox::lox_bindgen;
@@ -19,6 +18,8 @@ use rulox::LoxError;
 use rulox::LoxObject;
 use rulox::LoxValue;
 use rulox::MapKey;
+use rulox::Shared;
+use rulox::Upcast;
 
 use serde_json::Map;
 use serde_json::Value;
@@ -104,17 +105,12 @@ impl LoxObject for LoxContext {
         "Context".to_string()
     }
 
-    fn get(
-        &self,
-        this: Arc<RwLock<DynLoxObject>>,
-        key: &'static str,
-    ) -> Result<LoxValue, Option<LoxError>> {
-        let this: Arc<RwLock<LoxContext>> =
-            this.clone().downcast().unwrap_or_else(|_| unreachable!());
+    fn get(&self, this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
+        let this: Shared<LoxContext> = this.clone().downcast().unwrap_or_else(|_| unreachable!());
         match key {
             "filter" => {
                 let filter = move |name: String, fun: LoxValue| {
-                    this.write().unwrap().filters.insert(
+                    this.write().filters.insert(
                         name,
                         LoxFilter(Box::new(
                             move |input: &Value,
@@ -134,8 +130,8 @@ impl LoxObject for LoxContext {
                                     .call(
                                         [
                                             input.try_into().map_err(tera::Error::msg)?,
-                                            LoxValue::Map(Arc::new(
-                                                args.map_err(tera::Error::msg)?.into(),
+                                            LoxValue::Map(Shared::new(
+                                                args.map_err(tera::Error::msg)?,
                                             )),
                                         ]
                                         .into(),
@@ -152,7 +148,7 @@ impl LoxObject for LoxContext {
             }
             "test" => {
                 let test = move |name: String, function: LoxValue| {
-                    this.write().unwrap().tests.insert(
+                    this.write().tests.insert(
                         name,
                         LoxTest(Box::new(
                             move |input: Option<&Value>,
@@ -185,32 +181,42 @@ impl LoxObject for LoxContext {
                 Ok(test.get()?)
             }
             "function" => {
-                let function = move |name: String, function: LoxValue| {
-                    this.write().unwrap().functions.insert(
-                        name,
-                        LoxFunction(Box::new(
-                            move |args: &HashMap<String, Value>| -> Result<Value, tera::Error> {
-                                let args = [LoxValue::Map(Arc::new(RwLock::new(
-                                    args.iter()
-                                        .map(|(key, value)| {
-                                            Ok((
-                                                MapKey::verify_key(key.to_owned().into()).unwrap(),
-                                                LoxValue::try_from(value)
-                                                    .map_err(tera::Error::msg)?,
-                                            ))
-                                        })
-                                        .collect::<Result<HashMap<MapKey, LoxValue>, tera::Error>>(
-                                        )?,
-                                )))]
-                                .into();
-                                function
-                                    .call(args)
-                                    .and_then(|value| value.try_into())
-                                    .map_err(tera::Error::msg)
-                            },
-                        )),
-                    );
-                };
+                let function =
+                    move |name: String, function: LoxValue| {
+                        this.write().functions.insert(
+                            name,
+                            LoxFunction(Box::new(
+                                move |args: &HashMap<String, Value>| -> Result<Value, tera::Error> {
+                                    let args =
+                                        [LoxValue::Map(
+                                            Shared::new(
+                                                args.iter()
+                                                    .map(|(key, value)| {
+                                                        Ok((
+                                                            MapKey::verify_key(
+                                                                key.to_owned().into(),
+                                                            )
+                                                            .unwrap(),
+                                                            LoxValue::try_from(value)
+                                                                .map_err(tera::Error::msg)?,
+                                                        ))
+                                                    })
+                                                    .collect::<Result<
+                                                        HashMap<MapKey, LoxValue>,
+                                                        tera::Error,
+                                                    >>(
+                                                    )?,
+                                            ),
+                                        )]
+                                        .into();
+                                    function
+                                        .call(args)
+                                        .and_then(|value| value.try_into())
+                                        .map_err(tera::Error::msg)
+                                },
+                            )),
+                        );
+                    };
                 lox_bindgen!(fn function(name, func));
                 Ok(function.get()?)
             }
@@ -219,40 +225,37 @@ impl LoxObject for LoxContext {
     }
 }
 
-fn into_context(value: LoxValue) -> Result<Arc<RwLock<LoxContext>>, LoxError> {
+fn into_context(value: LoxValue) -> Result<Shared<LoxContext>, LoxError> {
     if let LoxValue::External(external) = value {
         external.downcast::<LoxContext>().map_err(|external| {
             Error::IncorrectType {
                 expected: LoxContext::type_name(),
-                found: external.read().unwrap().representation(),
+                found: external.read().representation(),
             }
             .into()
         })
     } else {
-        Ok(Arc::new(
-            LoxContext {
-                context: hashmap_to_json_map(&value.expect_map()?.read().unwrap())?,
-                filters: HashMap::new(),
-                tests: HashMap::new(),
-                functions: HashMap::new(),
-            }
-            .into(),
-        ))
+        Ok(Shared::new(LoxContext {
+            context: hashmap_to_json_map(&value.expect_map()?.read())?,
+            filters: HashMap::new(),
+            tests: HashMap::new(),
+            functions: HashMap::new(),
+        }))
     }
 }
 
 pub(super) fn new_context(value: LoxValue) -> Result<LoxValue, LoxError> {
-    let context: Arc<RwLock<DynLoxObject>> = into_context(value)?;
+    let context: Shared<DynLoxObject> = into_context(value)?.upcast();
     Ok(LoxValue::External(context))
 }
 
 pub(super) fn render_template(
     name: Arc<String>,
-    _request: Arc<RwLock<LoxRequest>>,
+    _request: Shared<LoxRequest>,
     context: LoxValue,
 ) -> Result<LoxValue, LoxError> {
     let context = into_context(context)?;
-    let (tera, context) = context.write().unwrap().apply(TEMPLATES.get().unwrap())?;
+    let (tera, context) = context.write().apply(TEMPLATES.get().unwrap())?;
     let body = tera.render(&name, &context).map_err(LoxError::external)?;
     Ok(LoxValue::external(new_response(body)))
 }

@@ -2,7 +2,6 @@
 
 use crate::error::LoxError;
 use crate::interop::LoxObject;
-use crate::shared::read;
 use crate::shared::Shared;
 use crate::LoxClass;
 use crate::LoxFn;
@@ -51,7 +50,7 @@ impl From<&str> for LoxValue {
 
 impl From<Vec<LoxValue>> for LoxValue {
     fn from(values: Vec<LoxValue>) -> Self {
-        Self::Arr(Shared::new(values.into()))
+        Self::Arr(Shared::new(values))
     }
 }
 
@@ -81,7 +80,7 @@ impl From<LoxRc<LoxClass>> for LoxValue {
 
 impl From<HashMap<MapKey, LoxValue>> for LoxValue {
     fn from(value: HashMap<MapKey, LoxValue>) -> Self {
-        LoxValue::Map(LoxRc::new(value.into()))
+        LoxValue::Map(Shared::new(value))
     }
 }
 
@@ -169,7 +168,7 @@ impl TryFrom<LoxValue> for Shared<HashMap<MapKey, LoxValue>> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.expect_map().map(LoxRc::clone)
+        value.expect_map().map(Clone::clone)
     }
 }
 
@@ -177,7 +176,7 @@ impl TryFrom<LoxValue> for HashMap<MapKey, LoxValue> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.expect_map().map(|value| read(value).clone())
+        value.expect_map().map(|value| value.read().clone())
     }
 }
 

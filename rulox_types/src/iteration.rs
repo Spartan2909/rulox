@@ -1,4 +1,3 @@
-use crate::shared::read;
 use crate::LoxValue;
 use crate::LoxValueType;
 
@@ -76,7 +75,7 @@ impl IntoIterator for LoxValue {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            Self::Arr(arr) => IntoIter::Array(read(&arr).clone().into_iter()),
+            Self::Arr(arr) => IntoIter::Array(arr.read().clone().into_iter()),
             Self::Str(string) => IntoIter::String(string.to_string().into_bytes().into_iter()),
             _ => panic!("cannot convert {} into iterator", LoxValueType::from(self)),
         }

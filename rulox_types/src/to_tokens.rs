@@ -1,4 +1,3 @@
-use crate::read;
 use crate::LoxValue;
 
 use proc_macro2::Literal;
@@ -25,7 +24,7 @@ impl ToTokens for LoxValue {
                 tokens.append(Punct::new('(', Spacing::Alone));
                 tokens.append_all(quote! { vec! });
                 tokens.append(Punct::new('[', Spacing::Alone));
-                for value in read(arr).iter() {
+                for value in arr.read().iter() {
                     tokens.append_all(quote! { #value, });
                 }
                 tokens.append(Punct::new(']', Spacing::Joint));

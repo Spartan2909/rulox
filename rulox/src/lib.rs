@@ -324,6 +324,7 @@ pub use rulox_types::LoxValue;
 pub use rulox_types::LoxVariable;
 pub use rulox_types::MapKey;
 pub use rulox_types::Shared;
+pub use rulox_types::Upcast;
 
 #[cfg(feature = "serialise")]
 pub use rulox_types::hashmap_to_json_map;
@@ -348,8 +349,6 @@ pub mod prelude {
         pub use crate::LoxVariable;
         pub use core::result::Result;
         pub use rulox_types::extract;
-        pub use rulox_types::read;
-        pub use rulox_types::write;
         pub use rulox_types::LoxRc;
         pub use rulox_types::Shared;
         pub use std::collections::HashMap;

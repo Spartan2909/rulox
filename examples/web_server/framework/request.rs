@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::RwLock;
 
 use http_body_util::BodyExt;
 
@@ -24,7 +23,9 @@ use rulox::DynLoxObject;
 use rulox::LoxError;
 use rulox::LoxObject;
 use rulox::LoxValue;
+use rulox::Shared;
 use rulox::TryFromLoxValue;
+use rulox::Upcast;
 
 use tokio::runtime::Handle;
 
@@ -74,15 +75,11 @@ impl LoxObject for LoxParamDict {
         "ParamDict".to_string()
     }
 
-    fn get(
-        &self,
-        this: rulox::Shared<DynLoxObject>,
-        key: &'static str,
-    ) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         if key == "get_or" {
             let get_or = move |key: LoxValue, default: LoxValue| -> Result<LoxValue, LoxError> {
-                let this: Arc<RwLock<LoxParamDict>> = this.clone().downcast().unwrap();
-                let this = this.read().unwrap();
+                let this: Shared<LoxParamDict> = this.clone().downcast().unwrap();
+                let this = this.read();
                 let value = this.dict.get(&**key.expect_str()?);
                 if let Some(values) = value {
                     Ok(LoxValue::Str(values.first().unwrap().clone()))
@@ -176,7 +173,7 @@ impl fmt::Debug for RequestBody {
 }
 
 pub struct LoxRequest {
-    headers: Arc<RwLock<LoxHeaders>>,
+    headers: Shared<LoxHeaders>,
     body: Mutex<RequestBody>,
     uri: Uri,
     method: Method,
@@ -185,7 +182,7 @@ pub struct LoxRequest {
 impl fmt::Debug for LoxRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Request")
-            .field("headers", &self.headers.read().unwrap())
+            .field("headers", &*self.headers.read())
             .field("body", &self.body)
             .field("path", &self.uri.path)
             .field("query", &self.uri.query)
@@ -202,13 +199,9 @@ impl LoxObject for LoxRequest {
         "Request".to_string()
     }
 
-    fn get(
-        &self,
-        _this: Arc<RwLock<DynLoxObject>>,
-        key: &'static str,
-    ) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, _this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         match key {
-            "headers" => Ok(LoxValue::External(self.headers.clone())),
+            "headers" => Ok(LoxValue::External(self.headers.clone().upcast())),
             "body" => {
                 let mut body = self.body.lock().unwrap();
                 match &mut *body {
@@ -244,12 +237,12 @@ impl LoxObject for LoxRequest {
     fn set(
         &mut self,
         _this: rulox::Shared<DynLoxObject>,
-        key: &'static str,
+        key: &str,
         value: LoxValue,
     ) -> Result<(), Option<LoxError>> {
         match key {
             "headers" => {
-                self.headers = Arc::new(RwLock::new(value.try_into()?));
+                self.headers = Shared::new(value.try_into()?);
                 Ok(())
             }
             "body" => {
@@ -288,7 +281,7 @@ pub(super) async fn new_request(value: Request<Incoming>) -> Result<LoxValue, Lo
     let (parts, body) = value.into_parts();
 
     let request = LoxRequest {
-        headers: Arc::new(RwLock::new(LoxHeaders(parts.headers))),
+        headers: Shared::new(LoxHeaders(parts.headers)),
         body: Mutex::new(RequestBody::Incoming(Some(body))),
         uri: parts.uri.try_into().map_err(LoxError::external)?,
         method: parts.method,

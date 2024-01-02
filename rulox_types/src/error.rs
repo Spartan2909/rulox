@@ -65,14 +65,14 @@ impl LoxError {
         }
     }
 
-    pub(crate) fn invalid_property(property: &'static str, object: String) -> LoxError {
+    pub(crate) fn invalid_property(property: String, object: String) -> LoxError {
         LoxError {
             inner: LoxErrorInner::InvalidProperty { property, object },
             trace: VecDeque::new(),
         }
     }
 
-    pub(crate) fn non_existent_super(name: &'static str) -> LoxError {
+    pub(crate) fn non_existent_super(name: String) -> LoxError {
         LoxError {
             inner: LoxErrorInner::NonExistentSuper(name),
             trace: VecDeque::new(),
@@ -94,7 +94,8 @@ impl LoxError {
         }
     }
 
-    pub(crate) fn incorrect_arity(expected: usize, found: usize) -> LoxError {
+    #[doc(hidden)]
+    pub fn incorrect_arity(expected: usize, found: usize) -> LoxError {
         LoxError {
             inner: LoxErrorInner::IncorrectArity { expected, found },
             trace: VecDeque::new(),
@@ -152,7 +153,7 @@ impl LoxError {
     }
 
     #[doc(hidden)]
-    pub fn is_pass(&self) -> bool {
+    pub const fn is_pass(&self) -> bool {
         matches!(&self.inner, LoxErrorInner::ControlFlow)
     }
 
@@ -229,10 +230,10 @@ enum LoxErrorInner {
     /// An error that occurs when variables are accessed without first being defined.
     UndefinedVariable(&'static str),
     InvalidProperty {
-        property: &'static str,
+        property: String,
         object: String,
     },
-    NonExistentSuper(&'static str),
+    NonExistentSuper(String),
     IndexOutOfRange(usize),
     InvalidKey(Box<LoxValue>),
     IncorrectArity {

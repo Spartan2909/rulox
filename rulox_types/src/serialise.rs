@@ -1,5 +1,3 @@
-use crate::read;
-use crate::shared::Inner;
 use crate::DynLoxObject;
 use crate::LoxArgs;
 use crate::LoxError;
@@ -43,12 +41,12 @@ impl TryFrom<&Value> for LoxValue {
             Value::Bool(b) => Ok(LoxValue::Bool(*b)),
             Value::Number(num) => Ok(LoxValue::Num(num.as_f64().unwrap())),
             Value::String(string) => Ok(LoxValue::Str(LoxRc::new(string.clone()))),
-            Value::Array(arr) => Ok(LoxValue::Arr(LoxRc::new(Inner::new(
+            Value::Array(arr) => Ok(LoxValue::Arr(Shared::new(
                 arr.iter()
                     .map(TryInto::<LoxValue>::try_into)
                     .collect::<Result<Vec<_>, _>>()?,
-            )))),
-            Value::Object(obj) => Ok(LoxValue::Map(LoxRc::new(
+            ))),
+            Value::Object(obj) => Ok(LoxValue::Map(Shared::new(
                 obj.into_iter()
                     .map(|(key, value)| {
                         Ok((
@@ -56,8 +54,7 @@ impl TryFrom<&Value> for LoxValue {
                             value.try_into()?,
                         ))
                     })
-                    .collect::<Result<HashMap<MapKey, LoxValue>, LoxError>>()?
-                    .into(),
+                    .collect::<Result<HashMap<MapKey, LoxValue>, LoxError>>()?,
             ))),
         }
     }
@@ -98,12 +95,13 @@ impl TryFrom<&LoxValue> for Value {
             }
             LoxValue::Arr(arr) => {
                 let arr: Result<Vec<Value>, LoxError> =
-                    read(arr).iter().map(TryInto::try_into).collect();
+                    arr.read().iter().map(TryInto::try_into).collect();
                 Ok(Value::Array(arr?))
             }
-            LoxValue::Map(map) => Ok(Value::Object(hashmap_to_json_map(&read(map))?)),
+            LoxValue::Map(map) => Ok(Value::Object(hashmap_to_json_map(&map.read())?)),
             LoxValue::Instance(instance) => {
-                let map: Result<Map<String, Value>, LoxError> = read(instance)
+                let map: Result<Map<String, Value>, LoxError> = instance
+                    .read()
                     .attributes
                     .iter()
                     .map(|(key, value)| Ok((key.to_owned(), value.try_into()?)))

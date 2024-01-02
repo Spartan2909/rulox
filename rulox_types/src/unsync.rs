@@ -11,19 +11,47 @@ use std::cell::UnsafeCell;
 use std::rc::Rc;
 
 /// A shared, mutable pointer to `T`.
-pub type Shared<T> = Rc<RefCell<T>>;
+#[derive(Debug)]
+#[cfg_attr(feature = "serialise", derive(serde::Serialize))]
+pub struct Shared<T: ?Sized>(pub(crate) Rc<RefCell<T>>);
 
-#[cfg_attr(not(feature = "serialise"), allow(dead_code))]
-pub type Inner<T> = RefCell<T>;
-
-/// Returns a read-only RAII guard for the shared pointer.
-pub fn read<T: ?Sized>(ptr: &Shared<T>) -> ReadGuard<T> {
-    ReadGuard(ptr.borrow())
+impl<T> Shared<T> {
+    /// Construct a new shared pointer to `value`.
+    pub fn new(value: T) -> Shared<T> {
+        Shared(Rc::new(RefCell::new(value)))
+    }
 }
 
-/// Returns a read-write RAII guard for the shared pointer.
-pub fn write<T: ?Sized>(ptr: &Shared<T>) -> WriteGuard<T> {
-    WriteGuard(ptr.borrow_mut())
+impl<T: ?Sized> Shared<T> {
+    /// Returns a read-only RAII guard for the contents of `self`.
+    pub fn read(&self) -> ReadGuard<T> {
+        ReadGuard(self.0.borrow())
+    }
+
+    /// Returns a read-write RAII guard for the contents of `self`.
+    pub fn write(&self) -> WriteGuard<T> {
+        WriteGuard(self.0.borrow_mut())
+    }
+
+    pub(crate) fn as_ptr(&self) -> *const RefCell<T> {
+        Rc::as_ptr(&self.0)
+    }
+
+    pub(crate) fn into_inner(self) -> Rc<RefCell<T>> {
+        self.0
+    }
+}
+
+impl<T: ?Sized> Clone for Shared<T> {
+    fn clone(&self) -> Self {
+        Shared(Rc::clone(&self.0))
+    }
+}
+
+impl<T: ?Sized> From<Rc<RefCell<T>>> for Shared<T> {
+    fn from(value: Rc<RefCell<T>>) -> Self {
+        Shared(value)
+    }
 }
 
 pub struct ReadGuard<'a, T: ?Sized>(Ref<'a, T>);

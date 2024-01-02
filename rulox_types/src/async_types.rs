@@ -1,6 +1,5 @@
 use crate::functions::LoxArgs;
 use crate::hash::hash_ptr;
-use crate::write;
 use crate::LoxError;
 use crate::LoxResult;
 use crate::Shared;
@@ -44,13 +43,10 @@ impl Coroutine {
     /// Note that the future returned by this function will not do anything
     /// unless `await`ed.
     pub fn start(&self, args: LoxArgs) -> LoxFuture {
-        LoxFuture(Shared::new(
-            LoxFutureInner {
-                handle: (self.fun)(args),
-                done: false,
-            }
-            .into(),
-        ))
+        LoxFuture(Shared::new(LoxFutureInner {
+            handle: (self.fun)(args),
+            done: false,
+        }))
     }
 }
 
@@ -142,7 +138,7 @@ impl Future for LoxFuture {
     type Output = LoxResult;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Future::poll(Pin::new(&mut *write(&self.0)), cx)
+        Future::poll(Pin::new(&mut *self.0.write()), cx)
     }
 }
 
@@ -150,6 +146,6 @@ impl Future for &LoxFuture {
     type Output = LoxResult;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Future::poll(Pin::new(&mut *write(&self.0)), cx)
+        Future::poll(Pin::new(&mut *self.0.write()), cx)
     }
 }

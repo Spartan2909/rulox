@@ -2,8 +2,6 @@ use super::Error;
 use super::LoxHeaders;
 
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::RwLock;
 
 use hyper::HeaderMap;
 use hyper::StatusCode;
@@ -14,7 +12,9 @@ use rulox::DynLoxObject;
 use rulox::LoxError;
 use rulox::LoxObject;
 use rulox::MapKey;
+use rulox::Shared;
 use rulox::TryFromLoxValue;
+use rulox::Upcast;
 
 use serde_json::Value;
 
@@ -22,7 +22,7 @@ use serde_json::Value;
 pub struct LoxResponse {
     pub(super) status_code: StatusCode,
     pub(super) body: String,
-    pub(super) headers: Arc<RwLock<LoxHeaders>>,
+    pub(super) headers: Shared<LoxHeaders>,
 }
 
 fn f64_to_status_code(num: f64) -> Result<StatusCode, LoxError> {
@@ -45,23 +45,19 @@ impl LoxObject for LoxResponse {
         "Response".to_string()
     }
 
-    fn get(
-        &self,
-        _this: Arc<RwLock<DynLoxObject>>,
-        key: &'static str,
-    ) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, _this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         match key {
             "status_code" => Ok(self.status_code.as_u16().into()),
             "body" => Ok(self.body.clone().into()),
-            "headers" => Ok(LoxValue::External(self.headers.clone())),
+            "headers" => Ok(LoxValue::External(self.headers.clone().upcast())),
             _ => Err(None),
         }
     }
 
     fn set(
         &mut self,
-        _this: Arc<RwLock<DynLoxObject>>,
-        key: &'static str,
+        _this: Shared<DynLoxObject>,
+        key: &str,
         value: LoxValue,
     ) -> Result<(), Option<LoxError>> {
         match key {
@@ -74,7 +70,7 @@ impl LoxObject for LoxResponse {
                 Ok(())
             }
             "headers" => {
-                self.headers = Arc::new(RwLock::new(value.try_into()?));
+                self.headers = Shared::new(value.try_into()?);
                 Ok(())
             }
             _ => Err(None),
@@ -98,7 +94,7 @@ fn response_from_body_headers<const N: usize>(
     Ok(LoxResponse {
         status_code: StatusCode::OK,
         body,
-        headers: Arc::new(RwLock::new(LoxHeaders(headers?))),
+        headers: Shared::new(LoxHeaders(headers?)),
     })
 }
 
@@ -106,11 +102,9 @@ pub fn new_response(body: String) -> LoxResponse {
     response_from_body_headers(body, [("Content-Type", "text/html")]).unwrap()
 }
 
-pub fn new_json_response(
-    body: Arc<RwLock<HashMap<MapKey, LoxValue>>>,
-) -> Result<LoxResponse, LoxError> {
+pub fn new_json_response(body: Shared<HashMap<MapKey, LoxValue>>) -> Result<LoxResponse, LoxError> {
     response_from_body_headers(
-        Value::Object(hashmap_to_json_map(&body.read().unwrap())?).to_string(),
+        Value::Object(hashmap_to_json_map(&body.read())?).to_string(),
         [("Content-Type", "application/json")],
     )
 }

@@ -1,6 +1,4 @@
 use crate::error::LoxError;
-use crate::shared::read;
-use crate::shared::write;
 use crate::LoxInstance;
 use crate::LoxRc;
 use crate::LoxResult;
@@ -89,14 +87,14 @@ impl Add for LoxValue {
             }
             (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
             (LoxValue::Arr(arr1), LoxValue::Arr(arr2)) => {
-                write(&arr1).append(&mut write(arr2));
+                arr1.write().append(&mut arr2.write());
                 Ok(LoxValue::Arr(arr1))
             }
             (LoxValue::Instance(instance), _) => LoxInstance::get(&instance, "+").map_or_else(
                 || Err(LoxError::not_implemented("+", &self_type)),
                 |method| method.call([rhs].into()),
             ),
-            (LoxValue::External(external), _) => read(&external).add(rhs),
+            (LoxValue::External(external), _) => external.read().add(rhs),
             _ => Err(LoxError::type_error(format!(
                 "cannot add {} to {}",
                 LoxValueType::from(rhs),
@@ -125,7 +123,7 @@ impl Sub for LoxValue {
                 || Err(LoxError::not_implemented("-", &LoxValueType::from(self))),
                 |method| method.call([rhs].into()),
             ),
-            (LoxValue::External(external), _) => read(external).sub(rhs),
+            (LoxValue::External(external), _) => external.read().sub(rhs),
             _ => Err(LoxError::type_error(format!(
                 "cannot subtract {} from {}",
                 LoxValueType::from(rhs),
@@ -145,7 +143,7 @@ impl Mul for LoxValue {
                 || Err(LoxError::not_implemented("*", &LoxValueType::from(self))),
                 |method| method.call([rhs].into()),
             ),
-            (LoxValue::External(external), _) => read(external).mul(rhs),
+            (LoxValue::External(external), _) => external.read().mul(rhs),
             _ => Err(LoxError::type_error(format!(
                 "cannot multiply {} by {}",
                 LoxValueType::from(self),
@@ -165,7 +163,7 @@ impl Div for LoxValue {
                 || Err(LoxError::not_implemented("/", &LoxValueType::from(self))),
                 |method| method.call([rhs].into()),
             ),
-            (LoxValue::External(external), _) => read(external).div(rhs),
+            (LoxValue::External(external), _) => external.read().div(rhs),
             _ => Err(LoxError::type_error(format!(
                 "cannot divide {} by {}",
                 LoxValueType::from(rhs),
@@ -185,7 +183,7 @@ impl Rem for LoxValue {
                 || Err(LoxError::not_implemented("%", &LoxValueType::from(self))),
                 |method| method.call([rhs].into()),
             ),
-            (LoxValue::External(external), _) => read(external).rem(rhs),
+            (LoxValue::External(external), _) => external.read().rem(rhs),
             _ => Err(LoxError::type_error(format!(
                 "cannot take the remainder of {} and {}",
                 LoxValueType::from(self),
@@ -205,7 +203,7 @@ impl Neg for LoxValue {
                 || Err(LoxError::not_implemented("-@", &LoxValueType::from(self))),
                 |method| method.call([].into()),
             ),
-            Self::External(external) => read(&external).neg(),
+            Self::External(external) => external.read().neg(),
             _ => Err(LoxError::type_error(format!(
                 "cannot negate {}",
                 LoxValueType::from(self)

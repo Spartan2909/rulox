@@ -74,6 +74,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::process::ExitCode;
 use std::process::Termination;
+use std::ptr;
 use std::sync::OnceLock;
 use std::vec;
 
@@ -801,7 +802,7 @@ where
             #[cfg(feature = "async")]
             (Self::Future(f1), Self::Future(f2)) => *f1.0.read() == *f2.0.read(),
             (Self::Nil, Self::Nil) => true,
-            (Self::External(e1), Self::External(e2)) => e1.as_ptr() == e2.as_ptr(),
+            (Self::External(e1), Self::External(e2)) => ptr::eq(e1.as_ptr(), e2.as_ptr()),
             _ => false,
         }
     }

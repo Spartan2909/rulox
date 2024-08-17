@@ -135,6 +135,7 @@ impl Parse for BinOp {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // Fields are useful for debug output.
 pub enum UnOp {
     Neg(Punct!["-"]),
     Not(Punct!["!"]),

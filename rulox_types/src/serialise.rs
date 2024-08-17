@@ -73,8 +73,8 @@ impl TryFrom<Value> for LoxValue {
 /// ## Errors
 /// Returns an error if any of the keys are not strings or if the values are not
 /// valid JSON values.
-pub fn hashmap_to_json_map(
-    map: &HashMap<MapKey, LoxValue>,
+pub fn hashmap_to_json_map<S>(
+    map: &HashMap<MapKey, LoxValue, S>,
 ) -> Result<Map<String, Value>, LoxError> {
     map.iter()
         .map(|(key, value)| Ok((key.as_inner().expect_str()?.to_string(), value.try_into()?)))

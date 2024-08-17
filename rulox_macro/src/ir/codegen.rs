@@ -130,10 +130,7 @@ fn class_to_tokens(
             &method.params,
             &method.body,
             false,
-            Some(MethodInfo {
-                class_name_for_initialiser: initialiser,
-                super_fn: &method.name,
-            }),
+            initialiser,
             Some(&method.name),
             *is_async,
         );
@@ -304,18 +301,12 @@ impl ToTokens for Stmt {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct MethodInfo<'a> {
-    class_name_for_initialiser: Option<&'a Ident>,
-    super_fn: &'a FunctionName,
-}
-
 fn function_expr_to_tokens(
     upvalues: &HashSet<Ident>,
     params: &VecDeque<Ident>,
     body: &Stmt,
     value_wrap: bool,
-    method_info: Option<MethodInfo>,
+    initialiser: Option<&Ident>,
     fn_name: Option<&FunctionName>,
     is_async: bool,
 ) -> TokenStream {
@@ -339,12 +330,10 @@ fn function_expr_to_tokens(
     let fn_name = fn_name.map_or_else(
         || quote!("<anonymous function>"),
         |name| {
-            method_info
-                .and_then(|info| info.class_name_for_initialiser)
-                .map_or_else(
-                    || quote! { stringify!(#name) },
-                    |class_name| quote! { stringify!(#class_name) },
-                )
+            initialiser.map_or_else(
+                || quote! { stringify!(#name) },
+                |class_name| quote! { stringify!(#class_name) },
+            )
         },
     );
 
@@ -352,7 +341,7 @@ fn function_expr_to_tokens(
 
     expr_body.append_all(quote! { { #body } });
 
-    let tail = if method_info.is_some_and(|info| info.class_name_for_initialiser.is_some()) {
+    let tail = if initialiser.is_some() {
         quote! { this.get() }
     } else {
         quote! { Ok(LoxValue::Nil) }

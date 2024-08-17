@@ -37,12 +37,15 @@ pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 
 cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
-implicit_hasher = "allow"
+dbg_macro = "warn"
+inline_always = "allow"
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
+option_if_let_else = "allow"
 redundant_pub_crate = "allow"
-significant_drop_in_scrutinee = "allow"
+semicolon_inside_block = "warn"    # Confusing name: semicolons *should* be inside the block.
 todo = "warn"
 use_self = "allow"

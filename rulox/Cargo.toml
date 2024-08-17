@@ -16,13 +16,10 @@ license.workspace = true
 
 [dependencies]
 "rulox_macro" = { path = "../rulox_macro", version = "0.9" }
-"rulox_types" = { path ="../rulox_types", version = "0.6" }
+"rulox_types" = { path = "../rulox_types", version = "0.6" }
 
 [features]
-default = ["sync", "async"]
-sync = ["rulox_types/sync", "rulox_macro/sync"]
-async = ["sync", "rulox_types/async", "rulox_macro/async"]
-serialise = ["rulox_types/serialise", "rulox_macro/serialise"]
+serde = ["rulox_types/serde", "rulox_macro/serde"]
 
 [lints]
 workspace = true

@@ -9,12 +9,12 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
 
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 use serde::Serialize;
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 use serde::Serializer;
 
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 fn serialise_external_error<S: Serializer>(
     value: &ExternalError,
     serializer: S,
@@ -23,12 +23,7 @@ fn serialise_external_error<S: Serializer>(
 }
 
 #[derive(Debug, Clone)]
-#[cfg(feature = "sync")]
 struct ExternalError(LoxRc<dyn Error + Send + Sync>);
-
-#[derive(Debug, Clone)]
-#[cfg(not(feature = "sync"))]
-struct ExternalError(LoxRc<dyn Error>);
 
 impl Hash for ExternalError {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -44,7 +39,7 @@ impl PartialEq for ExternalError {
 
 /// An error raised during compilation or execution.
 #[derive(Debug, Clone, PartialEq, Hash)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxError {
     inner: LoxErrorInner,
     trace: VecDeque<&'static str>,
@@ -128,7 +123,6 @@ impl LoxError {
         ))
     }
 
-    #[cfg(feature = "async")]
     pub(crate) fn finished_coroutine() -> LoxError {
         LoxError {
             inner: LoxErrorInner::FinishedCoroutine,
@@ -193,17 +187,7 @@ impl LoxError {
     }
 
     /// Creates a [`LoxError`] from another error.
-    #[cfg(feature = "sync")]
     pub fn external<E: Error + Send + Sync + 'static>(value: E) -> LoxError {
-        LoxError {
-            inner: LoxErrorInner::External(ExternalError(LoxRc::new(value))),
-            trace: VecDeque::new(),
-        }
-    }
-
-    /// Creates a [`LoxError`] from another error.
-    #[cfg(not(feature = "sync"))]
-    pub fn external<E: Error + 'static>(value: E) -> LoxError {
         LoxError {
             inner: LoxErrorInner::External(ExternalError(LoxRc::new(value))),
             trace: VecDeque::new(),
@@ -218,7 +202,7 @@ impl From<Infallible> for LoxError {
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 enum LoxErrorInner {
     /// An error that occurs when attempting to use a `LoxValue` with an invalid type.
     TypeError(String),
@@ -241,15 +225,11 @@ enum LoxErrorInner {
         found: usize,
     },
     Value(Box<LoxValue>),
-    #[cfg_attr(
-        feature = "serialise",
-        serde(serialize_with = "serialise_external_error")
-    )]
+    #[cfg_attr(feature = "serde", serde(serialize_with = "serialise_external_error"))]
     External(ExternalError),
-    #[cfg(feature = "serialise")]
+    #[cfg(feature = "serde")]
     #[doc(hidden)]
     Arbitrary(String),
-    #[cfg(feature = "async")]
     FinishedCoroutine,
     ControlFlow,
 }
@@ -289,9 +269,8 @@ impl Display for LoxError {
                 write!(f, "error: {value}")
             }
             LoxErrorInner::External(err) => fmt::Display::fmt(&err.0, f),
-            #[cfg(feature = "serialise")]
+            #[cfg(feature = "serde")]
             LoxErrorInner::Arbitrary(string) => f.write_str(string),
-            #[cfg(feature = "async")]
             LoxErrorInner::FinishedCoroutine => write!(f, "cannot await a finished coroutine"),
             LoxErrorInner::ControlFlow => unreachable!(),
         }

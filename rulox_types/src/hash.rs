@@ -7,7 +7,7 @@ use std::fmt;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 use serde::Serialize;
 
 pub fn hash_ptr<T: ?Sized, H: Hasher>(ptr: *const T, state: &mut H) {
@@ -43,9 +43,7 @@ impl Hash for LoxValue {
             Self::Map(_) => panic!("cannot hash a hashmap"),
             Self::Bytes(bytes) => bytes.hash(state),
             Self::Error(err) => err.hash(state),
-            #[cfg(feature = "async")]
             Self::Coroutine(func) => func.hash(state),
-            #[cfg(feature = "async")]
             Self::Future(fut) => fut.0.read().hash(state),
             Self::Nil => {}
             Self::External(external) => external.as_ptr().hash(state),
@@ -84,7 +82,7 @@ impl Hash for LoxInstance {
 
 /// A hashmap key.
 #[derive(Clone, PartialEq, PartialOrd, Hash)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 #[repr(transparent)]
 pub struct MapKey(LoxValue);
 

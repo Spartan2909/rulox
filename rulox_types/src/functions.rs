@@ -5,7 +5,6 @@ use crate::LoxRc;
 use crate::LoxResult;
 use crate::LoxValue;
 
-#[cfg(feature = "async")]
 use crate::async_types;
 
 use std::fmt;
@@ -14,33 +13,19 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::ptr;
 
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 use serde::Serialize;
 
 /// A function defined in Lox code.
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxFn {
-    #[cfg(feature = "sync")]
-    #[cfg_attr(feature = "serialise", serde(skip_serializing))]
+    #[cfg_attr(feature = "serde", serde(skip_serializing))]
     fun: Box<dyn Fn(LoxArgs) -> LoxResult + Send + Sync>,
-    #[cfg(not(feature = "sync"))]
-    #[cfg_attr(feature = "serialise", serde(skip_serializing))]
-    fun: Box<dyn Fn(LoxArgs) -> LoxResult>,
     params: Vec<&'static str>,
 }
 
 impl LoxFn {
     /// Creates a new [`LoxFn`] with the given body and parameter names.
-    #[cfg(not(feature = "sync"))]
-    pub fn new<F: Fn(LoxArgs) -> LoxResult + 'static>(fun: F, params: Vec<&'static str>) -> Self {
-        Self {
-            fun: Box::new(fun),
-            params,
-        }
-    }
-
-    /// Creates a new [`LoxFn`] with the given body and parameter names.
-    #[cfg(feature = "sync")]
     pub fn new<F: Fn(LoxArgs) -> LoxResult + Send + Sync + 'static>(
         fun: F,
         params: Vec<&'static str>,
@@ -83,11 +68,10 @@ impl Hash for LoxFn {
 }
 
 #[derive(Clone, PartialEq, Hash)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 #[doc(hidden)] // Not public API.
 pub enum LoxMethod {
     Sync(LoxRc<LoxFn>),
-    #[cfg(feature = "async")]
     Async(LoxRc<async_types::Coroutine>),
 }
 
@@ -95,16 +79,13 @@ impl LoxMethod {
     pub(super) fn params(&self) -> &[&'static str] {
         match self {
             LoxMethod::Sync(fun) => &fun.params,
-            #[cfg(feature = "async")]
             LoxMethod::Async(fun) => fun.params(),
         }
     }
 
-    #[cfg_attr(not(feature = "async"), allow(clippy::unnecessary_wraps))]
     pub(super) fn get_sync(self) -> Option<LoxRc<LoxFn>> {
         match self {
             LoxMethod::Sync(fun) => Some(fun),
-            #[cfg(feature = "async")]
             LoxMethod::Async(_) => None,
         }
     }
@@ -113,7 +94,6 @@ impl LoxMethod {
         let args = args.check_arity(self.params().len() - 1)?;
         match self {
             LoxMethod::Sync(fun) => (fun.fun)(args),
-            #[cfg(feature = "async")]
             LoxMethod::Async(fun) => Ok(LoxValue::Future(fun.start(args))),
         }
     }
@@ -124,7 +104,6 @@ impl Debug for LoxMethod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LoxMethod::Sync(fun) => write!(f, "Sync({:#?})", fun.params),
-            #[cfg(feature = "async")]
             LoxMethod::Async(fun) => write!(f, "Async({:#?})", fun.params()),
         }
     }
@@ -145,7 +124,6 @@ impl From<LoxRc<LoxFn>> for LoxMethod {
 }
 
 #[doc(hidden)] // Not public API.
-#[cfg(feature = "async")]
 impl From<async_types::Coroutine> for LoxMethod {
     fn from(value: async_types::Coroutine) -> Self {
         LoxMethod::Async(LoxRc::new(value))
@@ -153,7 +131,6 @@ impl From<async_types::Coroutine> for LoxMethod {
 }
 
 #[doc(hidden)] // Not public API.
-#[cfg(feature = "async")]
 impl From<LoxRc<async_types::Coroutine>> for LoxMethod {
     fn from(value: LoxRc<async_types::Coroutine>) -> Self {
         LoxMethod::Async(value)
@@ -161,7 +138,7 @@ impl From<LoxRc<async_types::Coroutine>> for LoxMethod {
 }
 
 /// Arguments to a Lox function.
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxArgs {
     pub(crate) head: Option<LoxValue>,
     pub(crate) main: Vec<LoxValue>,

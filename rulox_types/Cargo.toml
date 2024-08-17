@@ -23,9 +23,7 @@ bytes = "1"
 "serde_json" = { version = "1", optional = true }
 
 [features]
-sync = []
-async = ["sync"]
-serialise = ["dep:serde", "dep:serde_json", "bytes/serde"]
+serde = ["dep:serde", "dep:serde_json", "bytes/serde"]
 
 [lints]
 workspace = true

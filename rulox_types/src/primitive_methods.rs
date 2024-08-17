@@ -40,19 +40,10 @@ pub(super) fn is_arr(args: LoxArgs) -> LoxResult {
     )))
 }
 
-#[cfg(feature = "async")]
 pub(super) fn is_function(args: LoxArgs) -> LoxResult {
     Ok(LoxValue::Bool(matches!(
         args.head.unwrap(),
         LoxValue::BoundMethod(_, _) | LoxValue::Coroutine(_) | LoxValue::PrimitiveMethod(_, _)
-    )))
-}
-
-#[cfg(not(feature = "async"))]
-pub(super) fn is_function(args: LoxArgs) -> LoxResult {
-    Ok(LoxValue::Bool(matches!(
-        args.head.unwrap(),
-        LoxValue::BoundMethod(_, _) | LoxValue::PrimitiveMethod(_, _)
     )))
 }
 

@@ -4,12 +4,8 @@
 #![warn(missing_docs)]
 #![allow(clippy::mutable_key_type)]
 
-#[cfg(feature = "async")]
-#[doc(hidden)]
-pub mod async_types;
-#[cfg(feature = "async")]
+mod async_types;
 pub use async_types::Coroutine;
-#[cfg(feature = "async")]
 pub use async_types::LoxFuture;
 
 mod conversions;
@@ -42,13 +38,11 @@ mod operations;
 
 mod primitive_methods;
 
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 mod serialise;
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 pub use serialise::hashmap_to_json_map;
 
-#[cfg_attr(feature = "sync", path = "sync.rs")]
-#[cfg_attr(not(feature = "sync"), path = "unsync.rs")]
 mod shared;
 pub use shared::LoxVariable;
 #[doc(hidden)]
@@ -60,10 +54,6 @@ mod private {
     pub trait Sealed {}
 }
 
-#[cfg(not(feature = "sync"))]
-#[doc(hidden)]
-pub use std::rc::Rc as LoxRc;
-#[cfg(feature = "sync")]
 #[doc(hidden)]
 pub use std::sync::Arc as LoxRc;
 
@@ -78,12 +68,11 @@ use std::ptr;
 use std::sync::OnceLock;
 use std::vec;
 
-#[cfg(feature = "async")]
 use std::future::Future;
 
 use bytes::Bytes;
 
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 use serde::Serialize;
 
 #[doc(hidden)] // Not public API.
@@ -113,9 +102,7 @@ enum LoxValueType {
     Map,
     Bytes,
     Error,
-    #[cfg(feature = "async")]
     Coroutine(Vec<&'static str>),
-    #[cfg(feature = "async")]
     Future(bool),
     External,
     Nil,
@@ -134,9 +121,7 @@ impl fmt::Display for LoxValueType {
             Self::Map => write!(f, "map"),
             Self::Bytes => write!(f, "bytes"),
             Self::Error => f.write_str("error"),
-            #[cfg(feature = "async")]
             Self::Coroutine(params) => write!(f, "async function({params:#?})"),
-            #[cfg(feature = "async")]
             Self::Future(done) => write!(f, "{}future", if *done { "completed " } else { "" }),
             Self::External => write!(f, "external object"),
             Self::Nil => write!(f, "nil"),
@@ -161,9 +146,7 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Map(_) => Self::Map,
                     LoxValue::Bytes(_) => Self::Bytes,
                     LoxValue::Error(_) => Self::Error,
-                    #[cfg(feature = "async")]
                     LoxValue::Coroutine(f) => Self::Coroutine(f.params().to_vec()),
-                    #[cfg(feature = "async")]
                     LoxValue::Future(fut) => Self::Future(fut.0.read().done()),
                     LoxValue::External(_) => Self::External,
                     LoxValue::Nil => Self::Nil,
@@ -182,7 +165,7 @@ pub type LoxResult = Result<LoxValue, LoxError>;
 /// A dynamically typed value used by Lox programs.
 #[non_exhaustive]
 #[derive(Clone)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum LoxValue {
     /// A boolean value.
     Bool(bool),
@@ -198,7 +181,7 @@ pub enum LoxValue {
     BoundMethod(LoxMethod, Shared<LoxInstance>),
     #[doc(hidden)]
     #[cfg_attr(
-        feature = "serialise",
+        feature = "serde",
         serde(serialize_with = "serialise::primitive_method")
     )]
     PrimitiveMethod(fn(LoxArgs) -> LoxResult, Box<LoxValue>),
@@ -213,15 +196,13 @@ pub enum LoxValue {
     /// A wrapped error.
     Error(LoxError),
     /// An asynchronous function.
-    #[cfg(feature = "async")]
     Coroutine(LoxRc<async_types::Coroutine>),
     /// A value returned from an async function.
-    #[cfg(feature = "async")]
     Future(LoxFuture),
     /// Nothing.
     Nil,
     /// An object that couldn't normally be represented in Lox.
-    #[cfg_attr(feature = "serialise", serde(serialize_with = "serialise::external"))]
+    #[cfg_attr(feature = "serde", serde(serialize_with = "serialise::external"))]
     External(Shared<DynLoxObject>),
     #[doc(hidden)] // Not public API.
     Undefined(&'static str),
@@ -400,12 +381,10 @@ impl LoxValue {
 
     /// Returns the value wrapped by `self` if `self` is a
     /// `LoxValue::Coroutine`.
-    #[cfg(feature = "async")]
     pub fn as_coroutine(&self) -> Option<&LoxRc<Coroutine>> {
         self.expect_coroutine().ok()
     }
 
-    #[cfg(feature = "async")]
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Coroutine`.
     ///
     /// ## Errors
@@ -419,7 +398,6 @@ impl LoxValue {
     }
 
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Future`.
-    #[cfg(feature = "async")]
     pub fn as_future(&self) -> Option<&LoxFuture> {
         self.expect_future().ok()
     }
@@ -428,7 +406,6 @@ impl LoxValue {
     ///
     /// ## Errors
     /// Returns a type error if `self` is not a future.
-    #[cfg(feature = "async")]
     pub fn expect_future(&self) -> Result<&LoxFuture, LoxError> {
         if let LoxValue::Future(value) = self {
             Ok(value)
@@ -555,7 +532,6 @@ impl LoxValue {
     }
 
     #[doc(hidden)] // Not public API.
-    #[cfg(feature = "async")]
     pub fn coroutine<
         F: Fn(LoxArgs) -> Box<dyn Future<Output = LoxResult> + Send + Sync> + Send + Sync + 'static,
     >(
@@ -705,7 +681,6 @@ impl LoxValue {
                 }
             }
             Self::PrimitiveMethod(func, object) => func(args.with_head((**object).clone())),
-            #[cfg(feature = "async")]
             Self::Coroutine(func) => Ok(LoxValue::Future(
                 func.start(args.check_arity(func.params().len())?),
             )),
@@ -731,16 +706,7 @@ impl LoxValue {
     }
 
     /// Creates a new `LoxValue::External` with the given value.
-    #[cfg(feature = "sync")]
     pub fn external<T: LoxObject + Send + Sync + 'static>(value: T) -> LoxValue {
-        let shared = Shared::new(value).into_inner();
-        let shared = Shared::from(shared as LoxRc<_>);
-        LoxValue::External(shared)
-    }
-
-    /// Creates a new `LoxValue::External` with the given value.
-    #[cfg(not(feature = "sync"))]
-    pub fn external<T: LoxObject + 'static>(value: T) -> LoxValue {
         let shared = Shared::new(value).into_inner();
         let shared = Shared::from(shared as LoxRc<_>);
         LoxValue::External(shared)
@@ -766,9 +732,7 @@ impl Debug for LoxValue {
             Self::Map(map) => write!(f, "Map({:#?})", *map.read()),
             Self::Bytes(bytes) => write!(f, "Bytes({bytes:#?})"),
             Self::Error(error) => write!(f, "Error({error:#?})"),
-            #[cfg(feature = "async")]
             Self::Coroutine(fun) => write!(f, "Coroutine({:#?})", fun.params()),
-            #[cfg(feature = "async")]
             Self::Future(_) => write!(f, "Future"),
             Self::Nil => write!(f, "Nil"),
             Self::External(_) => write!(f, "External"),
@@ -797,9 +761,7 @@ where
             (Self::Map(m1), Self::Map(m2)) => *m1.read() == *m2.read(),
             (Self::Bytes(b1), Self::Bytes(b2)) => b1 == &b2,
             (Self::Error(e1), Self::Error(e2)) => e1 == &e2,
-            #[cfg(feature = "async")]
             (Self::Coroutine(f1), Self::Coroutine(f2)) => f1 == &f2,
-            #[cfg(feature = "async")]
             (Self::Future(f1), Self::Future(f2)) => *f1.0.read() == *f2.0.read(),
             (Self::Nil, Self::Nil) => true,
             (Self::External(e1), Self::External(e2)) => ptr::eq(e1.as_ptr(), e2.as_ptr()),
@@ -835,8 +797,7 @@ impl Display for LoxValue {
             Self::Function(_) => {
                 write!(f, "<function>")
             }
-            Self::BoundMethod(_, _) => write!(f, "<bound method>"),
-            Self::PrimitiveMethod(_, _) => write!(f, "<bound method>"),
+            Self::BoundMethod(_, _) | Self::PrimitiveMethod(_, _) => write!(f, "<bound method>"),
             Self::Class(_) => write!(f, "<class>"),
             Self::Instance(instance) => {
                 write!(f, "<instance of {}>", instance.read().class.name)
@@ -853,9 +814,7 @@ impl Display for LoxValue {
             }
             Self::Bytes(bytes) => write!(f, "{bytes:?}"),
             Self::Error(error) => write!(f, "{error}"),
-            #[cfg(feature = "async")]
             Self::Coroutine(_) => write!(f, "<async function>"),
-            #[cfg(feature = "async")]
             Self::Future(_) => write!(f, "<future>"),
             Self::Nil => {
                 write!(f, "nil")
@@ -897,7 +856,7 @@ impl Termination for LoxValue {
 
 /// An instance of a Lox class.
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxInstance {
     class: LoxRc<LoxClass>,
     attributes: HashMap<String, LoxValue>,
@@ -930,7 +889,7 @@ impl LoxInstance {
 
 /// A class defined in Lox code.
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxClass {
     name: &'static str,
     initialiser: Option<LoxRc<LoxFn>>,

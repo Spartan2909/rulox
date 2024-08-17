@@ -13,12 +13,13 @@ use std::ptr;
 use std::task::Context;
 use std::task::Poll;
 
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 use serde::Serialize;
 
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+/// An asynchronous function.
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Coroutine {
-    #[cfg_attr(feature = "serialise", serde(skip_serializing))]
+    #[cfg_attr(feature = "serde", serde(skip_serializing))]
     fun: Box<dyn Fn(LoxArgs) -> Box<dyn Future<Output = LoxResult> + Send + Sync> + Send + Sync>,
     params: Vec<&'static str>,
 }
@@ -72,10 +73,10 @@ impl Hash for Coroutine {
     }
 }
 
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 #[doc(hidden)]
 pub struct LoxFutureInner {
-    #[cfg_attr(feature = "serialise", serde(skip_serializing))]
+    #[cfg_attr(feature = "serde", serde(skip_serializing))]
     handle: Box<dyn Future<Output = LoxResult> + Send + Sync>,
     done: bool,
 }
@@ -130,8 +131,9 @@ impl Future for LoxFutureInner {
     }
 }
 
+/// An asynchronous computation recieived from [`Coroutine::start`].
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialise", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxFuture(pub(super) Shared<LoxFutureInner>);
 
 impl Future for LoxFuture {

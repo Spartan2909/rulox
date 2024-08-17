@@ -29,7 +29,6 @@ impl<T: Into<LoxValue>> ToLoxResult for T {
     }
 }
 
-#[cfg(feature = "sync")]
 impl<T: Into<LoxValue>, E: Error + Send + Sync + 'static> ToLoxResult for Result<T, E> {
     fn to_lox_result(self) -> LoxResult {
         self.map(Into::into).map_err(|err| {
@@ -42,26 +41,8 @@ impl<T: Into<LoxValue>, E: Error + Send + Sync + 'static> ToLoxResult for Result
     }
 }
 
-#[cfg(not(feature = "sync"))]
-impl<T: Into<LoxValue>, E: Error + 'static> ToLoxResult for Result<T, E> {
-    fn to_lox_result(self) -> LoxResult {
-        self.map(Into::into).map_err(|err| {
-            if cast!(&err, &LoxError).is_ok() {
-                cast!(err, LoxError).unwrap()
-            } else {
-                LoxError::external(err)
-            }
-        })
-    }
-}
-
 /// A convenient alias for a [`LoxObject`] trait object.
-#[cfg(feature = "sync")]
 pub type DynLoxObject = dyn LoxObject + Send + Sync + 'static;
-
-/// A convenient alias for a [`LoxObject`] trait object.
-#[cfg(not(feature = "sync"))]
-pub type DynLoxObject = dyn LoxObject + 'static;
 
 /// A trait for getting the name of a type from a reference.
 pub trait Named {
@@ -292,7 +273,6 @@ impl<T: LoxObject> Upcast<dyn LoxObject> for Shared<T> {
     }
 }
 
-#[cfg(feature = "sync")]
 impl<T: LoxObject + Send + Sync> Upcast<dyn LoxObject + Send + Sync> for Shared<T> {
     fn upcast(self) -> Shared<dyn LoxObject + Send + Sync> {
         Shared(self.into_inner() as _)

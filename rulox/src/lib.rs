@@ -308,16 +308,14 @@ macro_rules! rust_bindgen {
 /// [`LoxObject`] and [`Clone`].
 pub use rulox_macro::TryFromLoxValue;
 
-#[cfg(feature = "async")]
-pub use rulox_types::async_types::Coroutine;
-#[cfg(feature = "async")]
-pub use rulox_types::async_types::LoxFuture;
+pub use rulox_types::Coroutine;
 pub use rulox_types::Downcast;
 pub use rulox_types::DynLoxObject;
 pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxClass;
 pub use rulox_types::LoxError;
 pub use rulox_types::LoxFn;
+pub use rulox_types::LoxFuture;
 pub use rulox_types::LoxObject;
 pub use rulox_types::LoxResult;
 pub use rulox_types::LoxValue;
@@ -326,7 +324,7 @@ pub use rulox_types::MapKey;
 pub use rulox_types::Shared;
 pub use rulox_types::Upcast;
 
-#[cfg(feature = "serialise")]
+#[cfg(feature = "serde")]
 pub use rulox_types::hashmap_to_json_map;
 
 #[doc(hidden)]
@@ -353,9 +351,7 @@ pub mod prelude {
         pub use rulox_types::Shared;
         pub use std::collections::HashMap;
 
-        #[cfg(feature = "async")]
         pub use core::future::Future;
-        #[cfg(feature = "async")]
-        pub use rulox_types::async_types::Coroutine;
+        pub use rulox_types::Coroutine;
     }
 }

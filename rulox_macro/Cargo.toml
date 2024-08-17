@@ -21,9 +21,7 @@ flexi-parse = { version = "0.10.0", features = ["proc-macro"] }
 "proc-macro2" = "1.0"
 
 [features]
-sync = ["rulox_types/sync"]
-async = ["sync", "rulox_types/async"]
-serialise = ["rulox_types/serialise"]
+serde = ["rulox_types/serde"]
 
 [lib]
 proc-macro = true

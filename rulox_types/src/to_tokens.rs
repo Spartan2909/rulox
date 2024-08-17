@@ -38,9 +38,7 @@ impl ToTokens for LoxValue {
             Self::Map(_) => unimplemented!("maps must be constructed with LoxValue::map"),
             Self::Bytes(bytes) => Literal::byte_string(bytes).to_tokens(tokens),
             Self::Error(_) => unimplemented!("errors cannot directly occur in source code"),
-            #[cfg(feature = "async")]
             Self::Coroutine(_) => unimplemented!("coroutine are functions, which cannot be converted without context"),
-            #[cfg(feature = "async")]
             Self::Future(_) => unimplemented!("futures cannot directly occur in source code"),
             Self::Nil => tokens.append_all(quote! { LoxValue::Nil }),
             Self::External(_) => unimplemented!("external objects cannot be represented in Lox code"),

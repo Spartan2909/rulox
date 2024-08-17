@@ -11,7 +11,6 @@ use crate::LoxValue;
 use crate::LoxValueType;
 use crate::MapKey;
 
-#[cfg(feature = "async")]
 use crate::async_types;
 
 use std::collections::HashMap;
@@ -90,15 +89,7 @@ impl From<Bytes> for LoxValue {
     }
 }
 
-#[cfg(feature = "sync")]
 impl<T: LoxObject + Send + Sync> From<T> for LoxValue {
-    fn from(value: T) -> Self {
-        LoxValue::external(value)
-    }
-}
-
-#[cfg(not(feature = "sync"))]
-impl<T: LoxObject> From<T> for LoxValue {
     fn from(value: T) -> Self {
         LoxValue::external(value)
     }
@@ -188,7 +179,6 @@ impl TryFrom<LoxValue> for Bytes {
     }
 }
 
-#[cfg(feature = "async")]
 impl TryFrom<LoxValue> for LoxRc<async_types::Coroutine> {
     type Error = LoxError;
 

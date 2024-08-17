@@ -9,12 +9,12 @@ use flexi_parse::group::Brackets;
 use flexi_parse::group::Parentheses;
 use flexi_parse::token::Ident;
 use flexi_parse::token::Token;
-use flexi_parse::Span;
 use flexi_parse::Punct;
+use flexi_parse::Span;
 
-use proc_macro2::TokenStream;
 use proc_macro2::Punct;
 use proc_macro2::Spacing;
+use proc_macro2::TokenStream;
 
 use quote::quote;
 use quote::ToTokens;
@@ -269,6 +269,32 @@ enum Stmt {
 }
 
 impl Stmt {
+    fn try_stmt_undeclared_references(
+        body: &Stmt,
+        excepts: &[Except],
+        else_block: Option<&Stmt>,
+        finally: Option<&Stmt>,
+        declared: &HashSet<Ident>,
+        references: &mut HashSet<Ident>,
+    ) {
+        let mut body_declared = declared.clone();
+        body.undeclared_references(&mut body_declared, references);
+
+        for except in excepts {
+            except.undeclared_references(declared, references);
+        }
+
+        if let Some(block) = else_block {
+            let mut declared = declared.clone();
+            block.undeclared_references(&mut declared, references);
+        }
+
+        if let Some(block) = finally {
+            let mut declared = declared.clone();
+            block.undeclared_references(&mut declared, references);
+        }
+    }
+
     fn undeclared_references(
         &self,
         declared: &mut HashSet<Ident>,
@@ -360,24 +386,51 @@ impl Stmt {
                 else_block,
                 finally,
             } => {
-                let mut body_declared = declared.clone();
-                body.undeclared_references(&mut body_declared, references);
-
-                for except in excepts {
-                    except.undeclared_references(declared, references);
-                }
-
-                if let Some(block) = else_block {
-                    let mut declared = declared.clone();
-                    block.undeclared_references(&mut declared, references);
-                }
-
-                if let Some(block) = finally {
-                    let mut declared = declared.clone();
-                    block.undeclared_references(&mut declared, references);
-                }
+                Stmt::try_stmt_undeclared_references(
+                    body,
+                    excepts,
+                    else_block.as_deref(),
+                    finally.as_deref(),
+                    declared,
+                    references,
+                );
             }
             Stmt::Break => {}
+        }
+    }
+
+    fn resolve_class(methods: &mut [(bool, Function)], resolver: &mut Resolver) {
+        let current_function_type = resolver.function_type;
+        for (_, method) in methods {
+            resolver.function_type = if method.is_initialiser {
+                FunctionType::Initialiser
+            } else {
+                FunctionType::Method
+            };
+            method.body.resolve(resolver);
+        }
+        resolver.function_type = current_function_type;
+    }
+
+    fn resolve_try(
+        body: &mut Stmt,
+        excepts: &mut [Except],
+        else_block: Option<&mut Stmt>,
+        finally: Option<&mut Stmt>,
+        resolver: &mut Resolver,
+    ) {
+        body.resolve(resolver);
+
+        for except in excepts {
+            except.resolve(resolver);
+        }
+
+        if let Some(block) = else_block {
+            block.resolve(resolver);
+        }
+
+        if let Some(block) = finally {
+            block.resolve(resolver);
         }
     }
 
@@ -457,38 +510,19 @@ impl Stmt {
                 name: _,
                 methods,
                 superclass: _,
-            } => {
-                let current_function_type = resolver.function_type;
-                for (_, method) in methods {
-                    resolver.function_type = if method.is_initialiser {
-                        FunctionType::Initialiser
-                    } else {
-                        FunctionType::Method
-                    };
-                    method.body.resolve(resolver);
-                }
-                resolver.function_type = current_function_type;
-            }
+            } => Stmt::resolve_class(methods, resolver),
             Stmt::Try {
                 body,
                 excepts,
                 else_block,
                 finally,
-            } => {
-                body.resolve(resolver);
-
-                for except in excepts {
-                    except.resolve(resolver);
-                }
-
-                if let Some(block) = else_block {
-                    block.resolve(resolver);
-                }
-
-                if let Some(block) = finally {
-                    block.resolve(resolver);
-                }
-            }
+            } => Stmt::resolve_try(
+                body,
+                excepts,
+                else_block.as_deref_mut(),
+                finally.as_deref_mut(),
+                resolver,
+            ),
             Stmt::Var {
                 name: _,
                 initialiser: None,
@@ -558,7 +592,11 @@ impl From<ast::Stmt> for Stmt {
                         method
                             .params
                             .push_front(Ident::new("this".to_string(), method.name.span()));
-                        if method.name.ident().is_some_and(|ident| ident.string() == "init") {
+                        if method
+                            .name
+                            .ident()
+                            .is_some_and(|ident| ident.string() == "init")
+                        {
                             method.is_initialiser = true;
                         }
                         (is_async, method)
@@ -902,6 +940,70 @@ impl Expr {
             Expr::Literal(_) | Expr::Variable(_) | Expr::This => {}
         }
     }
+
+    fn from_ast_binary_expr(left: ast::Expr, operator: &ast::BinOp, right: ast::Expr) -> Expr {
+        let left = Box::new(left.into());
+        let right = Box::new(right.into());
+        match operator {
+            ast::BinOp::Add(_) => Expr::Binary {
+                left,
+                operator: BinOp::Add,
+                right,
+            },
+            ast::BinOp::Sub(_) => Expr::Binary {
+                left,
+                operator: BinOp::Sub,
+                right,
+            },
+            ast::BinOp::Mul(_) => Expr::Binary {
+                left,
+                operator: BinOp::Mul,
+                right,
+            },
+            ast::BinOp::Div(_) => Expr::Binary {
+                left,
+                operator: BinOp::Div,
+                right,
+            },
+            ast::BinOp::Rem(_) => Expr::Binary {
+                left,
+                operator: BinOp::Rem,
+                right,
+            },
+            ast::BinOp::Eq(_) => Expr::Comparison {
+                left,
+                operator: Comparison::Eq,
+                right,
+            },
+            ast::BinOp::Ne(_) => Expr::Comparison {
+                left,
+                operator: Comparison::Ne,
+                right,
+            },
+            ast::BinOp::Gt(_) => Expr::Comparison {
+                left,
+                operator: Comparison::Gt,
+                right,
+            },
+            ast::BinOp::Ge(_) => Expr::Comparison {
+                left,
+                operator: Comparison::Ge,
+                right,
+            },
+            ast::BinOp::Lt(_) => Expr::Comparison {
+                left,
+                operator: Comparison::Lt,
+                right,
+            },
+            ast::BinOp::Le(_) => Expr::Comparison {
+                left,
+                operator: Comparison::Le,
+                right,
+            },
+            ast::BinOp::And(_) => Expr::And { left, right },
+            ast::BinOp::Or(_) => Expr::Or { left, right },
+        }
+    }
 }
 
 #[allow(clippy::fallible_impl_from)]
@@ -942,69 +1044,7 @@ impl From<ast::Expr> for Expr {
                 left,
                 operator,
                 right,
-            } => {
-                let left = Box::new(left.into());
-                let right = Box::new(right.into());
-                match operator {
-                    ast::BinOp::Add(_) => Expr::Binary {
-                        left,
-                        operator: BinOp::Add,
-                        right,
-                    },
-                    ast::BinOp::Sub(_) => Expr::Binary {
-                        left,
-                        operator: BinOp::Sub,
-                        right,
-                    },
-                    ast::BinOp::Mul(_) => Expr::Binary {
-                        left,
-                        operator: BinOp::Mul,
-                        right,
-                    },
-                    ast::BinOp::Div(_) => Expr::Binary {
-                        left,
-                        operator: BinOp::Div,
-                        right,
-                    },
-                    ast::BinOp::Rem(_) => Expr::Binary {
-                        left,
-                        operator: BinOp::Rem,
-                        right,
-                    },
-                    ast::BinOp::Eq(_) => Expr::Comparison {
-                        left,
-                        operator: Comparison::Eq,
-                        right,
-                    },
-                    ast::BinOp::Ne(_) => Expr::Comparison {
-                        left,
-                        operator: Comparison::Ne,
-                        right,
-                    },
-                    ast::BinOp::Gt(_) => Expr::Comparison {
-                        left,
-                        operator: Comparison::Gt,
-                        right,
-                    },
-                    ast::BinOp::Ge(_) => Expr::Comparison {
-                        left,
-                        operator: Comparison::Ge,
-                        right,
-                    },
-                    ast::BinOp::Lt(_) => Expr::Comparison {
-                        left,
-                        operator: Comparison::Lt,
-                        right,
-                    },
-                    ast::BinOp::Le(_) => Expr::Comparison {
-                        left,
-                        operator: Comparison::Le,
-                        right,
-                    },
-                    ast::BinOp::And(_) => Expr::And { left, right },
-                    ast::BinOp::Or(_) => Expr::Or { left, right },
-                }
-            }
+            } => Self::from_ast_binary_expr(*left, &operator, *right),
             ast::Expr::Assign { name, value } => Expr::Assign {
                 name,
                 value: Box::new(value.into()),

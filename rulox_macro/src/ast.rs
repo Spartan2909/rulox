@@ -1,19 +1,19 @@
 use flexi_parse::group;
+use flexi_parse::group::Braces;
+use flexi_parse::group::Brackets;
+use flexi_parse::group::Parentheses;
+use flexi_parse::punctuated::Punctuated;
+use flexi_parse::token::Ident;
+use flexi_parse::token::LeftBrace;
+use flexi_parse::token::LeftBracket;
+use flexi_parse::token::LeftParen;
+use flexi_parse::token::LitFloat;
+use flexi_parse::token::LitInt;
+use flexi_parse::token::LitStrDoubleQuote as LitStr;
+use flexi_parse::token::Token;
 use flexi_parse::Parse;
 use flexi_parse::ParseStream;
-use flexi_parse::group::Braces;
 use flexi_parse::Punct;
-use flexi_parse::punctuated::Punctuated;
-use flexi_parse::token::Token;
-use flexi_parse::token::Ident;
-use flexi_parse::group::Parentheses;
-use flexi_parse::token::LeftBrace;
-use flexi_parse::token::LitInt;
-use flexi_parse::token::LeftParen;
-use flexi_parse::token::LeftBracket;
-use flexi_parse::group::Brackets;
-use flexi_parse::token::LitFloat;
-use flexi_parse::token::LitStrDoubleQuote as LitStr;
 use flexi_parse::Span;
 
 use rulox_types::LoxValue;
@@ -202,7 +202,8 @@ impl Parse for Function {
 
         let content;
         let _: Parentheses = group!(content in input);
-        let parameters: Punctuated<Ident, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
+        let parameters: Punctuated<Ident, Punct![","]> =
+            Punctuated::parse_separated_trailing(&content)?;
 
         let body = Stmt::block(input)?;
 
@@ -842,7 +843,8 @@ impl Expr {
         let content;
         let _: Parentheses = group!(content in input);
 
-        let arguments: Punctuated<Expr, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
+        let arguments: Punctuated<Expr, Punct![","]> =
+            Punctuated::parse_separated_trailing(&content)?;
 
         Ok(Self::Call {
             callee: Box::new(callee),
@@ -883,7 +885,8 @@ impl Expr {
             let content;
 
             let _: Parentheses = group!(content in input);
-            let arguments: Punctuated<Expr, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
+            let arguments: Punctuated<Expr, Punct![","]> =
+                Punctuated::parse_separated_trailing(&content)?;
 
             Ok(Self::Super {
                 arguments: arguments.into_iter().collect(),
@@ -892,7 +895,8 @@ impl Expr {
             let content;
             let _: Brackets = group!(content in input);
 
-            let items: Punctuated<Expr, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
+            let items: Punctuated<Expr, Punct![","]> =
+                Punctuated::parse_separated_trailing(&content)?;
             let items = Vec::from_iter(items);
 
             Ok(Self::Array(items))
@@ -915,7 +919,8 @@ impl Expr {
         let content;
         let _: Parentheses = group!(content in input);
 
-        let params: Punctuated<Ident, Punct![","]> = Punctuated::parse_separated_trailing(&content)?;
+        let params: Punctuated<Ident, Punct![","]> =
+            Punctuated::parse_separated_trailing(&content)?;
 
         let body: Stmt = input.parse()?;
 

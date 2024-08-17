@@ -19,6 +19,7 @@ macro_rules! numeric_operations {
             impl Add<$t> for LoxValue {
                 type Output = LoxResult;
 
+                #[allow(clippy::cast_lossless)]
                 fn add(self, rhs: $t) -> Self::Output {
                     match self {
                         Self::Num(num) => Ok(Self::Num(num + rhs as f64)),
@@ -30,6 +31,7 @@ macro_rules! numeric_operations {
             impl Sub<$t> for LoxValue {
                 type Output = LoxResult;
 
+                #[allow(clippy::cast_lossless)]
                 fn sub(self, rhs: $t) -> Self::Output {
                     match self {
                         Self::Num(num) => Ok(Self::Num(num - rhs as f64)),
@@ -41,6 +43,7 @@ macro_rules! numeric_operations {
             impl Mul<$t> for LoxValue {
                 type Output = LoxResult;
 
+                #[allow(clippy::cast_lossless)]
                 fn mul(self, rhs: $t) -> Self::Output {
                     match self {
                         Self::Num(num) => Ok(Self::Num(num * rhs as f64)),
@@ -52,6 +55,7 @@ macro_rules! numeric_operations {
             impl Div<$t> for LoxValue {
                 type Output = LoxResult;
 
+                #[allow(clippy::cast_lossless)]
                 fn div(self, rhs: $t) -> Self::Output {
                     match self {
                         Self::Num(num) => Ok(Self::Num(num / rhs as f64)),
@@ -63,6 +67,7 @@ macro_rules! numeric_operations {
             impl Rem<$t> for LoxValue {
                 type Output = LoxResult;
 
+                #[allow(clippy::cast_lossless)]
                 fn rem(self, rhs: $t) -> Self::Output {
                     match self {
                         Self::Num(num) => Ok(Self::Num(num % rhs as f64)),

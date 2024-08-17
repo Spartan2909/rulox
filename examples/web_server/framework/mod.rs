@@ -106,7 +106,7 @@ impl LoxObject for LoxHeaders {
     fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
         Ok(LoxValue::Str(Arc::new(
             self.0
-                .get(&key.expect_str()?.to_lowercase())
+                .get(key.expect_str()?.to_lowercase())
                 .ok_or(LoxError::invalid_key(key))?
                 .to_str()
                 .map_err(LoxError::external)?
@@ -295,10 +295,9 @@ async fn handle_method(
                     *response.body_mut() = Bytes::from(lox_response.body).into();
                     *response.status_mut() = lox_response.status_code;
                     for (header_name, header) in &lox_response.headers.read().0 {
-                        response.headers_mut().insert(
-                            HeaderName::try_from(header_name).map_err(LoxError::external)?,
-                            header.try_into().map_err(LoxError::external)?,
-                        );
+                        response
+                            .headers_mut()
+                            .insert(HeaderName::from(header_name), header.into());
                     }
                 }
                 LoxValue::Nil => {}

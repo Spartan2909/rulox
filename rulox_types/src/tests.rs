@@ -51,5 +51,5 @@ fn div() {
 
 #[test]
 fn comp() {
-    assert!(LoxValue::Num(8.0) > LoxValue::Num(5.0))
+    assert!(LoxValue::Num(8.0) > LoxValue::Num(5.0));
 }

@@ -11,7 +11,14 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 rulox = { path = "./rulox", features = ["serialise"] }
 serde_json = "1"
 tera = "1"
-tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "signal", "time", "net"] }
+tokio = { version = "1", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "signal",
+    "time",
+    "net",
+] }
 
 [workspace]
 members = ["rulox", "rulox_macro", "rulox_types"]
@@ -30,6 +37,7 @@ pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 
 cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
 cast_sign_loss = "allow"
 implicit_hasher = "allow"
 module_name_repetitions = "allow"
@@ -37,5 +45,4 @@ must_use_candidate = "allow"
 redundant_pub_crate = "allow"
 significant_drop_in_scrutinee = "allow"
 todo = "warn"
-too_many_lines = "allow"
 use_self = "allow"

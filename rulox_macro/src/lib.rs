@@ -21,6 +21,7 @@ mod ast;
 mod ir;
 
 #[proc_macro]
+#[allow(clippy::missing_panics_doc)]
 pub fn lox(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input: ast::LoxProgram = parse(tokens.into()).unwrap();
 

@@ -168,7 +168,7 @@ impl TryFrom<LoxValue> for Shared<HashMap<MapKey, LoxValue>> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.expect_map().map(Clone::clone)
+        value.expect_map().cloned()
     }
 }
 
@@ -184,7 +184,7 @@ impl TryFrom<LoxValue> for Bytes {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
-        value.expect_bytes().map(Clone::clone)
+        value.expect_bytes().cloned()
     }
 }
 
@@ -238,6 +238,7 @@ macro_rules! numeric_conversions {
     ( $( $ty:ty ),* ) => {
         $(
             impl From<$ty> for LoxValue {
+                #[allow(clippy::cast_lossless)]
                 fn from(value: $ty) -> Self {
                     Self::Num(value as f64)
                 }
@@ -246,6 +247,7 @@ macro_rules! numeric_conversions {
             impl TryFrom<LoxValue> for $ty {
                 type Error = LoxError;
 
+                #[allow(clippy::cast_lossless)]
                 fn try_from(value: LoxValue) -> Result<Self, LoxError> {
                     match &value {
                         LoxValue::Num(num) => {

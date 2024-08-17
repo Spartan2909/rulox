@@ -220,9 +220,9 @@ impl From<Infallible> for LoxError {
 #[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "serialise", derive(Serialize))]
 enum LoxErrorInner {
-    /// An error that occurs when attempting to use a LoxValue with an invalid type.
+    /// An error that occurs when attempting to use a `LoxValue` with an invalid type.
     TypeError(String),
-    /// An error that occurs when attempting to convert a LoxValue into a Rust type that is too small.
+    /// An error that occurs when attempting to convert a `LoxValue` into a Rust type that is too small.
     OverflowError {
         value: Box<MapKey>,
         target_type: &'static str,

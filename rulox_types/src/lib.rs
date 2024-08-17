@@ -652,7 +652,7 @@ impl LoxValue {
     fn super_fn_impl(&self, name: &str) -> Option<LoxMethod> {
         let instance = self.as_instance()?;
         let mut class = &instance.read().class;
-        while class.methods.get(name).is_none() {
+        while !class.methods.contains_key(name) {
             class = class.superclass.as_ref()?;
         }
         Some(class.superclass.as_ref()?.methods.get(name)?.clone())
@@ -906,6 +906,7 @@ pub struct LoxInstance {
 impl LoxInstance {
     /// Checks if `self` is an instance of `target_class` or one of its
     /// subclasses.
+    #[allow(clippy::assigning_clones)] // Not accepted by borrow checker.
     pub fn instance_of(&self, target_class: &LoxClass) -> bool {
         let mut current_class = Some(self.class.clone());
         while let Some(class) = current_class {

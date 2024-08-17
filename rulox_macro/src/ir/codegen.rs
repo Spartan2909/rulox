@@ -79,6 +79,126 @@ impl ToTokens for Except {
     }
 }
 
+fn function_stmt_to_tokens(
+    is_async: bool,
+    name: &FunctionName,
+    params: &VecDeque<Ident>,
+    body: &Stmt,
+    upvalues: &HashSet<Ident>,
+    tokens: &mut TokenStream,
+) {
+    let function_object =
+        function_expr_to_tokens(upvalues, params, body, true, None, Some(name), is_async);
+
+    let mut params_tokens = TokenStream::new();
+    for param in params {
+        let name = LitStr::new(param.string().clone(), param.span().clone());
+        params_tokens.append_all(quote! { #name, });
+    }
+
+    tokens.append_all(quote! {
+        #name.overwrite(#function_object);
+    });
+}
+
+fn class_to_tokens(
+    name: &Ident,
+    methods: &[(bool, Function)],
+    superclass: Option<&Ident>,
+    tokens: &mut TokenStream,
+) {
+    let superclass = superclass.as_ref().map_or_else(
+        || quote! { None },
+        |superclass| {
+            let get = wrap_extract(&quote! { #superclass.get() });
+            let class = wrap_extract(&quote! { #get.expect_as_superclass() });
+            quote! {
+                    Some(__rulox_helpers::LoxRc::clone(#class))
+            }
+        },
+    );
+
+    let mut methods_tokens = TokenStream::new();
+    for (is_async, method) in methods {
+        let initialiser = if method.is_initialiser {
+            Some(name)
+        } else {
+            None
+        };
+        let current_method = function_expr_to_tokens(
+            &method.upvalues,
+            &method.params,
+            &method.body,
+            false,
+            Some(MethodInfo {
+                class_name_for_initialiser: initialiser,
+                super_fn: &method.name,
+            }),
+            Some(&method.name),
+            *is_async,
+        );
+        let method_name = &method.name;
+        methods_tokens.append_all(
+            quote! { (stringify!(#method_name), __rulox_helpers::LoxRc::new(#current_method).into()), },
+        );
+    }
+
+    tokens.append_all(quote! {
+        #name.overwrite(LoxValue::Class(__rulox_helpers::LoxRc::new(__rulox_helpers::LoxClass::new(
+            stringify!(#name),
+            __rulox_helpers::HashMap::from_iter([#methods_tokens]),
+            #superclass,
+        ))));
+    });
+}
+
+fn try_stmt_to_tokens(
+    body: &Stmt,
+    excepts: &[Except],
+    else_block: Option<&Stmt>,
+    finally: Option<&Stmt>,
+    tokens: &mut TokenStream,
+) {
+    let else_block = else_block.as_ref().map_or_else(TokenStream::new, |block| {
+        quote! {
+            Err(__e) if __e.get().unwrap().as_error().map_or(false, |err| err.is_pass()) => { #block }
+        }
+    });
+    let mut catches = TokenStream::new();
+    for except in excepts {
+        except.to_tokens(&mut catches);
+    }
+    let match_block = quote! {
+        match
+            (|| -> Result<LoxValue, __rulox_helpers::LoxError> {
+                #body
+                #[allow(unreachable_code)] Err(__rulox_helpers::LoxError::pass())
+            })()
+                .map_err(|err| __rulox_helpers::LoxVariable::new(err.into_value()))
+        {
+            Ok(val) => return Ok(val),
+            #else_block
+            #catches
+            #[allow(unreachable_code)]
+            _ => {}
+        }
+    };
+    if let Some(finally) = finally {
+        tokens.append_all(quote! { {
+            let __result = (|| -> Result<__rulox_helpers::LoxValue, __rulox_helpers::LoxError> {
+                #match_block
+                #[allow(unreachable_code)] Err(__rulox_helpers::LoxError::pass())
+            })();
+            { #finally }
+            if let Some(r) = __rulox_helpers::LoxError::result_filter_pass(__result) {
+                return r;
+            }
+        }; });
+    } else {
+        tokens.append_all(match_block);
+    }
+}
+
 impl ToTokens for Stmt {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
@@ -117,26 +237,7 @@ impl ToTokens for Stmt {
                         is_initialiser: _,
                     },
             } => {
-                let function_object = function_expr_to_tokens(
-                    upvalues,
-                    params,
-                    body,
-                    true,
-                    None,
-                    None,
-                    Some(name),
-                    *is_async,
-                );
-
-                let mut params_tokens = TokenStream::new();
-                for param in params {
-                    let name = LitStr::new(param.string().clone(), param.span().clone());
-                    params_tokens.append_all(quote! { #name, });
-                }
-
-                tokens.append_all(quote! {
-                    #name.overwrite(#function_object);
-                });
+                function_stmt_to_tokens(*is_async, name, params, body, upvalues, tokens);
             }
             Stmt::Block {
                 forward_declarations,
@@ -180,47 +281,7 @@ impl ToTokens for Stmt {
                 methods,
                 superclass,
             } => {
-                let superclass = superclass.as_ref().map_or_else(
-                    || quote! { None },
-                    |superclass| {
-                        let get = wrap_extract(&quote! { #superclass.get() });
-                        let class = wrap_extract(&quote! { #get.expect_as_superclass() });
-                        quote! {
-                                Some(__rulox_helpers::LoxRc::clone(#class))
-                        }
-                    },
-                );
-
-                let mut methods_tokens = TokenStream::new();
-                for (is_async, method) in methods {
-                    let initialiser = if method.is_initialiser {
-                        Some(name)
-                    } else {
-                        None
-                    };
-                    let current_method = function_expr_to_tokens(
-                        &method.upvalues,
-                        &method.params,
-                        &method.body,
-                        false,
-                        initialiser,
-                        Some(&method.name),
-                        Some(&method.name),
-                        *is_async,
-                    );
-                    let method_name = &method.name;
-                    methods_tokens.append_all(
-                        quote! { (stringify!(#method_name), __rulox_helpers::LoxRc::new(#current_method).into()), },
-                    );
-                }
-
-                tokens.append_all(quote! {
-                    #name.overwrite(LoxValue::Class(__rulox_helpers::LoxRc::new(__rulox_helpers::LoxClass::new(
-                        stringify!(#name),
-                        __rulox_helpers::HashMap::from_iter([#methods_tokens]),
-                        #superclass,
-                    ))));
-                });
+                class_to_tokens(name, methods, superclass.as_ref(), tokens);
             }
             Stmt::Throw(expr) => tokens.append_all(
                 quote! { return Err((#expr).into_error().with_trace(vec![__rulox_fn_name])); },
@@ -231,47 +292,22 @@ impl ToTokens for Stmt {
                 else_block,
                 finally,
             } => {
-                let else_block = else_block.as_ref().map_or_else(TokenStream::new, |block| {
-                    quote! {
-                        Err(__e) if __e.get().unwrap().as_error().map_or(false, |err| err.is_pass()) => { #block }
-                    }
-                });
-                let mut catches = TokenStream::new();
-                for except in excepts {
-                    except.to_tokens(&mut catches);
-                }
-                let match_block = quote! {
-                    match
-                        (|| -> Result<LoxValue, __rulox_helpers::LoxError> {
-                            #body
-                            #[allow(unreachable_code)] Err(__rulox_helpers::LoxError::pass())
-                        })()
-                            .map_err(|err| __rulox_helpers::LoxVariable::new(err.into_value()))
-                    {
-                        Ok(val) => return Ok(val),
-                        #else_block
-                        #catches
-                        #[allow(unreachable_code)]
-                        _ => {}
-                    }
-                };
-                if let Some(finally) = finally {
-                    tokens.append_all(quote! { {
-                        let __result = (|| -> Result<__rulox_helpers::LoxValue, __rulox_helpers::LoxError> {
-                            #match_block
-                            #[allow(unreachable_code)] Err(__rulox_helpers::LoxError::pass())
-                        })();
-                        { #finally }
-                        if let Some(r) = __rulox_helpers::LoxError::result_filter_pass(__result) {
-                            return r;
-                        }
-                    }; });
-                } else {
-                    tokens.append_all(match_block);
-                }
+                try_stmt_to_tokens(
+                    body,
+                    excepts,
+                    else_block.as_deref(),
+                    finally.as_deref(),
+                    tokens,
+                );
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MethodInfo<'a> {
+    class_name_for_initialiser: Option<&'a Ident>,
+    super_fn: &'a FunctionName,
 }
 
 fn function_expr_to_tokens(
@@ -279,8 +315,7 @@ fn function_expr_to_tokens(
     params: &VecDeque<Ident>,
     body: &Stmt,
     value_wrap: bool,
-    initialiser: Option<&Ident>,
-    insert_super_fn: Option<&FunctionName>,
+    method_info: Option<MethodInfo>,
     fn_name: Option<&FunctionName>,
     is_async: bool,
 ) -> TokenStream {
@@ -301,8 +336,9 @@ fn function_expr_to_tokens(
         );
     }
 
-    if let Some(name) = insert_super_fn {
+    if let Some(method_info) = method_info {
         let this = wrap_extract(&quote! { this.get() });
+        let name = method_info.super_fn;
         let fun = wrap_extract(&quote! { _this.clone().super_fn(stringify!(#name)) });
         expr_body.append_all(quote! {
             let __super = |args: __rulox_helpers::LoxArgs| -> __rulox_helpers::LoxResult {
@@ -314,18 +350,23 @@ fn function_expr_to_tokens(
         });
     }
 
-    let fn_name = fn_name.map_or(quote! { "<anonymous function>" }, |name| {
-        initialiser.map_or_else(
-            || quote! { stringify!(#name) },
-            |class_name| quote! { stringify!(#class_name) },
-        )
-    });
+    let fn_name = fn_name.map_or_else(
+        || quote!("<anonymous function>"),
+        |name| {
+            method_info
+                .and_then(|info| info.class_name_for_initialiser)
+                .map_or_else(
+                    || quote! { stringify!(#name) },
+                    |class_name| quote! { stringify!(#class_name) },
+                )
+        },
+    );
 
     expr_body.append_all(quote! { let __rulox_fn_name = #fn_name; });
 
     expr_body.append_all(quote! { { #body } });
 
-    let tail = if initialiser.is_some() {
+    let tail = if method_info.is_some_and(|info| info.class_name_for_initialiser.is_some()) {
         quote! { this.get() }
     } else {
         quote! { Ok(LoxValue::Nil) }
@@ -412,7 +453,7 @@ impl ToTokens for Expr {
                 body,
             } => {
                 tokens.append_all(function_expr_to_tokens(
-                    upvalues, params, body, true, None, None, None, *is_async,
+                    upvalues, params, body, true, None, None, *is_async,
                 ));
             }
             Expr::Variable(var) => {

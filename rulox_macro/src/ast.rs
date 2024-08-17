@@ -628,7 +628,7 @@ pub enum Expr {
         value: Box<Expr>,
     },
     Super {
-        arguments: Vec<Expr>,
+        method: Ident,
     },
     Await {
         left: Box<Expr>,
@@ -882,14 +882,10 @@ impl Expr {
             Ok(Expr::This)
         } else if lookahead.peek(kw::kw_super) {
             input.parse::<kw::kw_super>()?;
-            let content;
-
-            let _: Parentheses = group!(content in input);
-            let arguments: Punctuated<Expr, Punct![","]> =
-                Punctuated::parse_separated_trailing(&content)?;
+            input.parse::<Punct!["."]>()?;
 
             Ok(Self::Super {
-                arguments: arguments.into_iter().collect(),
+                method: input.parse()?,
             })
         } else if lookahead.peek(LeftBracket) {
             let content;

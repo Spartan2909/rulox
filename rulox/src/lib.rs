@@ -113,7 +113,7 @@
 //!
 //!     class Telepath > Person {
 //!         init(name, power) {
-//!             super(name);
+//!             super.init(name);
 //!             this.power = power;
 //!         }
 //!

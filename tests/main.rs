@@ -310,7 +310,7 @@ fn inheritance() -> Result<(), LoxError> {
 
         class Telepath > Person {
             init(name, power) {
-                super(name);
+                super.init(name);
                 this.power = power;
             }
 
@@ -352,7 +352,7 @@ fn super_call() -> Result<(), LoxError> {
         class B > A {
             do_thing() {
                 print "B";
-                super();
+                super.do_thing();
             }
         }
 

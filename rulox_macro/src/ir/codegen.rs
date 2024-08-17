@@ -336,20 +336,6 @@ fn function_expr_to_tokens(
         );
     }
 
-    if let Some(method_info) = method_info {
-        let this = wrap_extract(&quote! { this.get() });
-        let name = method_info.super_fn;
-        let fun = wrap_extract(&quote! { _this.clone().super_fn(stringify!(#name)) });
-        expr_body.append_all(quote! {
-            let __super = |args: __rulox_helpers::LoxArgs| -> __rulox_helpers::LoxResult {
-                let _this = #this;
-                let fun = #fun;
-                let bound = LoxValue::bind(fun, &_this);
-                bound.call(args)
-            };
-        });
-    }
-
     let fn_name = fn_name.map_or_else(
         || quote!("<anonymous function>"),
         |name| {
@@ -516,11 +502,10 @@ impl ToTokens for Expr {
                     &quote! { (#object).set(stringify!(#name), #value) },
                 ));
             }
-            Expr::Super { arguments } => {
-                let mut inner = TokenStream::new();
-                inner.append_separated(arguments, Punct::new(',', Spacing::Alone));
-
-                tokens.append_all(quote! { __super([#inner].into())? });
+            Expr::Super { method } => {
+                tokens.append_all(
+                    quote! { __rulox_helpers::LoxValue::bind(this.get()?.super_fn(stringify!(#method))?, &this.get()?) },
+                );
             }
             Expr::Await { left } => tokens.append_all(quote! { (#left).expect_future()?.await? }),
             Expr::Index { left, index } => tokens.append_all(quote! { (#left).index(#index)? }),

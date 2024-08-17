@@ -755,7 +755,7 @@ enum Expr {
         value: Box<Expr>,
     },
     Super {
-        arguments: Vec<Expr>,
+        method: Ident,
     },
     Await {
         left: Box<Expr>,
@@ -836,11 +836,6 @@ impl Expr {
                 object.undeclared_references(declared, references);
                 value.undeclared_references(declared, references);
             }
-            Expr::Super { arguments } => {
-                for expr in arguments {
-                    expr.undeclared_references(declared, references);
-                }
-            }
             Expr::Await { left } => left.undeclared_references(declared, references),
             Expr::Index { left, index } => {
                 left.undeclared_references(declared, references);
@@ -857,7 +852,7 @@ impl Expr {
                     value.undeclared_references(declared, references);
                 }
             }
-            Expr::Literal(_) | Expr::This => (),
+            Expr::Literal(_) | Expr::This | Expr::Super { .. } => (),
         }
     }
 
@@ -912,14 +907,11 @@ impl Expr {
                 object.resolve(resolver);
                 value.resolve(resolver);
             }
-            Expr::Super { arguments } => {
+            Expr::Super { method: _ } => {
                 assert!(
                     resolver.function_type.is_method(),
                     "cannot use 'super' outside of a method"
                 );
-                for argument in arguments {
-                    argument.resolve(resolver);
-                }
             }
             Expr::Await { left } => left.resolve(resolver),
             Expr::Index { left, index } => {
@@ -1063,9 +1055,7 @@ impl From<ast::Expr> for Expr {
                 name,
                 value: Box::new(value.into()),
             },
-            ast::Expr::Super { arguments } => Expr::Super {
-                arguments: arguments.into_iter().map(Into::into).collect(),
-            },
+            ast::Expr::Super { method } => Expr::Super { method },
             ast::Expr::Await { left } => Expr::Await {
                 left: Box::new(left.into()),
             },

@@ -102,9 +102,9 @@ impl fmt::Debug for LoxFutureInner {
 
 impl PartialEq for LoxFutureInner {
     fn eq(&self, other: &Self) -> bool {
-        let h1: *const _ = &*self.handle.as_ref();
-        let h2: *const _ = &*other.handle.as_ref();
-        ptr::eq(h1.cast::<()>(), h2.cast())
+        let h1 = &*self.handle.as_ref();
+        let h2 = &*other.handle.as_ref();
+        ptr::addr_eq(h1, h2)
     }
 }
 

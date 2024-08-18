@@ -81,7 +81,6 @@ impl Hash for Coroutine {
 #[pin_project]
 pub struct LoxFutureInner {
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
-    #[pin]
     handle: RawLoxFuture,
     done: bool,
 }
@@ -123,7 +122,7 @@ impl Future for LoxFutureInner {
         }
 
         let this = self.project();
-        let handle = this.handle;
+        let handle = this.handle.as_mut();
         match Future::poll(handle, cx) {
             Poll::Ready(result) => {
                 *this.done = true;

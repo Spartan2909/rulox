@@ -356,7 +356,12 @@ fn super_call() -> Result<(), LoxError> {
             }
         }
 
-        class C > B {}
+        class C > B {
+            do_thing() {
+                print "C";
+                super.do_thing();
+            }
+        }
 
         var c = C();
         c.do_thing();

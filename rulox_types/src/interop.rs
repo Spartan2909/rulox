@@ -79,6 +79,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Sets the field of `self` corresponding to `key` to the given value.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     /// If the key does not exist, `Err(None)` should be returned.
     fn set(
@@ -96,6 +97,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Intended for objects that function as arrays or maps.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
         drop(key);
@@ -110,6 +112,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Intended for objects that function as arrays or maps.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     fn index_set(&mut self, key: LoxValue, value: LoxValue) -> Result<(), LoxError> {
         let (_, _) = (key, value);
@@ -122,6 +125,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Add `self` to `rhs`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     fn add(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
@@ -131,6 +135,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Subtract `rhs` from `self`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     fn sub(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
@@ -140,6 +145,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Multiply `self` by `rhs`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     fn mul(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
@@ -149,6 +155,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Divide `self` by `rhs`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     fn div(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
@@ -158,6 +165,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Take the remainder when `self` is divided by `rhs`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     fn rem(&self, rhs: LoxValue) -> LoxResult {
         let _ = rhs;
@@ -167,6 +175,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Negate `self`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     fn neg(&self) -> LoxResult {
         Err(LoxError::not_implemented("neg", &self.type_name_of_val()))
@@ -175,6 +184,7 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Call `self` like a method with the given arguments.
     ///
     /// ## Errors
+    ///
     /// Returns an error if this functionality is not implemented for this type.
     fn call(&self, args: LoxArgs) -> LoxResult {
         let _ = args;

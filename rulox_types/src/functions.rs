@@ -191,6 +191,7 @@ impl LoxArgs {
     /// Attempts to extract `self` into the given tuple.
     ///
     /// ## Errors
+    ///
     /// Errors if the types of the values in `self` do not match those in the
     /// target.
     ///

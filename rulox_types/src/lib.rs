@@ -211,6 +211,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Bool`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not a boolean.
     pub fn expect_bool(&self) -> Result<bool, LoxError> {
         if let LoxValue::Bool(value) = self {
@@ -228,6 +229,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Str`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not a string.
     pub fn expect_str(&self) -> Result<&Arc<str>, LoxError> {
         if let LoxValue::Str(value) = self {
@@ -245,6 +247,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Num`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not a number.
     pub fn expect_num(&self) -> Result<f64, LoxError> {
         if let LoxValue::Num(value) = self {
@@ -262,6 +265,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Arr`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not an array.
     pub fn expect_arr(&self) -> Result<Shared<Vec<LoxValue>>, LoxError> {
         if let LoxValue::Arr(value) = self {
@@ -279,6 +283,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Function`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not a function.
     pub fn expect_function(&self) -> Result<&Arc<LoxFn>, LoxError> {
         if let LoxValue::Function(value) = self {
@@ -296,6 +301,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Class`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not a class.
     pub fn expect_class(&self) -> Result<&Arc<LoxClass>, LoxError> {
         if let LoxValue::Class(value) = self {
@@ -313,6 +319,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Instance`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not an instance of a class.
     pub fn expect_instance(&self) -> Result<&Shared<LoxInstance>, LoxError> {
         if let LoxValue::Instance(value) = self {
@@ -330,6 +337,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Map`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not a map.
     pub fn expect_map(&self) -> Result<&Shared<HashMap<MapKey, LoxValue>>, LoxError> {
         if let LoxValue::Map(value) = self {
@@ -347,6 +355,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Bytes`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not a bytestring.
     pub fn expect_bytes(&self) -> Result<&Bytes, LoxError> {
         if let LoxValue::Bytes(value) = self {
@@ -364,6 +373,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Error`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not an error.
     pub fn expect_error(&self) -> Result<&LoxError, LoxError> {
         if let LoxValue::Error(value) = self {
@@ -382,6 +392,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Coroutine`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not a coroutine.
     pub fn expect_coroutine(&self) -> Result<&Arc<Coroutine>, LoxError> {
         if let LoxValue::Coroutine(value) = self {
@@ -399,6 +410,7 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Future`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not a future.
     pub fn expect_future(&self) -> Result<&LoxFuture, LoxError> {
         if let LoxValue::Future(value) = self {
@@ -411,15 +423,16 @@ impl LoxValue {
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::External`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not an external object.
     pub fn to_external(self) -> Option<Shared<dyn LoxObject>> {
         self.expect_external().ok()
     }
 
-    /// Returns the value wrapped by `self` if `self` is a
-    /// `LoxValue::External`.
+    /// Returns the value wrapped by `self` if `self` is a `LoxValue::External`.
     ///
     /// ## Errors
+    ///
     /// Returns a type error if `self` is not an external object.
     pub fn expect_external(self) -> Result<Shared<dyn LoxObject>, LoxError> {
         if let LoxValue::External(obj) = self {
@@ -434,6 +447,7 @@ impl LoxValue {
     /// Gets the element of `self` corresponding to `index`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if `self` cannot be indexed, or if the index is invalid.
     pub fn index(&self, index: LoxValue) -> Result<LoxValue, LoxError> {
         match self {
@@ -467,6 +481,7 @@ impl LoxValue {
     /// Sets the element of `self` corresponding to `index` to `value`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if `self` cannot be indexed, or if the index is invalid.
     pub fn index_set(&self, index: LoxValue, value: LoxValue) -> Result<(), LoxError> {
         match self {
@@ -572,6 +587,7 @@ impl LoxValue {
     /// Gets the attribute corresponding to `self.key`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if the attribute cannot be read.
     pub fn get(&self, key: &str) -> LoxResult {
         self.get_impl(key).map_err(|err| {
@@ -582,6 +598,7 @@ impl LoxValue {
     /// Gets the attribute corresponding to `self.key` to `value`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if the attribute cannot be written to.
     pub fn set(&self, key: &str, value: LoxValue) -> LoxResult {
         if let LoxValue::Instance(instance) = self {
@@ -648,12 +665,11 @@ impl LoxValue {
         }
     }
 
-    /// Calls `self` with the given arguments, if `self` is a function or a
-    /// class.
+    /// Calls `self` with the given arguments, if `self` is a function or a class.
     ///
     /// ## Errors
-    /// Returns an error if `self` cannot be called, or the function in `self`
-    /// returns an error.
+    ///
+    /// Returns an error if `self` cannot be called, or the function in `self` returns an error.
     pub fn call(&self, mut args: LoxArgs) -> LoxResult {
         match self {
             Self::Function(func) => func.call(args),
@@ -855,8 +871,7 @@ pub struct LoxInstance {
 }
 
 impl LoxInstance {
-    /// Checks if `self` is an instance of `target_class` or one of its
-    /// subclasses.
+    /// Checks if `self` is an instance of `target_class` or one of its subclasses.
     #[allow(clippy::assigning_clones)] // Not accepted by borrow checker.
     pub fn instance_of(&self, target_class: &LoxClass) -> bool {
         let mut current_class = Some(self.class.clone());

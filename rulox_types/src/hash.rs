@@ -89,6 +89,7 @@ impl MapKey {
     /// Creates a [`MapKey`] from a [`LoxValue`] if it is a valid key.
     ///
     /// ## Errors
+    ///
     /// Returns an error if `self` is not a boolean, number, or string, or if
     /// `self` is `NaN`.
     pub fn verify_key(key: LoxValue) -> Result<MapKey, LoxError> {

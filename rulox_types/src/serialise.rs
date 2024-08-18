@@ -84,6 +84,7 @@ impl TryFrom<Value> for LoxValue {
 /// Converts a Lox hashmap to a JSON map.
 ///
 /// ## Errors
+///
 /// Returns an error if any of the keys are not strings or if the values are not
 /// valid JSON values.
 pub fn hashmap_to_json_map<S>(

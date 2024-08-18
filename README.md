@@ -1,18 +1,17 @@
 # rulox
 
-[![crates.io](https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&labelColor=555555&logo=rust)](https://crates.io/crates/rulox) 
-[![github](https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github)](https://github.com/Spartan2909/rulox)
-[![docs.rs](https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs)](https://docs.rs/rulox/latest) <br />
+[![crates.io](https://img.shields.io/badge/crates.io-555555?logo=rust&logoColor=fc8d62)](https://crates.io/crates/rulox) 
+[![github](https://img.shields.io/badge/github-555555?logo=github&logoColor=8da0cb)](https://github.com/Spartan2909/rulox)
+[![docs.rs](https://img.shields.io/badge/docs.rs-555555?logo=docs.rs&logoColor=66c2a5)](https://docs.rs/rulox/latest) <br />
 
-`rulox` is a lightweight scripting language embedded in Rust. It is based on the
-Lox language from [Crafting Interpreters](https://craftinginterpreters.com/).
+`rulox` is a lightweight scripting language embedded in Rust. It is based on the Lox language from
+[Crafting Interpreters](https://craftinginterpreters.com/).
 
 ## Basic use
 
-Add `use rulox::prelude::*` at the top level of each module you want to use
-rulox in, then invoke the `lox` macro with your Lox code. Note that due to
-technical limitations, the `lox` macro can currently only be used in functions
-that return `Result<_, LoxError>`.
+Add `use rulox::prelude::*` at the top level of each module you want to use rulox in, then invoke
+the `lox` macro with your Lox code. Note that due to technical limitations, the `lox` macro can
+currently only be used in functions that return `Result<_, impl From<LoxError>>`.
 
 ## Examples
 ```rust

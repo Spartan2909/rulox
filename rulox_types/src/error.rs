@@ -107,8 +107,7 @@ impl LoxError {
         }
     }
 
-    /// Creates an error out of a [`LoxValue`], which can be recovered in an
-    /// `except` block.
+    /// Creates an error out of a [`LoxValue`], which can be recovered in an `except` block.
     pub fn value(value: LoxValue) -> LoxError {
         LoxError {
             inner: LoxErrorInner::Value(Box::new(value)),

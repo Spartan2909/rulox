@@ -1,3 +1,3 @@
 # rulox_types
 
-rulox_types is a collection of helper types for the [`rulox`](https://crates.io/crates/rulox) crate.
+rulox_types is the runtime for the [`rulox`](https://crates.io/crates/rulox) crate.

@@ -128,6 +128,7 @@ impl LoxVariable {
     /// Gets the value of `self`.
     ///
     /// ## Errors
+    ///
     /// Returns an error if `self` is not defined.
     pub fn get(&self) -> LoxResult {
         match &*self.0.read() {

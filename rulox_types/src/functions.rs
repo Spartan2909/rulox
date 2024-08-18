@@ -278,20 +278,26 @@ macro_rules! impl_concrete_lox_args {
         impl<$( $ty: TryFrom<LoxValue>, )*> Sealed for ( $( $ty, )* )
             where $( LoxError: From<<$ty as TryFrom<LoxValue>>::Error> ),* {}
 
-        impl<$( $ty: TryFrom<LoxValue>, )*> ConcreteLoxArgs for ( $( $ty, )* )
-            where $( LoxError: From<<$ty as TryFrom<LoxValue>>::Error> ),*
+        impl<$( $ty ),*> ConcreteLoxArgs for ( $( $ty, )* )
+        where
+            $( $ty: TryFrom<LoxValue>, )*
+            $( LoxError: From<<$ty as TryFrom<LoxValue>>::Error> ),*
         {
-            fn extract_from_args(mut __args: LoxArgs) -> Result<Self, LoxError> {
-                const __COUNT: usize = count!( $( $ty )* );
-                let __len = __args.main.len();
-                let mut __drain = __args.drain();
-                Ok(( $(
+            fn extract_from_args(mut args: LoxArgs) -> Result<Self, LoxError> {
+                const COUNT: usize = count!( $( $ty )* );
+                let len = args.main.len();
+                let mut drain = args.drain();
+                let result = ( $(
                     $ty::try_from(
-                        __drain
-                        .next()
-                        .ok_or(LoxError::incorrect_arity(__COUNT, __len))?
+                        drain
+                            .next()
+                            .ok_or(LoxError::incorrect_arity(COUNT, len))?
                     )?,
-                )* ))
+                )* );
+                if drain.next().is_some() {
+                    return Err(LoxError::incorrect_arity(COUNT, len));
+                }
+                Ok(result)
             }
         }
     };

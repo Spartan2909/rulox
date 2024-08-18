@@ -77,9 +77,8 @@ impl Hash for Coroutine {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize))]
-#[doc(hidden)]
 #[pin_project]
-pub struct LoxFutureInner {
+pub(crate) struct LoxFutureInner {
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
     handle: RawLoxFuture,
     done: bool,
@@ -136,7 +135,7 @@ impl Future for LoxFutureInner {
 /// An asynchronous computation recieived from [`Coroutine::start`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
-pub struct LoxFuture(pub(super) Shared<LoxFutureInner>);
+pub struct LoxFuture(pub(crate) Shared<LoxFutureInner>);
 
 impl Future for LoxFuture {
     type Output = LoxResult;

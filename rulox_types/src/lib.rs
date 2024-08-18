@@ -673,6 +673,7 @@ impl LoxValue {
     /// ## Errors
     ///
     /// Returns an error if `self` cannot be called, or the function in `self` returns an error.
+    #[allow(clippy::missing_panics_doc)]
     pub fn call(&self, mut args: LoxArgs) -> LoxResult {
         match self {
             Self::Function(func) => func.call(args),
@@ -686,7 +687,7 @@ impl LoxValue {
                     attributes: HashMap::new(),
                 }));
                 let mut args = args.check_arity(class.arity())?;
-                if let Some(initialiser) = &class.initialiser {
+                if let Some(initialiser) = &*class.initialiser.read().unwrap() {
                     args.head = Some(instance);
                     LoxMethod::Sync(initialiser.clone()).call(args)
                 } else {
@@ -902,7 +903,7 @@ impl LoxInstance {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxClass {
     name: &'static str,
-    initialiser: Option<Arc<LoxFn>>,
+    initialiser: RwLock<Option<Arc<LoxFn>>>,
     methods: RwLock<HashMap<&'static str, LoxMethod>>,
     superclass: Option<Arc<LoxClass>>,
 }
@@ -917,7 +918,7 @@ static OBJECT_CLASS: LazyLock<Arc<LoxClass>> = LazyLock::new(|| {
     };
     Arc::new(LoxClass {
         name: "object",
-        initialiser: None,
+        initialiser: RwLock::new(None),
         methods: RwLock::new(HashMap::from_iter([(
             "instance_of",
             LoxMethod::Sync(Arc::new(LoxFn::new(Box::new(instance_of), vec!["class"]))),
@@ -929,21 +930,21 @@ static OBJECT_CLASS: LazyLock<Arc<LoxClass>> = LazyLock::new(|| {
 impl LoxClass {
     #[doc(hidden)] // Not public API.
     pub fn new(name: &'static str, superclass: Option<Arc<LoxClass>>) -> LoxClass {
-        let mut class = LoxClass {
+        LoxClass {
             name,
-            initialiser: None,
+            initialiser: RwLock::new(None),
             methods: RwLock::new(HashMap::new()),
             superclass: Some(superclass.unwrap_or_else(|| Arc::clone(&OBJECT_CLASS))),
-        };
-
-        class.initialiser = class.get("init").and_then(LoxMethod::get_sync);
-
-        class
+        }
     }
 
     #[doc(hidden)] // Not public API.
     pub fn add_method(&self, name: &'static str, method: LoxMethod) {
-        self.methods.write().unwrap().insert(name, method);
+        self.methods.write().unwrap().insert(name, method.clone());
+
+        if name == "init" {
+            *self.initialiser.write().unwrap() = method.get_sync();
+        }
     }
 
     fn get(&self, key: &str) -> Option<LoxMethod> {
@@ -959,6 +960,8 @@ impl LoxClass {
 
     fn arity(&self) -> usize {
         self.initialiser
+            .read()
+            .unwrap()
             .as_ref()
             .map_or(0, |initialiser| initialiser.params().len() - 1)
     }
@@ -967,7 +970,7 @@ impl LoxClass {
 impl PartialEq for LoxClass {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
-            && self.initialiser == other.initialiser
+            && *self.initialiser.read().unwrap() == *other.initialiser.read().unwrap()
             && *self.methods.read().unwrap() == *other.methods.read().unwrap()
             && self.superclass == other.superclass
     }

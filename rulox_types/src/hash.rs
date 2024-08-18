@@ -55,7 +55,7 @@ impl Hash for LoxClass {
     #[allow(clippy::significant_drop_tightening)] // False positive
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
-        self.initialiser.hash(state);
+        self.initialiser.read().unwrap().hash(state);
         self.superclass.hash(state);
         let methods_lock = self.methods.read().unwrap();
         let mut methods: Vec<_> = methods_lock

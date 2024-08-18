@@ -309,7 +309,6 @@ macro_rules! rust_bindgen {
 pub use rulox_macro::TryFromLoxValue;
 
 pub use rulox_types::Coroutine;
-pub use rulox_types::DynLoxObject;
 pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxClass;
 pub use rulox_types::LoxError;
@@ -321,7 +320,6 @@ pub use rulox_types::LoxValue;
 pub use rulox_types::LoxVariable;
 pub use rulox_types::MapKey;
 pub use rulox_types::Shared;
-pub use rulox_types::Upcast;
 
 #[cfg(feature = "serde")]
 pub use rulox_types::hashmap_to_json_map;

@@ -2,7 +2,6 @@
 #![allow(clippy::unnecessary_wraps)]
 
 use crate::functions::LoxArgs;
-use crate::DynLoxObject;
 use crate::LoxError;
 use crate::LoxObject;
 use crate::LoxResult;
@@ -94,7 +93,7 @@ macro_rules! default_collection {
 
             fn get(
                 &self,
-                _this: Shared<DynLoxObject>,
+                _this: Shared<dyn LoxObject>,
                 key: &str,
             ) -> Result<LoxValue, Option<LoxError>> {
                 Ok(LoxValue::$loxvalue_variant(self.0.clone()).get(key)?)
@@ -102,7 +101,7 @@ macro_rules! default_collection {
 
             fn set(
                 &mut self,
-                _this: Shared<DynLoxObject>,
+                _this: Shared<dyn LoxObject>,
                 key: &str,
                 value: LoxValue,
             ) -> Result<(), Option<LoxError>> {

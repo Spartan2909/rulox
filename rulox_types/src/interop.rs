@@ -38,9 +38,6 @@ impl<T: Into<LoxValue>, E: Error + Send + Sync + 'static> ToLoxResult for Result
     }
 }
 
-/// A convenient alias for a [`LoxObject`] trait object.
-pub type DynLoxObject = dyn LoxObject + Send + Sync + 'static;
-
 /// A trait for getting the name of a type from a reference.
 pub trait Named {
     /// A programmer-friendly name for the type.
@@ -57,7 +54,7 @@ impl<T: LoxObject> Named for T {
 }
 
 /// A trait for foreign objects that can be used in Lox.
-pub trait LoxObject: Any + Debug + Named {
+pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// A programmer-friendly name for the type.
     fn type_name() -> String
     where
@@ -74,7 +71,7 @@ pub trait LoxObject: Any + Debug + Named {
     /// ## Errors
     /// Returns an error if this functionality is not implemented for this type.
     /// This method should return `Err(None)` if the value is not found.
-    fn get(&self, this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, this: Shared<dyn LoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         let (_, _) = (this, key);
         Err(None)
     }
@@ -86,7 +83,7 @@ pub trait LoxObject: Any + Debug + Named {
     /// If the key does not exist, `Err(None)` should be returned.
     fn set(
         &mut self,
-        this: Shared<DynLoxObject>,
+        this: Shared<dyn LoxObject>,
         key: &str,
         value: LoxValue,
     ) -> Result<(), Option<LoxError>> {
@@ -185,40 +182,19 @@ pub trait LoxObject: Any + Debug + Named {
     }
 }
 
-fn obj_from_value<T: LoxObject + Send + Sync>(value: &LoxValue) -> Option<Shared<T>> {
+fn obj_from_value<T: LoxObject>(value: &LoxValue) -> Option<Shared<T>> {
     match value {
         LoxValue::External(external) => external.clone().downcast().ok(),
         _ => None,
     }
 }
 
-impl<T: LoxObject + Send + Sync> TryFrom<LoxValue> for Shared<T> {
+impl<T: LoxObject> TryFrom<LoxValue> for Shared<T> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
         obj_from_value(&value).ok_or_else(|| {
             LoxError::type_error(format!("expected {}, found {value}", T::type_name()))
         })
-    }
-}
-
-/// A trait primarily intended for explicit conversions to unsized types.
-///
-/// This trait is expected to be replaced by [`std::ops::CoerceUnsized`] once
-/// it is stabilised.
-pub trait Upcast<T: ?Sized> {
-    /// Convert `self` to a pointer to the target type.
-    fn upcast(self) -> Shared<T>;
-}
-
-impl<T: LoxObject> Upcast<dyn LoxObject> for Shared<T> {
-    fn upcast(self) -> Shared<dyn LoxObject> {
-        Shared(self.into_inner() as _)
-    }
-}
-
-impl<T: LoxObject + Send + Sync> Upcast<dyn LoxObject + Send + Sync> for Shared<T> {
-    fn upcast(self) -> Shared<dyn LoxObject + Send + Sync> {
-        Shared(self.into_inner() as _)
     }
 }

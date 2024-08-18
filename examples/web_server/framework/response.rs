@@ -8,13 +8,11 @@ use hyper::StatusCode;
 
 use rulox::hashmap_to_json_map;
 use rulox::prelude::*;
-use rulox::DynLoxObject;
 use rulox::LoxError;
 use rulox::LoxObject;
 use rulox::MapKey;
 use rulox::Shared;
 use rulox::TryFromLoxValue;
-use rulox::Upcast;
 
 use serde_json::Value;
 
@@ -45,7 +43,7 @@ impl LoxObject for LoxResponse {
         "Response".to_string()
     }
 
-    fn get(&self, _this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, _this: Shared<dyn LoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         match key {
             "status_code" => Ok(self.status_code.as_u16().into()),
             "body" => Ok(self.body.clone().into()),
@@ -56,7 +54,7 @@ impl LoxObject for LoxResponse {
 
     fn set(
         &mut self,
-        _this: Shared<DynLoxObject>,
+        _this: Shared<dyn LoxObject>,
         key: &str,
         value: LoxValue,
     ) -> Result<(), Option<LoxError>> {

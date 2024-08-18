@@ -18,13 +18,11 @@ use hyper::StatusCode;
 
 use rulox::lox_bindgen;
 use rulox::prelude::*;
-use rulox::DynLoxObject;
 use rulox::LoxError;
 use rulox::LoxObject;
 use rulox::LoxValue;
 use rulox::Shared;
 use rulox::TryFromLoxValue;
-use rulox::Upcast;
 
 use tokio::runtime::Handle;
 
@@ -71,7 +69,7 @@ impl LoxObject for LoxParamDict {
         "ParamDict".to_string()
     }
 
-    fn get(&self, this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, this: Shared<dyn LoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         if key == "get_or" {
             let get_or = move |key: LoxValue, default: LoxValue| -> Result<LoxValue, LoxError> {
                 let this: Shared<LoxParamDict> = this.clone().downcast().unwrap();
@@ -195,7 +193,7 @@ impl LoxObject for LoxRequest {
         "Request".to_string()
     }
 
-    fn get(&self, _this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, _this: Shared<dyn LoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         match key {
             "headers" => Ok(LoxValue::External(self.headers.clone().upcast())),
             "body" => {
@@ -232,7 +230,7 @@ impl LoxObject for LoxRequest {
 
     fn set(
         &mut self,
-        _this: rulox::Shared<DynLoxObject>,
+        _this: rulox::Shared<dyn LoxObject>,
         key: &str,
         value: LoxValue,
     ) -> Result<(), Option<LoxError>> {

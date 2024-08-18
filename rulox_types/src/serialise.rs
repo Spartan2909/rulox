@@ -1,6 +1,6 @@
-use crate::DynLoxObject;
 use crate::LoxArgs;
 use crate::LoxError;
+use crate::LoxObject;
 use crate::LoxResult;
 use crate::LoxValue;
 use crate::MapKey;
@@ -25,7 +25,7 @@ pub(super) fn primitive_method<S: Serializer>(
 }
 
 pub(super) fn external<S: Serializer>(
-    _external: &Shared<DynLoxObject>,
+    _external: &Shared<dyn LoxObject>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     LoxValue::Str("<external object>".into()).serialize(serializer)

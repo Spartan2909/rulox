@@ -41,7 +41,6 @@ use hyper_util::rt::TokioIo;
 use rulox::lox_bindgen;
 use rulox::prelude::*;
 use rulox::Coroutine;
-use rulox::DynLoxObject;
 use rulox::LoxError;
 use rulox::LoxFn;
 use rulox::LoxObject;
@@ -195,7 +194,7 @@ struct RouteHandler {
     post: Option<Arc<Coroutine>>,
 }
 
-fn get_handler(handler: Shared<DynLoxObject>) -> Result<Shared<RouteHandler>, LoxError> {
+fn get_handler(handler: Shared<dyn LoxObject>) -> Result<Shared<RouteHandler>, LoxError> {
     Ok(handler
         .downcast()
         .map_err(|_| "expected a handler object")
@@ -230,7 +229,7 @@ impl LoxObject for RouteHandler {
         "Handler".to_string()
     }
 
-    fn get(&self, this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, this: Shared<dyn LoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         match key {
             "get" => Ok(handler!(this, get)),
             "post" => Ok(handler!(this, post)),

@@ -12,13 +12,11 @@ use std::sync::Arc;
 use rulox::hashmap_to_json_map;
 use rulox::lox_bindgen;
 use rulox::prelude::*;
-use rulox::DynLoxObject;
 use rulox::LoxError;
 use rulox::LoxObject;
 use rulox::LoxValue;
 use rulox::MapKey;
 use rulox::Shared;
-use rulox::Upcast;
 
 use serde_json::Map;
 use serde_json::Value;
@@ -104,7 +102,7 @@ impl LoxObject for LoxContext {
         "Context".to_string()
     }
 
-    fn get(&self, this: Shared<DynLoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
+    fn get(&self, this: Shared<dyn LoxObject>, key: &str) -> Result<LoxValue, Option<LoxError>> {
         let this: Shared<LoxContext> = this.clone().downcast().unwrap_or_else(|_| unreachable!());
         match key {
             "filter" => {
@@ -244,7 +242,7 @@ fn into_context(value: LoxValue) -> Result<Shared<LoxContext>, LoxError> {
 }
 
 pub(super) fn new_context(value: LoxValue) -> Result<LoxValue, LoxError> {
-    let context: Shared<DynLoxObject> = into_context(value)?.upcast();
+    let context: Shared<dyn LoxObject> = into_context(value)?.upcast();
     Ok(LoxValue::External(context))
 }
 

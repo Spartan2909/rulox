@@ -23,9 +23,7 @@ mod hash;
 pub use hash::MapKey;
 
 mod interop;
-pub use interop::DynLoxObject;
 pub use interop::LoxObject;
-pub use interop::Upcast;
 
 mod iteration;
 pub use iteration::IntoIter;
@@ -199,7 +197,7 @@ pub enum LoxValue {
     Nil,
     /// An object that couldn't normally be represented in Lox.
     #[cfg_attr(feature = "serde", serde(serialize_with = "serialise::external"))]
-    External(Shared<DynLoxObject>),
+    External(Shared<dyn LoxObject>),
 }
 
 impl LoxValue {
@@ -412,7 +410,7 @@ impl LoxValue {
     ///
     /// ## Errors
     /// Returns a type error if `self` is not an external object.
-    pub fn to_external(self) -> Option<Shared<DynLoxObject>> {
+    pub fn to_external(self) -> Option<Shared<dyn LoxObject>> {
         self.expect_external().ok()
     }
 
@@ -421,7 +419,7 @@ impl LoxValue {
     ///
     /// ## Errors
     /// Returns a type error if `self` is not an external object.
-    pub fn expect_external(self) -> Result<Shared<DynLoxObject>, LoxError> {
+    pub fn expect_external(self) -> Result<Shared<dyn LoxObject>, LoxError> {
         if let LoxValue::External(obj) = self {
             Ok(obj)
         } else {

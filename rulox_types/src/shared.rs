@@ -44,15 +44,20 @@ impl<T: ?Sized> Shared<T> {
     }
 }
 
-impl Shared<dyn LoxObject + Send + Sync> {
+impl<T: LoxObject> Shared<T> {
+    /// Convert `self` to a pointer to the target type.
+    pub fn upcast(self) -> Shared<dyn LoxObject> {
+        Shared(self.into_inner() as _)
+    }
+}
+
+impl Shared<dyn LoxObject> {
     /// Attempts to downcast `self` to a concrete type.
     ///
     /// ## Errors
     ///
     /// Returns `Err(self)` if the value wrapped by `self` is not an instance of `T`.
-    pub fn downcast<T: LoxObject + Send + Sync>(
-        self,
-    ) -> Result<Shared<T>, Shared<dyn LoxObject + Send + Sync>> {
+    pub fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject>> {
         let t = TypeId::of::<T>();
         let concrete_self_type = (*self.read()).type_id();
         if t == concrete_self_type {

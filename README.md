@@ -2,7 +2,8 @@
 
 [![crates.io](https://img.shields.io/badge/crates.io-555555?logo=rust&logoColor=fc8d62)](https://crates.io/crates/rulox) 
 [![github](https://img.shields.io/badge/github-555555?logo=github&logoColor=8da0cb)](https://github.com/Spartan2909/rulox)
-[![docs.rs](https://img.shields.io/badge/docs.rs-555555?logo=docs.rs&logoColor=66c2a5)](https://docs.rs/rulox/latest) <br />
+[![docs.rs](https://img.shields.io/badge/docs.rs-555555?logo=docs.rs&logoColor=66c2a5)](https://docs.rs/rulox/latest)
+![tests](https://img.shields.io/github/actions/workflow/status/Spartan2909/rulox/CI.yml?label=tests)<br />
 
 `rulox` is a lightweight scripting language embedded in Rust. It is based on the Lox language from
 [Crafting Interpreters](https://craftinginterpreters.com/).

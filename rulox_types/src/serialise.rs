@@ -15,20 +15,34 @@ use serde_json::Map;
 use serde_json::Number;
 use serde_json::Value;
 
+/// A [`LoxObject`] that can be serialised with `serde`.
+pub trait SerializableLoxObject<S: Serializer>: LoxObject {
+    /// Serialise this object.
+    ///
+    /// ## Errors
+    ///
+    /// Returns an error if serialisation fails.
+    fn serialize(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        "<external object>".serialize(serializer)
+    }
+}
+
+impl<T: LoxObject + ?Sized, S: Serializer> SerializableLoxObject<S> for T {}
+
 #[allow(clippy::trivially_copy_pass_by_ref)]
 pub(super) fn primitive_method<S: Serializer>(
     _func: &fn(LoxArgs) -> LoxResult,
     _value: &LoxValue,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    LoxValue::Str("<bound method>".into()).serialize(serializer)
+    "<bound method>".serialize(serializer)
 }
 
 pub(super) fn external<S: Serializer>(
-    _external: &Shared<dyn LoxObject>,
+    external: &Shared<dyn LoxObject>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    LoxValue::Str("<external object>".into()).serialize(serializer)
+    external.read().serialize(serializer)
 }
 
 impl TryFrom<&Value> for LoxValue {

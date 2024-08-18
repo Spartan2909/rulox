@@ -323,6 +323,8 @@ pub use rulox_types::Shared;
 
 #[cfg(feature = "serde")]
 pub use rulox_types::hashmap_to_json_map;
+#[cfg(feature = "serde")]
+pub use rulox_types::SerializableLoxObject;
 
 #[doc(hidden)]
 pub use rulox_types::ToLoxResult;

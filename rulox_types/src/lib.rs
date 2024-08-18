@@ -39,6 +39,8 @@ mod primitive_methods;
 mod serialise;
 #[cfg(feature = "serde")]
 pub use serialise::hashmap_to_json_map;
+#[cfg(feature = "serde")]
+pub use serialise::SerializableLoxObject;
 
 mod shared;
 pub use shared::LoxVariable;

@@ -16,5 +16,11 @@ jobs:
       - name: Update Rust
         run: rustup update
 
+      - name: Build
+        run: cargo build --workspace --verbose
+
       - name: Test
         run: cargo test --workspace --verbose
+      
+      - name: Run Clippy
+        run: cargo clippy --workspace --verbose -- -Dwarnings

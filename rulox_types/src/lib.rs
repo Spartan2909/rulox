@@ -64,7 +64,9 @@ use std::process::ExitCode;
 use std::process::Termination;
 use std::ptr;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::OnceLock;
+use std::sync::RwLock;
 use std::vec;
 
 use bytes::Bytes;
@@ -636,18 +638,19 @@ impl LoxValue {
         }
     }
 
-    fn super_fn_impl(&self, name: &str) -> Option<LoxMethod> {
-        let instance = self.as_instance()?;
-        let mut class = &instance.read().class;
-        while !class.methods.contains_key(name) {
+    fn super_fn_impl(mut class: &LoxClass, name: &str) -> Option<LoxMethod> {
+        class = class.superclass.as_ref()?;
+        loop {
+            if let Some(method) = class.methods.read().unwrap().get(name) {
+                return Some(method.clone());
+            }
             class = class.superclass.as_ref()?;
         }
-        Some(class.superclass.as_ref()?.methods.get(name)?.clone())
     }
 
     #[doc(hidden)] // Not public API.
-    pub fn super_fn(&self, name: &str) -> Result<LoxMethod, LoxError> {
-        self.super_fn_impl(name)
+    pub fn super_fn(class: &LoxClass, name: &str) -> Result<LoxMethod, LoxError> {
+        LoxValue::super_fn_impl(class, name)
             .ok_or_else(|| LoxError::non_existent_super(name.to_string()))
     }
 
@@ -895,44 +898,42 @@ impl LoxInstance {
 }
 
 /// A class defined in Lox code.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxClass {
     name: &'static str,
     initialiser: Option<Arc<LoxFn>>,
-    methods: HashMap<&'static str, LoxMethod>,
+    methods: RwLock<HashMap<&'static str, LoxMethod>>,
     superclass: Option<Arc<LoxClass>>,
 }
 
+static OBJECT_CLASS: LazyLock<Arc<LoxClass>> = LazyLock::new(|| {
+    let instance_of = |args: LoxArgs| -> LoxResult {
+        let this = args.get(0).unwrap().as_instance().unwrap();
+        let target_class = args.get(0).unwrap().expect_class()?.clone();
+        let is_instance = this.read().instance_of(&target_class);
+
+        Ok(LoxValue::Bool(is_instance))
+    };
+    Arc::new(LoxClass {
+        name: "object",
+        initialiser: None,
+        methods: RwLock::new(HashMap::from_iter([(
+            "instance_of",
+            LoxMethod::Sync(Arc::new(LoxFn::new(Box::new(instance_of), vec!["class"]))),
+        )])),
+        superclass: None,
+    })
+});
+
 impl LoxClass {
     #[doc(hidden)] // Not public API.
-    pub fn new(
-        name: &'static str,
-        methods: HashMap<&'static str, LoxMethod>,
-        superclass: Option<Arc<LoxClass>>,
-    ) -> LoxClass {
+    pub fn new(name: &'static str, superclass: Option<Arc<LoxClass>>) -> LoxClass {
         let mut class = LoxClass {
             name,
             initialiser: None,
-            methods,
-            superclass: Some(superclass.unwrap_or_else(|| {
-                let instance_of = |args: LoxArgs| -> LoxResult {
-                    let this = args.get(0).unwrap().as_instance().unwrap();
-                    let target_class = args.get(0).unwrap().expect_class()?.clone();
-                    let is_instance = this.read().instance_of(&target_class);
-
-                    Ok(LoxValue::Bool(is_instance))
-                };
-                Arc::new(LoxClass {
-                    name: "object",
-                    initialiser: None,
-                    methods: HashMap::from_iter([(
-                        "instance_of",
-                        LoxMethod::Sync(Arc::new(LoxFn::new(Box::new(instance_of), vec!["class"]))),
-                    )]),
-                    superclass: None,
-                })
-            })),
+            methods: RwLock::new(HashMap::new()),
+            superclass: Some(superclass.unwrap_or_else(|| Arc::clone(&OBJECT_CLASS))),
         };
 
         class.initialiser = class.get("init").and_then(LoxMethod::get_sync);
@@ -940,8 +941,13 @@ impl LoxClass {
         class
     }
 
+    #[doc(hidden)] // Not public API.
+    pub fn add_method(&self, name: &'static str, method: LoxMethod) {
+        self.methods.write().unwrap().insert(name, method);
+    }
+
     fn get(&self, key: &str) -> Option<LoxMethod> {
-        self.methods.get(key).map_or_else(
+        self.methods.read().unwrap().get(key).map_or_else(
             || {
                 self.superclass
                     .as_ref()
@@ -955,6 +961,15 @@ impl LoxClass {
         self.initialiser
             .as_ref()
             .map_or(0, |initialiser| initialiser.params().len() - 1)
+    }
+}
+
+impl PartialEq for LoxClass {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.initialiser == other.initialiser
+            && *self.methods.read().unwrap() == *other.methods.read().unwrap()
+            && self.superclass == other.superclass
     }
 }
 

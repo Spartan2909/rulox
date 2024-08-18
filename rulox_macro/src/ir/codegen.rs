@@ -108,7 +108,7 @@ fn class_to_tokens(
     tokens: &mut TokenStream,
 ) {
     let superclass = superclass.as_ref().map_or_else(
-        || quote! { None },
+        || quote!(None),
         |superclass| {
             let get = wrap_extract(&quote! { #superclass.get() });
             let class = wrap_extract(&quote! { #get.expect_as_superclass() });
@@ -130,22 +130,28 @@ fn class_to_tokens(
             &method.params,
             &method.body,
             false,
-            initialiser,
+            Some(MethodInfo {
+                class_name_for_initialiser: initialiser,
+            }),
             Some(&method.name),
             *is_async,
         );
         let method_name = &method.name;
-        methods_tokens.append_all(
-            quote! { (stringify!(#method_name), __rulox_helpers::Arc::new(#current_method).into()), },
-        );
+        methods_tokens.append_all(quote! {
+            __lox_class_tmp.add_method(
+                stringify!(#method_name),
+                __rulox_helpers::Arc::new(#current_method).into()
+            );
+        });
     }
 
     tokens.append_all(quote! {
-        #name.overwrite(LoxValue::Class(__rulox_helpers::Arc::new(__rulox_helpers::LoxClass::new(
+        let __lox_class_tmp = __rulox_helpers::Arc::new(__rulox_helpers::LoxClass::new(
             stringify!(#name),
-            __rulox_helpers::HashMap::from_iter([#methods_tokens]),
             #superclass,
-        ))));
+        ));
+        #methods_tokens
+        #name.overwrite(LoxValue::Class(__lox_class_tmp));
     });
 }
 
@@ -301,12 +307,17 @@ impl ToTokens for Stmt {
     }
 }
 
+#[derive(Clone, Copy)]
+struct MethodInfo<'a> {
+    class_name_for_initialiser: Option<&'a Ident>,
+}
+
 fn function_expr_to_tokens(
     upvalues: &HashSet<Ident>,
     params: &VecDeque<Ident>,
     body: &Stmt,
     value_wrap: bool,
-    initialiser: Option<&Ident>,
+    method_info: Option<MethodInfo>,
     fn_name: Option<&FunctionName>,
     is_async: bool,
 ) -> TokenStream {
@@ -330,10 +341,12 @@ fn function_expr_to_tokens(
     let fn_name = fn_name.map_or_else(
         || quote!("<anonymous function>"),
         |name| {
-            initialiser.map_or_else(
-                || quote! { stringify!(#name) },
-                |class_name| quote! { stringify!(#class_name) },
-            )
+            method_info
+                .and_then(|info| info.class_name_for_initialiser)
+                .map_or_else(
+                    || quote! { stringify!(#name) },
+                    |class_name| quote! { stringify!(#class_name) },
+                )
         },
     );
 
@@ -341,7 +354,7 @@ fn function_expr_to_tokens(
 
     expr_body.append_all(quote! { { #body } });
 
-    let tail = if initialiser.is_some() {
+    let tail = if method_info.is_some_and(|info| info.class_name_for_initialiser.is_some()) {
         quote! { this.get() }
     } else {
         quote! { Ok(LoxValue::Nil) }
@@ -388,7 +401,7 @@ fn function_expr_to_tokens(
         value
     };
 
-    if upvalues.is_empty() {
+    let closed = if upvalues.is_empty() {
         value
     } else {
         let mut closes = TokenStream::new();
@@ -402,6 +415,15 @@ fn function_expr_to_tokens(
             #closes
             #value
         } }
+    };
+
+    if method_info.is_some() {
+        quote! { {
+            let __lox_class_tmp = __rulox_helpers::Arc::clone(&__lox_class_tmp);
+            #closed
+        } }
+    } else {
+        closed
     }
 }
 
@@ -492,9 +514,12 @@ impl ToTokens for Expr {
                 ));
             }
             Expr::Super { method } => {
-                tokens.append_all(
-                    quote! { __rulox_helpers::LoxValue::bind(this.get()?.super_fn(stringify!(#method))?, &this.get()?) },
-                );
+                tokens.append_all(quote! {
+                    __rulox_helpers::LoxValue::bind(
+                        LoxValue::super_fn(&__lox_class_tmp, stringify!(#method))?,
+                        &this.get()?,
+                    )
+                });
             }
             Expr::Await { left } => tokens.append_all(quote! { (#left).expect_future()?.await? }),
             Expr::Index { left, index } => tokens.append_all(quote! { (#left).index(#index)? }),

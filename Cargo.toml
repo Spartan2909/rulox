@@ -28,6 +28,7 @@ authors = ["Caleb Robson"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/Spartan2909/rulox"
+rust-version = "1.80"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "forbid"

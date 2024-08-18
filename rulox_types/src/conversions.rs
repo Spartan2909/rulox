@@ -1,5 +1,3 @@
-#![allow(clippy::implicit_hasher)]
-
 use crate::error::LoxError;
 use crate::interop::LoxObject;
 use crate::shared::Shared;
@@ -161,6 +159,7 @@ impl TryFrom<LoxValue> for Arc<LoxFn> {
     }
 }
 
+#[allow(clippy::implicit_hasher)] // Only supports the currently used hasher.
 impl TryFrom<LoxValue> for Shared<HashMap<MapKey, LoxValue>> {
     type Error = LoxError;
 
@@ -169,6 +168,7 @@ impl TryFrom<LoxValue> for Shared<HashMap<MapKey, LoxValue>> {
     }
 }
 
+#[allow(clippy::implicit_hasher)] // Only supports the currently used hasher.
 impl TryFrom<LoxValue> for HashMap<MapKey, LoxValue> {
     type Error = LoxError;
 

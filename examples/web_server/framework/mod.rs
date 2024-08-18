@@ -41,7 +41,6 @@ use hyper_util::rt::TokioIo;
 use rulox::lox_bindgen;
 use rulox::prelude::*;
 use rulox::Coroutine;
-use rulox::Downcast;
 use rulox::DynLoxObject;
 use rulox::LoxError;
 use rulox::LoxFn;

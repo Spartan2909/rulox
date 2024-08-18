@@ -8,28 +8,31 @@ use std::fmt;
 use std::future::Future;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::pin::pin;
 use std::pin::Pin;
 use std::ptr;
 use std::task::Context;
 use std::task::Poll;
 
+use pin_project::pin_project;
+
 #[cfg(feature = "serde")]
 use serde::Serialize;
+
+type RawLoxFuture = Pin<Box<dyn Future<Output = LoxResult> + Send + Sync>>;
 
 /// An asynchronous function.
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Coroutine {
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
-    fun: Box<dyn Fn(LoxArgs) -> Box<dyn Future<Output = LoxResult> + Send + Sync> + Send + Sync>,
+    fun: Box<dyn Fn(LoxArgs) -> RawLoxFuture + Send + Sync>,
     params: Vec<&'static str>,
 }
 
 impl Coroutine {
     #[doc(hidden)]
     pub fn new(
-        fun: Box<
-            dyn Fn(LoxArgs) -> Box<dyn Future<Output = LoxResult> + Send + Sync> + Send + Sync,
-        >,
+        fun: Box<dyn Fn(LoxArgs) -> RawLoxFuture + Send + Sync>,
         params: Vec<&'static str>,
     ) -> Coroutine {
         Coroutine { fun, params }
@@ -75,9 +78,11 @@ impl Hash for Coroutine {
 
 #[cfg_attr(feature = "serde", derive(Serialize))]
 #[doc(hidden)]
+#[pin_project]
 pub struct LoxFutureInner {
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
-    handle: Box<dyn Future<Output = LoxResult> + Send + Sync>,
+    #[pin]
+    handle: RawLoxFuture,
     done: bool,
 }
 
@@ -97,15 +102,15 @@ impl fmt::Debug for LoxFutureInner {
 
 impl PartialEq for LoxFutureInner {
     fn eq(&self, other: &Self) -> bool {
-        let h1: *const _ = self.handle.as_ref();
-        let h2: *const _ = other.handle.as_ref();
+        let h1: *const _ = &*self.handle.as_ref();
+        let h2: *const _ = &*other.handle.as_ref();
         ptr::eq(h1.cast::<()>(), h2.cast())
     }
 }
 
 impl Hash for LoxFutureInner {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        hash_ptr(self.handle.as_ref(), state);
+        hash_ptr(&*self.handle.as_ref(), state);
     }
 }
 
@@ -117,13 +122,11 @@ impl Future for LoxFutureInner {
             return Poll::Ready(Err(LoxError::finished_coroutine()));
         }
 
-        // SAFETY: `self` is not moved out of.
-        let this = unsafe { self.get_unchecked_mut() };
-        // SAFETY: `self.handle` will not be moved as `self` is pinned.
-        let handle = unsafe { Pin::new_unchecked(&mut *this.handle) };
+        let this = self.project();
+        let handle = this.handle;
         match Future::poll(handle, cx) {
             Poll::Ready(result) => {
-                this.done = true;
+                *this.done = true;
                 Poll::Ready(result)
             }
             Poll::Pending => Poll::Pending,

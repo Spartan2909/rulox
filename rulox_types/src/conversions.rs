@@ -6,7 +6,6 @@ use crate::shared::Shared;
 use crate::LoxClass;
 use crate::LoxFn;
 use crate::LoxInstance;
-use crate::LoxRc;
 use crate::LoxValue;
 use crate::LoxValueType;
 use crate::MapKey;
@@ -14,6 +13,7 @@ use crate::MapKey;
 use crate::async_types;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use bytes::Bytes;
 
@@ -71,8 +71,8 @@ impl From<()> for LoxValue {
     }
 }
 
-impl From<LoxRc<LoxClass>> for LoxValue {
-    fn from(value: LoxRc<LoxClass>) -> Self {
+impl From<Arc<LoxClass>> for LoxValue {
+    fn from(value: Arc<LoxClass>) -> Self {
         LoxValue::Class(value)
     }
 }
@@ -125,7 +125,7 @@ impl TryFrom<LoxValue> for String {
     }
 }
 
-impl TryFrom<LoxValue> for LoxRc<String> {
+impl TryFrom<LoxValue> for Arc<String> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
@@ -140,7 +140,7 @@ impl TryFrom<LoxValue> for LoxRc<String> {
     }
 }
 
-impl TryFrom<LoxValue> for LoxRc<LoxFn> {
+impl TryFrom<LoxValue> for Arc<LoxFn> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
@@ -179,7 +179,7 @@ impl TryFrom<LoxValue> for Bytes {
     }
 }
 
-impl TryFrom<LoxValue> for LoxRc<async_types::Coroutine> {
+impl TryFrom<LoxValue> for Arc<async_types::Coroutine> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {

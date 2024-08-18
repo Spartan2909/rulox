@@ -17,6 +17,7 @@ license.workspace = true
 bytes = "1"
 "castaway" = "0.2"
 "fastrand" = "2"
+pin-project = "1.1.5"
 "proc-macro2" = "1.0"
 "quote" = "1.0"
 "serde" = { version = "1", features = ["derive", "rc"], optional = true }

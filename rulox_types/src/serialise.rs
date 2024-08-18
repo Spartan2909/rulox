@@ -1,13 +1,13 @@
 use crate::DynLoxObject;
 use crate::LoxArgs;
 use crate::LoxError;
-use crate::LoxRc;
 use crate::LoxResult;
 use crate::LoxValue;
 use crate::MapKey;
 use crate::Shared;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::Serialize;
 use serde::Serializer;
@@ -22,14 +22,14 @@ pub(super) fn primitive_method<S: Serializer>(
     _value: &LoxValue,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    LoxValue::Str(LoxRc::new("<bound method>".to_string())).serialize(serializer)
+    LoxValue::Str(Arc::new("<bound method>".to_string())).serialize(serializer)
 }
 
 pub(super) fn external<S: Serializer>(
     _external: &Shared<DynLoxObject>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    LoxValue::Str(LoxRc::new("<external object>".to_string())).serialize(serializer)
+    LoxValue::Str(Arc::new("<external object>".to_string())).serialize(serializer)
 }
 
 impl TryFrom<&Value> for LoxValue {
@@ -40,7 +40,7 @@ impl TryFrom<&Value> for LoxValue {
             Value::Null => Ok(LoxValue::Nil),
             Value::Bool(b) => Ok(LoxValue::Bool(*b)),
             Value::Number(num) => Ok(LoxValue::Num(num.as_f64().unwrap())),
-            Value::String(string) => Ok(LoxValue::Str(LoxRc::new(string.clone()))),
+            Value::String(string) => Ok(LoxValue::Str(Arc::new(string.clone()))),
             Value::Array(arr) => Ok(LoxValue::Arr(Shared::new(
                 arr.iter()
                     .map(TryInto::<LoxValue>::try_into)

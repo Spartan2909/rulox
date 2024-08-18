@@ -1,6 +1,5 @@
 use crate::error::LoxError;
 use crate::LoxInstance;
-use crate::LoxRc;
 use crate::LoxResult;
 use crate::LoxValue;
 use crate::LoxValueType;
@@ -12,6 +11,7 @@ use std::ops::Neg;
 use std::ops::Not;
 use std::ops::Rem;
 use std::ops::Sub;
+use std::sync::Arc;
 
 macro_rules! numeric_operations {
     ( $($t:ty),* ) => {
@@ -88,7 +88,7 @@ impl Add for LoxValue {
         let self_type = LoxValueType::from(&self);
         match (self, &rhs) {
             (LoxValue::Str(s1), LoxValue::Str(s2)) => {
-                Ok(LoxValue::Str(LoxRc::new(s1.to_string() + s2)))
+                Ok(LoxValue::Str(Arc::new(s1.to_string() + s2)))
             }
             (LoxValue::Num(n1), &LoxValue::Num(n2)) => Ok(LoxValue::Num(n1 + n2)),
             (LoxValue::Arr(arr1), LoxValue::Arr(arr2)) => {

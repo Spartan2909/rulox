@@ -1,7 +1,6 @@
 use crate::error::LoxError;
 use crate::hash::hash_ptr;
 use crate::private::Sealed;
-use crate::LoxRc;
 use crate::LoxResult;
 use crate::LoxValue;
 
@@ -12,6 +11,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::ptr;
+use std::sync::Arc;
 
 #[cfg(feature = "serde")]
 use serde::Serialize;
@@ -71,8 +71,8 @@ impl Hash for LoxFn {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 #[doc(hidden)] // Not public API.
 pub enum LoxMethod {
-    Sync(LoxRc<LoxFn>),
-    Async(LoxRc<async_types::Coroutine>),
+    Sync(Arc<LoxFn>),
+    Async(Arc<async_types::Coroutine>),
 }
 
 impl LoxMethod {
@@ -83,7 +83,7 @@ impl LoxMethod {
         }
     }
 
-    pub(super) fn get_sync(self) -> Option<LoxRc<LoxFn>> {
+    pub(super) fn get_sync(self) -> Option<Arc<LoxFn>> {
         match self {
             LoxMethod::Sync(fun) => Some(fun),
             LoxMethod::Async(_) => None,
@@ -112,13 +112,13 @@ impl Debug for LoxMethod {
 #[doc(hidden)] // Not public API.
 impl From<LoxFn> for LoxMethod {
     fn from(value: LoxFn) -> Self {
-        LoxMethod::Sync(LoxRc::new(value))
+        LoxMethod::Sync(Arc::new(value))
     }
 }
 
 #[doc(hidden)] // Not public API.
-impl From<LoxRc<LoxFn>> for LoxMethod {
-    fn from(value: LoxRc<LoxFn>) -> Self {
+impl From<Arc<LoxFn>> for LoxMethod {
+    fn from(value: Arc<LoxFn>) -> Self {
         LoxMethod::Sync(value)
     }
 }
@@ -126,13 +126,13 @@ impl From<LoxRc<LoxFn>> for LoxMethod {
 #[doc(hidden)] // Not public API.
 impl From<async_types::Coroutine> for LoxMethod {
     fn from(value: async_types::Coroutine) -> Self {
-        LoxMethod::Async(LoxRc::new(value))
+        LoxMethod::Async(Arc::new(value))
     }
 }
 
 #[doc(hidden)] // Not public API.
-impl From<LoxRc<async_types::Coroutine>> for LoxMethod {
-    fn from(value: LoxRc<async_types::Coroutine>) -> Self {
+impl From<Arc<async_types::Coroutine>> for LoxMethod {
+    fn from(value: Arc<async_types::Coroutine>) -> Self {
         LoxMethod::Async(value)
     }
 }

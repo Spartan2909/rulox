@@ -1,7 +1,9 @@
+use crate::interop::LoxObject;
 use crate::LoxError;
 use crate::LoxResult;
 use crate::LoxValue;
 
+use std::any::TypeId;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::sync::Arc;
@@ -39,6 +41,29 @@ impl<T: ?Sized> Shared<T> {
 
     pub(crate) fn into_inner(self) -> Arc<RwLock<T>> {
         self.0
+    }
+}
+
+impl Shared<dyn LoxObject + Send + Sync> {
+    /// Attempts to downcast `self` to a concrete type.
+    ///
+    /// ## Errors
+    ///
+    /// Returns `Err(self)` if the value wrapped by `self` is not an instance of `T`.
+    pub fn downcast<T: LoxObject + Send + Sync>(
+        self,
+    ) -> Result<Shared<T>, Shared<dyn LoxObject + Send + Sync>> {
+        let t = TypeId::of::<T>();
+        let concrete_self_type = (*self.read()).type_id();
+        if t == concrete_self_type {
+            // SAFETY: The `TypeId`s of `*self.read()` and `T` are the same, so they are the same
+            // type.
+            Ok(Shared(unsafe {
+                Arc::from_raw(Arc::into_raw(self.0).cast())
+            }))
+        } else {
+            Err(self)
+        }
     }
 }
 

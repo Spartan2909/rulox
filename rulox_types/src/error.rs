@@ -1,4 +1,3 @@
-use crate::LoxRc;
 use crate::LoxValue;
 use crate::MapKey;
 
@@ -8,6 +7,7 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
+use std::sync::Arc;
 
 #[cfg(feature = "serde")]
 use serde::Serialize;
@@ -23,17 +23,17 @@ fn serialise_external_error<S: Serializer>(
 }
 
 #[derive(Debug, Clone)]
-struct ExternalError(LoxRc<dyn Error + Send + Sync>);
+struct ExternalError(Arc<dyn Error + Send + Sync>);
 
 impl Hash for ExternalError {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        LoxRc::as_ptr(&self.0).hash(state);
+        Arc::as_ptr(&self.0).hash(state);
     }
 }
 
 impl PartialEq for ExternalError {
     fn eq(&self, other: &Self) -> bool {
-        LoxRc::ptr_eq(&self.0, &other.0)
+        Arc::ptr_eq(&self.0, &other.0)
     }
 }
 
@@ -189,7 +189,7 @@ impl LoxError {
     /// Creates a [`LoxError`] from another error.
     pub fn external<E: Error + Send + Sync + 'static>(value: E) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::External(ExternalError(LoxRc::new(value))),
+            inner: LoxErrorInner::External(ExternalError(Arc::new(value))),
             trace: VecDeque::new(),
         }
     }

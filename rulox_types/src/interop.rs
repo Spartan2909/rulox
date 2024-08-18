@@ -1,13 +1,10 @@
 use crate::error::LoxError;
-use crate::private::Sealed;
 use crate::shared::Shared;
 use crate::LoxArgs;
-use crate::LoxRc;
 use crate::LoxResult;
 use crate::LoxValue;
 
 use std::any::Any;
-use std::any::TypeId;
 use std::error::Error;
 use std::fmt::Debug;
 
@@ -188,67 +185,14 @@ pub trait LoxObject: Any + Debug + Named {
     }
 }
 
-fn unsync_is<T: LoxObject>(value: &Shared<dyn LoxObject>) -> bool {
-    let t = TypeId::of::<T>();
-    let concrete = (*value.read()).type_id();
-    t == concrete
-}
-
-fn sync_is<T: LoxObject>(value: &Shared<dyn LoxObject + Send + Sync>) -> bool {
-    let t = TypeId::of::<T>();
-    let concrete = (*value.read()).type_id();
-    t == concrete
-}
-
-/// Objects which can be downcast to a concrete type.
-///
-/// This trait is sealed, and cannot be implemented for foreign types.
-pub trait Downcast: Sized + Sealed {
-    /// Attempts to downcast `self` to a concrete type.
-    ///
-    /// ## Errors
-    /// Returns `Err(self)` if the conversion failed.
-    fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Self>;
-}
-
-impl Sealed for Shared<dyn LoxObject> {}
-
-impl Downcast for Shared<dyn LoxObject> {
-    fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject>> {
-        if unsync_is::<T>(&self) {
-            let ptr = self.as_ptr();
-            // SAFETY: The `TypeId`s are the same, therefore `self` is an
-            // instance of `T`.
-            Ok(unsafe { Shared::from(LoxRc::from_raw(ptr.cast())) })
-        } else {
-            Err(self)
-        }
-    }
-}
-
-impl Sealed for Shared<dyn LoxObject + Send + Sync> {}
-
-impl Downcast for Shared<dyn LoxObject + Send + Sync> {
-    fn downcast<T: LoxObject>(self) -> Result<Shared<T>, Shared<dyn LoxObject + Send + Sync>> {
-        if sync_is::<T>(&self) {
-            let ptr = self.as_ptr();
-            // SAFETY: The `TypeId`s are the same, therefore `self` is an
-            // instance of `T`.
-            Ok(unsafe { Shared::from(LoxRc::from_raw(ptr.cast())) })
-        } else {
-            Err(self)
-        }
-    }
-}
-
-fn obj_from_value<T: LoxObject>(value: &LoxValue) -> Option<Shared<T>> {
+fn obj_from_value<T: LoxObject + Send + Sync>(value: &LoxValue) -> Option<Shared<T>> {
     match value {
         LoxValue::External(external) => external.clone().downcast().ok(),
         _ => None,
     }
 }
 
-impl<T: LoxObject> TryFrom<LoxValue> for Shared<T> {
+impl<T: LoxObject + Send + Sync> TryFrom<LoxValue> for Shared<T> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {

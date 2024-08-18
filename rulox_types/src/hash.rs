@@ -10,7 +10,7 @@ use std::hash::Hasher;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
-pub fn hash_ptr<T: ?Sized, H: Hasher>(ptr: *const T, state: &mut H) {
+pub(crate) fn hash_ptr<T: ?Sized, H: Hasher>(ptr: *const T, state: &mut H) {
     (ptr.cast::<()>()).hash(state);
 }
 

@@ -113,7 +113,7 @@ fn class_to_tokens(
             let get = wrap_extract(&quote! { #superclass.get() });
             let class = wrap_extract(&quote! { #get.expect_as_superclass() });
             quote! {
-                    Some(__rulox_helpers::LoxRc::clone(#class))
+                    Some(__rulox_helpers::Arc::clone(#class))
             }
         },
     );
@@ -136,12 +136,12 @@ fn class_to_tokens(
         );
         let method_name = &method.name;
         methods_tokens.append_all(
-            quote! { (stringify!(#method_name), __rulox_helpers::LoxRc::new(#current_method).into()), },
+            quote! { (stringify!(#method_name), __rulox_helpers::Arc::new(#current_method).into()), },
         );
     }
 
     tokens.append_all(quote! {
-        #name.overwrite(LoxValue::Class(__rulox_helpers::LoxRc::new(__rulox_helpers::LoxClass::new(
+        #name.overwrite(LoxValue::Class(__rulox_helpers::Arc::new(__rulox_helpers::LoxClass::new(
             stringify!(#name),
             __rulox_helpers::HashMap::from_iter([#methods_tokens]),
             #superclass,
@@ -314,7 +314,7 @@ fn function_expr_to_tokens(
     if is_async {
         inner.append_all(quote! {
             move |mut __args|
-                -> Box<dyn __rulox_helpers::Future<Output = __rulox_helpers::LoxResult> + Send + Sync + 'static>
+                -> __rulox_helpers::Pin<Box<dyn __rulox_helpers::Future<Output = __rulox_helpers::LoxResult> + Send + Sync + 'static>>
         });
     } else {
         inner.append_all(quote! { move |mut __args| -> __rulox_helpers::LoxResult });
@@ -355,7 +355,7 @@ fn function_expr_to_tokens(
 
     let value = if is_async {
         if upvalues.is_empty() {
-            inner.append_all(quote! { { Box::new(async move {
+            inner.append_all(quote! { { Box::pin(async move {
                 #expr_body
                 #[allow(unreachable_code)] #tail
             }) } });
@@ -366,7 +366,7 @@ fn function_expr_to_tokens(
             }
             inner.append_all(quote! { {
                #closes
-               Box::new(async move {
+               Box::pin(async move {
                    #expr_body
                    #[allow(unreachable_code)] #tail
                })
@@ -376,7 +376,7 @@ fn function_expr_to_tokens(
         let mut value =
             quote! { __rulox_helpers::Coroutine::new(Box::new(#inner), vec![#params_tokens]) };
         if value_wrap {
-            value = quote! { LoxValue::Coroutine(__rulox_helpers::LoxRc::new(#value)) };
+            value = quote! { LoxValue::Coroutine(__rulox_helpers::Arc::new(#value)) };
         }
         value
     } else {

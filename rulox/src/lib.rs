@@ -235,8 +235,8 @@ macro_rules! lox_bindgen {
     };
     ( async fn $rust_name:ident $( :: $segment:ident )* ( $( $arg:ident ),* ) as $lox_name:ident ) => {
         let $lox_name = __rulox_helpers::LoxVariable::new(LoxValue::coroutine(
-            move |__args: $crate::LoxArgs| -> Box<dyn $crate::prelude::__rulox_helpers::Future<Output = $crate::LoxResult> + Send + Sync + 'static> {
-                Box::new(async move {
+            move |__args: $crate::LoxArgs| -> __rulox_helpers::Pin<Box<dyn $crate::prelude::__rulox_helpers::Future<Output = $crate::LoxResult> + Send + Sync + 'static>> {
+                Box::pin(async move {
                     let ( $( $arg, )* ) = __args.extract()?;
                     $crate::ToLoxResult::to_lox_result($rust_name $( :: $segment )* ( $( $arg ),* ).await)
                 })
@@ -309,7 +309,6 @@ macro_rules! rust_bindgen {
 pub use rulox_macro::TryFromLoxValue;
 
 pub use rulox_types::Coroutine;
-pub use rulox_types::Downcast;
 pub use rulox_types::DynLoxObject;
 pub use rulox_types::LoxArgs;
 pub use rulox_types::LoxClass;
@@ -337,21 +336,22 @@ pub mod prelude {
 
     #[doc(hidden)] // Not public API.
     pub mod __rulox_helpers {
-        pub use crate::LoxArgs;
-        pub use crate::LoxClass;
-        pub use crate::LoxError;
-        pub use crate::LoxFn;
-        pub use crate::LoxObject;
-        pub use crate::LoxResult;
-        pub use crate::LoxValue;
-        pub use crate::LoxVariable;
         pub use core::result::Result;
         pub use rulox_types::extract;
-        pub use rulox_types::LoxRc;
-        pub use rulox_types::Shared;
-        pub use std::collections::HashMap;
-
-        pub use core::future::Future;
         pub use rulox_types::Coroutine;
+        pub use rulox_types::LoxArgs;
+        pub use rulox_types::LoxClass;
+        pub use rulox_types::LoxError;
+        pub use rulox_types::LoxFn;
+        pub use rulox_types::LoxObject;
+        pub use rulox_types::LoxResult;
+        pub use rulox_types::LoxValue;
+        pub use rulox_types::LoxVariable;
+        pub use rulox_types::Shared;
+
+        pub use std::collections::HashMap;
+        pub use std::future::Future;
+        pub use std::pin::Pin;
+        pub use std::sync::Arc;
     }
 }

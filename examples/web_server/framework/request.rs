@@ -18,7 +18,6 @@ use hyper::StatusCode;
 
 use rulox::lox_bindgen;
 use rulox::prelude::*;
-use rulox::Downcast;
 use rulox::DynLoxObject;
 use rulox::LoxError;
 use rulox::LoxObject;

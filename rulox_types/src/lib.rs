@@ -23,7 +23,6 @@ mod hash;
 pub use hash::MapKey;
 
 mod interop;
-pub use interop::Downcast;
 pub use interop::DynLoxObject;
 pub use interop::LoxObject;
 pub use interop::Upcast;
@@ -54,21 +53,19 @@ mod private {
     pub trait Sealed {}
 }
 
-#[doc(hidden)]
-pub use std::sync::Arc as LoxRc;
-
 use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::future::Future;
+use std::pin::Pin;
 use std::process::ExitCode;
 use std::process::Termination;
 use std::ptr;
+use std::sync::Arc;
 use std::sync::OnceLock;
 use std::vec;
-
-use std::future::Future;
 
 use bytes::Bytes;
 
@@ -170,13 +167,13 @@ pub enum LoxValue {
     /// A boolean value.
     Bool(bool),
     /// A string.
-    Str(LoxRc<String>),
+    Str(Arc<String>),
     /// A floating-point number.
     Num(f64),
     /// An array of [`LoxValue`]s.
     Arr(Shared<Vec<Self>>),
     /// A function.
-    Function(LoxRc<LoxFn>),
+    Function(Arc<LoxFn>),
     #[doc(hidden)]
     BoundMethod(LoxMethod, Shared<LoxInstance>),
     #[doc(hidden)]
@@ -186,7 +183,7 @@ pub enum LoxValue {
     )]
     PrimitiveMethod(fn(LoxArgs) -> LoxResult, Box<LoxValue>),
     /// A class.
-    Class(LoxRc<LoxClass>),
+    Class(Arc<LoxClass>),
     /// An instance of a class.
     Instance(Shared<LoxInstance>),
     /// A set of key-value pairs.
@@ -196,7 +193,7 @@ pub enum LoxValue {
     /// A wrapped error.
     Error(LoxError),
     /// An asynchronous function.
-    Coroutine(LoxRc<async_types::Coroutine>),
+    Coroutine(Arc<async_types::Coroutine>),
     /// A value returned from an async function.
     Future(LoxFuture),
     /// Nothing.
@@ -227,7 +224,7 @@ impl LoxValue {
     }
 
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Str`.
-    pub fn as_str(&self) -> Option<&LoxRc<String>> {
+    pub fn as_str(&self) -> Option<&Arc<String>> {
         self.expect_str().ok()
     }
 
@@ -235,7 +232,7 @@ impl LoxValue {
     ///
     /// ## Errors
     /// Returns a type error if `self` is not a string.
-    pub fn expect_str(&self) -> Result<&LoxRc<String>, LoxError> {
+    pub fn expect_str(&self) -> Result<&Arc<String>, LoxError> {
         if let LoxValue::Str(value) = self {
             Ok(value)
         } else {
@@ -278,7 +275,7 @@ impl LoxValue {
     }
 
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Function`.
-    pub fn as_function(&self) -> Option<&LoxRc<LoxFn>> {
+    pub fn as_function(&self) -> Option<&Arc<LoxFn>> {
         self.expect_function().ok()
     }
 
@@ -286,7 +283,7 @@ impl LoxValue {
     ///
     /// ## Errors
     /// Returns a type error if `self` is not a function.
-    pub fn expect_function(&self) -> Result<&LoxRc<LoxFn>, LoxError> {
+    pub fn expect_function(&self) -> Result<&Arc<LoxFn>, LoxError> {
         if let LoxValue::Function(value) = self {
             Ok(value)
         } else {
@@ -295,7 +292,7 @@ impl LoxValue {
     }
 
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Class`.
-    pub fn as_class(&self) -> Option<&LoxRc<LoxClass>> {
+    pub fn as_class(&self) -> Option<&Arc<LoxClass>> {
         self.expect_class().ok()
     }
 
@@ -303,7 +300,7 @@ impl LoxValue {
     ///
     /// ## Errors
     /// Returns a type error if `self` is not a class.
-    pub fn expect_class(&self) -> Result<&LoxRc<LoxClass>, LoxError> {
+    pub fn expect_class(&self) -> Result<&Arc<LoxClass>, LoxError> {
         if let LoxValue::Class(value) = self {
             Ok(value)
         } else {
@@ -381,7 +378,7 @@ impl LoxValue {
 
     /// Returns the value wrapped by `self` if `self` is a
     /// `LoxValue::Coroutine`.
-    pub fn as_coroutine(&self) -> Option<&LoxRc<Coroutine>> {
+    pub fn as_coroutine(&self) -> Option<&Arc<Coroutine>> {
         self.expect_coroutine().ok()
     }
 
@@ -389,7 +386,7 @@ impl LoxValue {
     ///
     /// ## Errors
     /// Returns a type error if `self` is not a coroutine.
-    pub fn expect_coroutine(&self) -> Result<&LoxRc<Coroutine>, LoxError> {
+    pub fn expect_coroutine(&self) -> Result<&Arc<Coroutine>, LoxError> {
         if let LoxValue::Coroutine(value) = self {
             Ok(value)
         } else {
@@ -519,7 +516,7 @@ impl LoxValue {
 
     #[doc(hidden)] // Not public API.
     pub fn function(func: LoxFn) -> LoxValue {
-        LoxValue::Function(LoxRc::new(func))
+        LoxValue::Function(Arc::new(func))
     }
 
     #[doc(hidden)] // Not public API.
@@ -533,15 +530,15 @@ impl LoxValue {
 
     #[doc(hidden)] // Not public API.
     pub fn coroutine<
-        F: Fn(LoxArgs) -> Box<dyn Future<Output = LoxResult> + Send + Sync> + Send + Sync + 'static,
+        F: Fn(LoxArgs) -> Pin<Box<dyn Future<Output = LoxResult> + Send + Sync>>
+            + Send
+            + Sync
+            + 'static,
     >(
         fun: F,
         params: Vec<&'static str>,
     ) -> LoxValue {
-        LoxValue::Coroutine(LoxRc::new(async_types::Coroutine::new(
-            Box::new(fun),
-            params,
-        )))
+        LoxValue::Coroutine(Arc::new(async_types::Coroutine::new(Box::new(fun), params)))
     }
 
     #[inline(always)]
@@ -615,7 +612,7 @@ impl LoxValue {
     }
 
     #[doc(hidden)] // Not public API.
-    pub fn expect_as_superclass(&self) -> Result<&LoxRc<LoxClass>, LoxError> {
+    pub fn expect_as_superclass(&self) -> Result<&Arc<LoxClass>, LoxError> {
         if let LoxValue::Class(class) = self {
             Ok(class)
         } else {
@@ -669,7 +666,7 @@ impl LoxValue {
             }
             Self::Class(class) => {
                 let instance = LoxValue::Instance(Shared::new(LoxInstance {
-                    class: LoxRc::clone(class),
+                    class: Arc::clone(class),
                     attributes: HashMap::new(),
                 }));
                 let mut args = args.check_arity(class.arity())?;
@@ -708,7 +705,7 @@ impl LoxValue {
     /// Creates a new `LoxValue::External` with the given value.
     pub fn external<T: LoxObject + Send + Sync + 'static>(value: T) -> LoxValue {
         let shared = Shared::new(value).into_inner();
-        let shared = Shared::from(shared as LoxRc<_>);
+        let shared = Shared::from(shared as Arc<_>);
         LoxValue::External(shared)
     }
 }
@@ -858,7 +855,7 @@ impl Termination for LoxValue {
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxInstance {
-    class: LoxRc<LoxClass>,
+    class: Arc<LoxClass>,
     attributes: HashMap<String, LoxValue>,
 }
 
@@ -892,9 +889,9 @@ impl LoxInstance {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxClass {
     name: &'static str,
-    initialiser: Option<LoxRc<LoxFn>>,
+    initialiser: Option<Arc<LoxFn>>,
     methods: HashMap<&'static str, LoxMethod>,
-    superclass: Option<LoxRc<LoxClass>>,
+    superclass: Option<Arc<LoxClass>>,
 }
 
 impl LoxClass {
@@ -902,7 +899,7 @@ impl LoxClass {
     pub fn new(
         name: &'static str,
         methods: HashMap<&'static str, LoxMethod>,
-        superclass: Option<LoxRc<LoxClass>>,
+        superclass: Option<Arc<LoxClass>>,
     ) -> LoxClass {
         let mut class = LoxClass {
             name,
@@ -916,15 +913,12 @@ impl LoxClass {
 
                     Ok(LoxValue::Bool(is_instance))
                 };
-                LoxRc::new(LoxClass {
+                Arc::new(LoxClass {
                     name: "object",
                     initialiser: None,
                     methods: HashMap::from_iter([(
                         "instance_of",
-                        LoxMethod::Sync(LoxRc::new(LoxFn::new(
-                            Box::new(instance_of),
-                            vec!["class"],
-                        ))),
+                        LoxMethod::Sync(Arc::new(LoxFn::new(Box::new(instance_of), vec!["class"]))),
                     )]),
                     superclass: None,
                 })

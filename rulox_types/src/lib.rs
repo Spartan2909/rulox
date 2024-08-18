@@ -80,7 +80,7 @@ macro_rules! extract {
             Ok(expr) => expr,
             Err(mut err) => {
                 err.push_trace_front($var_name);
-                return Err(err);
+                Err(err)?
             }
         }
     };

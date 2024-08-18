@@ -39,7 +39,7 @@ fn block_to_token_stream(
     for name in forward_declarations {
         tokens.append_all(quote! {
             #[allow(non_snake_case)]
-            let #name = __rulox_helpers::LoxVariable::new(LoxValue::Undefined(stringify!(#name)));
+            let #name = __rulox_helpers::LoxVariable::undefined(stringify!(#name));
         });
     }
 

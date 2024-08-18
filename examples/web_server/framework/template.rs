@@ -249,7 +249,7 @@ pub(super) fn new_context(value: LoxValue) -> Result<LoxValue, LoxError> {
 }
 
 pub(super) fn render_template(
-    name: Arc<String>,
+    name: Arc<str>,
     _request: Shared<LoxRequest>,
     context: LoxValue,
 ) -> Result<LoxValue, LoxError> {

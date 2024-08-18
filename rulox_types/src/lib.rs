@@ -147,7 +147,6 @@ macro_rules! loxvalue_to_loxvaluetype {
                     LoxValue::Future(fut) => Self::Future(fut.0.read().done()),
                     LoxValue::External(_) => Self::External,
                     LoxValue::Nil => Self::Nil,
-                    LoxValue::Undefined(_) => unreachable!(),
                 }
             }
         }
@@ -167,7 +166,7 @@ pub enum LoxValue {
     /// A boolean value.
     Bool(bool),
     /// A string.
-    Str(Arc<String>),
+    Str(Arc<str>),
     /// A floating-point number.
     Num(f64),
     /// An array of [`LoxValue`]s.
@@ -191,9 +190,9 @@ pub enum LoxValue {
     /// A sequence of bytes.
     Bytes(Bytes),
     /// A wrapped error.
-    Error(LoxError),
+    Error(Box<LoxError>),
     /// An asynchronous function.
-    Coroutine(Arc<async_types::Coroutine>),
+    Coroutine(Arc<Coroutine>),
     /// A value returned from an async function.
     Future(LoxFuture),
     /// Nothing.
@@ -201,8 +200,6 @@ pub enum LoxValue {
     /// An object that couldn't normally be represented in Lox.
     #[cfg_attr(feature = "serde", serde(serialize_with = "serialise::external"))]
     External(Shared<DynLoxObject>),
-    #[doc(hidden)] // Not public API.
-    Undefined(&'static str),
 }
 
 impl LoxValue {
@@ -224,7 +221,7 @@ impl LoxValue {
     }
 
     /// Returns the value wrapped by `self` if `self` is a `LoxValue::Str`.
-    pub fn as_str(&self) -> Option<&Arc<String>> {
+    pub fn as_str(&self) -> Option<&Arc<str>> {
         self.expect_str().ok()
     }
 
@@ -232,7 +229,7 @@ impl LoxValue {
     ///
     /// ## Errors
     /// Returns a type error if `self` is not a string.
-    pub fn expect_str(&self) -> Result<&Arc<String>, LoxError> {
+    pub fn expect_str(&self) -> Result<&Arc<str>, LoxError> {
         if let LoxValue::Str(value) = self {
             Ok(value)
         } else {
@@ -645,7 +642,7 @@ impl LoxValue {
     #[doc(hidden)] // Not public API.
     pub fn into_error(self) -> LoxError {
         if let LoxValue::Error(err) = self {
-            err
+            *err
         } else {
             LoxError::value(self)
         }
@@ -733,7 +730,6 @@ impl Debug for LoxValue {
             Self::Future(_) => write!(f, "Future"),
             Self::Nil => write!(f, "Nil"),
             Self::External(_) => write!(f, "External"),
-            Self::Undefined(_) => write!(f, "Undefined"),
         }
     }
 }
@@ -817,7 +813,6 @@ impl Display for LoxValue {
                 write!(f, "nil")
             }
             Self::External(external) => f.write_str(&external.read().representation()),
-            Self::Undefined(_) => unreachable!(),
         }
     }
 }

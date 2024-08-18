@@ -19,7 +19,7 @@ impl<T: Into<LoxValue>> ToLoxResult for T {
     fn to_lox_result(self) -> LoxResult {
         let value: LoxValue = self.into();
         if let LoxValue::Error(err) = value {
-            Err(err)
+            Err(*err)
         } else {
             Ok(value)
         }

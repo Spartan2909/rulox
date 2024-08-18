@@ -30,7 +30,7 @@ use tokio::runtime::Handle;
 
 #[derive(Clone, Default, TryFromLoxValue)]
 struct LoxParamDict {
-    dict: HashMap<Arc<String>, Arc<Vec<Arc<String>>>>,
+    dict: HashMap<Arc<str>, Arc<[Arc<str>]>>,
 }
 
 impl fmt::Debug for LoxParamDict {
@@ -41,7 +41,7 @@ impl fmt::Debug for LoxParamDict {
 
 impl LoxParamDict {
     fn parse(value: &str) -> Option<LoxParamDict> {
-        let mut map: HashMap<String, Vec<Arc<String>>> = HashMap::new();
+        let mut map: HashMap<Arc<str>, Vec<Arc<str>>> = HashMap::new();
 
         for param in value.split('&') {
             let mut iter = param.split('=');
@@ -51,18 +51,15 @@ impl LoxParamDict {
                 return None;
             }
             if let Some(entry) = map.get_mut(name) {
-                entry.push(Arc::new(value.to_string()));
+                entry.push(value.into());
             } else {
-                map.insert(name.to_string(), vec![Arc::new(value.to_string())]);
+                map.insert(name.into(), vec![value.into()]);
             }
         }
 
-        let mut params = HashMap::with_capacity(map.len());
-        for (key, value) in map {
-            params.insert(Arc::new(key), Arc::new(value));
-        }
-
-        Some(LoxParamDict { dict: params })
+        Some(LoxParamDict {
+            dict: map.into_iter().map(|(k, v)| (k, v.into())).collect(),
+        })
     }
 }
 
@@ -105,7 +102,7 @@ impl LoxObject for LoxParamDict {
 }
 
 #[derive(Clone)]
-struct LoxParamView(Arc<Vec<Arc<String>>>);
+struct LoxParamView(Arc<[Arc<str>]>);
 
 impl fmt::Debug for LoxParamView {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -228,7 +225,7 @@ impl LoxObject for LoxRequest {
             "GET" => Ok(LoxValue::external(
                 self.uri.query.clone().unwrap_or_default(),
             )),
-            "method" => Ok(LoxValue::Str(Arc::new(self.method.to_string()))),
+            "method" => Ok(LoxValue::Str(self.method.to_string().into())),
             _ => Err(None),
         }
     }

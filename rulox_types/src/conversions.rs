@@ -59,9 +59,15 @@ impl<const N: usize> From<[LoxValue; N]> for LoxValue {
     }
 }
 
+impl From<Box<LoxError>> for LoxValue {
+    fn from(value: Box<LoxError>) -> Self {
+        LoxValue::Error(value)
+    }
+}
+
 impl From<LoxError> for LoxValue {
     fn from(value: LoxError) -> Self {
-        LoxValue::Error(value)
+        LoxValue::Error(Box::new(value))
     }
 }
 
@@ -125,7 +131,7 @@ impl TryFrom<LoxValue> for String {
     }
 }
 
-impl TryFrom<LoxValue> for Arc<String> {
+impl TryFrom<LoxValue> for Arc<str> {
     type Error = LoxError;
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {

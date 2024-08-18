@@ -103,19 +103,19 @@ impl LoxObject for LoxHeaders {
     }
 
     fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
-        Ok(LoxValue::Str(Arc::new(
+        Ok(LoxValue::Str(
             self.0
                 .get(key.expect_str()?.to_lowercase())
                 .ok_or(LoxError::invalid_key(key))?
                 .to_str()
                 .map_err(LoxError::external)?
-                .to_string(),
-        )))
+                .into(),
+        ))
     }
 
     fn index_set(&mut self, key: LoxValue, value: LoxValue) -> Result<(), LoxError> {
         self.0.insert(
-            HeaderName::try_from(key.expect_str()?.as_str()).map_err(LoxError::external)?,
+            HeaderName::try_from(&**key.expect_str()?).map_err(LoxError::external)?,
             value
                 .expect_str()?
                 .to_string()

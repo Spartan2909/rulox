@@ -84,7 +84,7 @@ impl LoxError {
     /// Returns an error corresponding to an invalid key in a map or array.
     pub fn invalid_key(key: LoxValue) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::InvalidKey(Box::new(key)),
+            inner: LoxErrorInner::InvalidKey(key),
             trace: VecDeque::new(),
         }
     }
@@ -182,7 +182,7 @@ impl LoxError {
         if let LoxErrorInner::Value(value) = self.inner {
             *value
         } else {
-            LoxValue::Error(self)
+            LoxValue::Error(Box::new(self))
         }
     }
 
@@ -219,7 +219,7 @@ enum LoxErrorInner {
     },
     NonExistentSuper(String),
     IndexOutOfRange(usize),
-    InvalidKey(Box<LoxValue>),
+    InvalidKey(LoxValue),
     IncorrectArity {
         expected: usize,
         found: usize,

@@ -106,13 +106,18 @@ impl<'a, T: ?Sized> DerefMut for WriteGuard<'a, T> {
 }
 
 /// A variable defined in Lox code.
-pub struct LoxVariable(Shared<LoxValue>);
+pub struct LoxVariable(Shared<LoxVariableInner>);
+
+enum LoxVariableInner {
+    Value(LoxValue),
+    Undefined(&'static str),
+}
 
 impl LoxVariable {
     /// Creates a new [`LoxVariable`] wrapping a [`LoxValue`] created from the
     /// argument.
     pub fn new<T: Into<LoxValue>>(value: T) -> LoxVariable {
-        LoxVariable(Shared::new(value.into()))
+        LoxVariable(Shared::new(LoxVariableInner::Value(value.into())))
     }
 
     /// Gets the value of `self`.
@@ -120,22 +125,29 @@ impl LoxVariable {
     /// ## Errors
     /// Returns an error if `self` is not defined.
     pub fn get(&self) -> LoxResult {
-        let inner = self.0.read();
-        if let LoxValue::Undefined(name) = *inner {
-            Err(LoxError::undefined_variable(name))
-        } else {
-            Ok(inner.clone())
+        match &*self.0.read() {
+            LoxVariableInner::Value(ref value) => Ok(value.clone()),
+            LoxVariableInner::Undefined(name) => Err(LoxError::undefined_variable(name)),
         }
     }
 
     #[doc(hidden)] // Not public API.
     pub fn overwrite(&self, value: LoxValue) {
-        *self.0.write() = value;
+        let mut inner = self.0.write();
+        match &mut *inner {
+            LoxVariableInner::Value(current) => *current = value,
+            LoxVariableInner::Undefined(_) => *inner = LoxVariableInner::Value(value),
+        }
     }
 
     #[doc(hidden)] // Not public API.
     #[must_use]
     pub fn close_over(&self) -> LoxVariable {
         LoxVariable(self.0.clone())
+    }
+
+    #[doc(hidden)]
+    pub fn undefined(name: &'static str) -> LoxVariable {
+        LoxVariable(Shared::new(LoxVariableInner::Undefined(name)))
     }
 }

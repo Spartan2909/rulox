@@ -47,7 +47,6 @@ impl Hash for LoxValue {
             Self::Future(fut) => fut.0.read().hash(state),
             Self::Nil => {}
             Self::External(external) => external.as_ptr().hash(state),
-            Self::Undefined(_) => unreachable!(),
         }
     }
 }

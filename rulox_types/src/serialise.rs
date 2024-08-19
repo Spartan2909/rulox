@@ -102,11 +102,9 @@ impl TryFrom<&LoxValue> for Value {
         match value {
             LoxValue::Bool(b) => Ok(Value::Bool(*b)),
             LoxValue::Str(s) => Ok(Value::String(s.to_string())),
-            LoxValue::Num(n) => {
-                Ok(Value::Number(Number::from_f64(*n).ok_or_else(|| {
-                    LoxError::type_error(format!("invalid json value: '{n}'"))
-                })?))
-            }
+            LoxValue::Num(n) => Ok(Value::Number(Number::from_f64(*n).ok_or_else(|| {
+                LoxError::type_error(format!("invalid json value: '{n}'").into())
+            })?)),
             LoxValue::Arr(arr) => {
                 let arr: Result<Vec<Value>, LoxError> =
                     arr.read().iter().map(TryInto::try_into).collect();
@@ -126,9 +124,9 @@ impl TryFrom<&LoxValue> for Value {
                 String::from_utf8(bytes.to_vec()).map_err(LoxError::external)?,
             )),
             LoxValue::Nil => Ok(Value::Null),
-            _ => Err(LoxError::type_error(format!(
-                "invalid json value: '{value}'"
-            ))),
+            _ => Err(LoxError::type_error(
+                format!("invalid json value: '{value}'").into(),
+            )),
         }
     }
 }

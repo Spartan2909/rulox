@@ -160,9 +160,8 @@ pub(super) fn set_default(mut args: LoxArgs) -> LoxResult {
                 args.drain().next().unwrap(),
             )))
         }
-        _ => Err(LoxError::type_error(format!(
-            "'{}' has no attribute 'set_default'",
-            args.head.unwrap()
-        ))),
+        _ => Err(LoxError::type_error(
+            format!("'{}' has no attribute 'set_default'", args.head.unwrap()).into(),
+        )),
     }
 }

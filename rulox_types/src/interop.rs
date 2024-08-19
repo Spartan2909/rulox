@@ -101,10 +101,9 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Returns an error if this functionality is not implemented for this type.
     fn index(&self, key: LoxValue) -> Result<LoxValue, LoxError> {
         drop(key);
-        Err(LoxError::type_error(format!(
-            "cannot index into '{}'",
-            self.type_name_of_val()
-        )))
+        Err(LoxError::type_error(
+            format!("cannot index into '{}'", self.type_name_of_val()).into(),
+        ))
     }
 
     /// Sets the element of `self` corresponding to `key` to `value`.
@@ -116,10 +115,9 @@ pub trait LoxObject: Any + Debug + Named + Send + Sync {
     /// Returns an error if this functionality is not implemented for this type.
     fn index_set(&mut self, key: LoxValue, value: LoxValue) -> Result<(), LoxError> {
         let (_, _) = (key, value);
-        Err(LoxError::type_error(format!(
-            "cannot index into '{}'",
-            self.type_name_of_val()
-        )))
+        Err(LoxError::type_error(
+            format!("cannot index into '{}'", self.type_name_of_val()).into(),
+        ))
     }
 
     /// Add `self` to `rhs`.
@@ -204,7 +202,7 @@ impl<T: LoxObject> TryFrom<LoxValue> for Shared<T> {
 
     fn try_from(value: LoxValue) -> Result<Self, Self::Error> {
         obj_from_value(&value).ok_or_else(|| {
-            LoxError::type_error(format!("expected {}, found {value}", T::type_name()))
+            LoxError::type_error(format!("expected {}, found {value}", T::type_name()).into())
         })
     }
 }

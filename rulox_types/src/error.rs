@@ -1,7 +1,6 @@
 use crate::LoxValue;
 use crate::MapKey;
 
-use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::error::Error;
 use std::fmt;
@@ -19,7 +18,11 @@ fn serialise_external_error<S: Serializer>(
     value: &ExternalError,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    LoxErrorInner::Arbitrary(value.0.to_string()).serialize(serializer)
+    #[derive(Serialize)]
+    enum LoxErrorSerialise {
+        ExternalError(String),
+    }
+    LoxErrorSerialise::ExternalError(value.0.to_string()).serialize(serializer)
 }
 
 #[derive(Debug, Clone)]
@@ -41,104 +44,105 @@ impl PartialEq for ExternalError {
 #[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LoxError {
-    inner: LoxErrorInner,
-    trace: VecDeque<&'static str>,
+    inner: Box<LoxErrorInner>,
+    trace: Vec<&'static str>,
 }
 
 impl LoxError {
-    pub(crate) fn type_error(message: String) -> LoxError {
+    pub(crate) fn type_error(message: Box<str>) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::TypeError(message),
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::TypeError(message)),
+            trace: Vec::new(),
         }
     }
 
     pub(crate) fn undefined_variable(kind: &'static str) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::UndefinedVariable(kind),
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::UndefinedVariable(kind)),
+            trace: Vec::new(),
         }
     }
 
-    pub(crate) fn invalid_property(property: String, object: String) -> LoxError {
+    pub(crate) fn invalid_property(mut object: String, property: &str) -> LoxError {
+        let property_start = object.len();
+        object.push_str(property);
         LoxError {
-            inner: LoxErrorInner::InvalidProperty { property, object },
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::InvalidProperty {
+                string: object.into_boxed_str(),
+                property_start,
+            }),
+            trace: Vec::new(),
         }
     }
 
     pub(crate) fn non_existent_super(name: String) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::NonExistentSuper(name),
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::NonExistentSuper(name)),
+            trace: Vec::new(),
         }
     }
 
     pub(crate) fn index_out_of_range(index: usize) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::IndexOutOfRange(index),
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::IndexOutOfRange(index)),
+            trace: Vec::new(),
         }
     }
 
     /// Returns an error corresponding to an invalid key in a map or array.
     pub fn invalid_key(key: LoxValue) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::InvalidKey(key),
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::InvalidKey(key)),
+            trace: Vec::new(),
         }
     }
 
     #[doc(hidden)]
     pub fn incorrect_arity(expected: usize, found: usize) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::IncorrectArity { expected, found },
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::IncorrectArity { expected, found }),
+            trace: Vec::new(),
         }
     }
 
     pub(crate) fn overflow_error(value: MapKey, target_type: &'static str) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::OverflowError {
-                value: Box::new(value),
-                target_type,
-            },
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::OverflowError { value, target_type }),
+            trace: Vec::new(),
         }
     }
 
     /// Creates an error out of a [`LoxValue`], which can be recovered in an `except` block.
     pub fn value(value: LoxValue) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::Value(Box::new(value)),
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::Value(value)),
+            trace: Vec::new(),
         }
     }
 
-    pub(super) fn not_implemented<T: ToString>(method_name: &str, kind: &T) -> LoxError {
-        LoxError::type_error(format!(
-            "The method '{method_name}' is not implemented for '{}'",
-            kind.to_string()
-        ))
+    pub(super) fn not_implemented<T: fmt::Display>(method_name: &str, kind: &T) -> LoxError {
+        LoxError::type_error(
+            format!("The method '{method_name}' is not implemented for '{kind}'").into(),
+        )
     }
 
     pub(crate) fn finished_coroutine() -> LoxError {
         LoxError {
-            inner: LoxErrorInner::FinishedCoroutine,
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::FinishedCoroutine),
+            trace: Vec::new(),
         }
     }
 
     #[doc(hidden)]
     pub fn pass() -> LoxError {
         LoxError {
-            inner: LoxErrorInner::ControlFlow,
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::ControlFlow),
+            trace: Vec::new(),
         }
     }
 
     fn filter_pass(self) -> Option<LoxError> {
-        if matches!(&self.inner, LoxErrorInner::ControlFlow) {
+        if matches!(&*self.inner, LoxErrorInner::ControlFlow) {
             None
         } else {
             Some(self)
@@ -147,7 +151,7 @@ impl LoxError {
 
     #[doc(hidden)]
     pub const fn is_pass(&self) -> bool {
-        matches!(&self.inner, LoxErrorInner::ControlFlow)
+        matches!(&*self.inner, LoxErrorInner::ControlFlow)
     }
 
     #[doc(hidden)]
@@ -161,25 +165,20 @@ impl LoxError {
     /// Pushes a new function to this error's stack trace.
     #[cold]
     pub fn push_trace(&mut self, value: &'static str) {
-        self.trace.push_front(value);
-    }
-
-    #[doc(hidden)] // Not public API.
-    pub fn push_trace_front(&mut self, value: &'static str) {
-        self.trace.push_front(value);
+        self.trace.push(value);
     }
 
     #[doc(hidden)] // Not public API.
     #[must_use]
     pub fn with_trace(mut self, trace: Vec<&'static str>) -> LoxError {
-        self.trace = trace.into();
+        self.trace = trace;
         self
     }
 
     #[doc(hidden)] // Not public API.
     pub fn into_value(self) -> LoxValue {
-        if let LoxErrorInner::Value(value) = self.inner {
-            *value
+        if let LoxErrorInner::Value(value) = *self.inner {
+            value
         } else {
             LoxValue::Error(Box::new(self))
         }
@@ -188,8 +187,8 @@ impl LoxError {
     /// Creates a [`LoxError`] from another error.
     pub fn external<E: Error + Send + Sync + 'static>(value: E) -> LoxError {
         LoxError {
-            inner: LoxErrorInner::External(ExternalError(Arc::new(value))),
-            trace: VecDeque::new(),
+            inner: Box::new(LoxErrorInner::External(ExternalError(Arc::new(value)))),
+            trace: Vec::new(),
         }
     }
 }
@@ -204,17 +203,17 @@ impl From<Infallible> for LoxError {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 enum LoxErrorInner {
     /// An error that occurs when attempting to use a `LoxValue` with an invalid type.
-    TypeError(String),
+    TypeError(Box<str>),
     /// An error that occurs when attempting to convert a `LoxValue` into a Rust type that is too small.
     OverflowError {
-        value: Box<MapKey>,
+        value: MapKey,
         target_type: &'static str,
     },
     /// An error that occurs when variables are accessed without first being defined.
     UndefinedVariable(&'static str),
     InvalidProperty {
-        property: String,
-        object: String,
+        string: Box<str>,
+        property_start: usize,
     },
     NonExistentSuper(String),
     IndexOutOfRange(usize),
@@ -223,12 +222,9 @@ enum LoxErrorInner {
         expected: usize,
         found: usize,
     },
-    Value(Box<LoxValue>),
+    Value(LoxValue),
     #[cfg_attr(feature = "serde", serde(serialize_with = "serialise_external_error"))]
     External(ExternalError),
-    #[cfg(feature = "serde")]
-    #[doc(hidden)]
-    Arbitrary(String),
     FinishedCoroutine,
     ControlFlow,
 }
@@ -236,12 +232,12 @@ enum LoxErrorInner {
 impl Display for LoxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "traceback (most recent call last):")?;
-        for &fun in &self.trace {
+        for &fun in self.trace.iter().rev() {
             writeln!(f, "in '{fun}'")?;
         }
         writeln!(f)?;
 
-        match &self.inner {
+        match &*self.inner {
             LoxErrorInner::TypeError(message) => {
                 write!(f, "{message}")
             }
@@ -253,7 +249,12 @@ impl Display for LoxError {
                 )
             }
             LoxErrorInner::UndefinedVariable(name) => write!(f, "undefined variable '{name}'"),
-            LoxErrorInner::InvalidProperty { property, object } => {
+            LoxErrorInner::InvalidProperty {
+                string,
+                property_start,
+            } => {
+                let object = &string[..*property_start];
+                let property = &string[*property_start..];
                 write!(f, "invalid property '{property}' on {object}")
             }
             LoxErrorInner::NonExistentSuper(name) => {
@@ -268,8 +269,6 @@ impl Display for LoxError {
                 write!(f, "error: {value}")
             }
             LoxErrorInner::External(err) => fmt::Display::fmt(&err.0, f),
-            #[cfg(feature = "serde")]
-            LoxErrorInner::Arbitrary(string) => f.write_str(string),
             LoxErrorInner::FinishedCoroutine => write!(f, "cannot await a finished coroutine"),
             LoxErrorInner::ControlFlow => unreachable!(),
         }

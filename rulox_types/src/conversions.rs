@@ -106,10 +106,9 @@ impl TryFrom<LoxValue> for bool {
         if let LoxValue::Bool(b) = value {
             Ok(b)
         } else {
-            Err(LoxError::type_error(format!(
-                "expected bool, found {}",
-                LoxValueType::from(value)
-            )))
+            Err(LoxError::type_error(
+                format!("expected bool, found {}", LoxValueType::from(value)).into(),
+            ))
         }
     }
 }
@@ -121,10 +120,9 @@ impl TryFrom<LoxValue> for String {
         if let LoxValue::Str(string) = value {
             Ok(string.to_string())
         } else {
-            Err(LoxError::type_error(format!(
-                "expected string, found {}",
-                LoxValueType::from(value)
-            )))
+            Err(LoxError::type_error(
+                format!("expected string, found {}", LoxValueType::from(value)).into(),
+            ))
         }
     }
 }
@@ -136,10 +134,9 @@ impl TryFrom<LoxValue> for Arc<str> {
         if let LoxValue::Str(string) = value {
             Ok(string)
         } else {
-            Err(LoxError::type_error(format!(
-                "expected string, found {}",
-                LoxValueType::from(value)
-            )))
+            Err(LoxError::type_error(
+                format!("expected string, found {}", LoxValueType::from(value)).into(),
+            ))
         }
     }
 }
@@ -151,10 +148,9 @@ impl TryFrom<LoxValue> for Arc<LoxFn> {
         if let LoxValue::Function(fun) = value {
             Ok(fun)
         } else {
-            Err(LoxError::type_error(format!(
-                "expected function, found {}",
-                LoxValueType::from(value)
-            )))
+            Err(LoxError::type_error(
+                format!("expected function, found {}", LoxValueType::from(value)).into(),
+            ))
         }
     }
 }
@@ -192,10 +188,9 @@ impl TryFrom<LoxValue> for Arc<async_types::Coroutine> {
         if let LoxValue::Coroutine(fun) = value {
             Ok(fun)
         } else {
-            Err(LoxError::type_error(format!(
-                "expected coroutine, found {}",
-                LoxValueType::from(value)
-            )))
+            Err(LoxError::type_error(
+                format!("expected coroutine, found {}", LoxValueType::from(value)).into(),
+            ))
         }
     }
 }
@@ -207,10 +202,9 @@ impl TryFrom<LoxValue> for Shared<LoxInstance> {
         if let LoxValue::Instance(fun) = value {
             Ok(fun)
         } else {
-            Err(LoxError::type_error(format!(
-                "expected instance, found {}",
-                LoxValueType::from(value)
-            )))
+            Err(LoxError::type_error(
+                format!("expected instance, found {}", LoxValueType::from(value)).into(),
+            ))
         }
     }
 }
@@ -253,7 +247,7 @@ macro_rules! numeric_conversions {
                                 Ok(*num as Self)
                             }
                         },
-                        _ => Err(LoxError::type_error(format!("expected number, found {}", LoxValueType::from(value))))
+                        _ => Err(LoxError::type_error(format!("expected number, found {}", LoxValueType::from(value)).into()))
                     }
                 }
             }

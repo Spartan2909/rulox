@@ -81,7 +81,7 @@ macro_rules! extract {
         match $expr {
             Ok(expr) => expr,
             Err(mut err) => {
-                err.push_trace_front($var_name);
+                err.push_trace($var_name);
                 Err(err)?
             }
         }
@@ -219,7 +219,9 @@ impl LoxValue {
         if let LoxValue::Bool(value) = self {
             Ok(*value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not a boolean")))
+            Err(LoxError::type_error(
+                format!("{self} is not a boolean").into(),
+            ))
         }
     }
 
@@ -237,7 +239,9 @@ impl LoxValue {
         if let LoxValue::Str(value) = self {
             Ok(value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not a string")))
+            Err(LoxError::type_error(
+                format!("{self} is not a string").into(),
+            ))
         }
     }
 
@@ -255,7 +259,9 @@ impl LoxValue {
         if let LoxValue::Num(value) = self {
             Ok(*value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not a number")))
+            Err(LoxError::type_error(
+                format!("{self} is not a number").into(),
+            ))
         }
     }
 
@@ -273,7 +279,9 @@ impl LoxValue {
         if let LoxValue::Arr(value) = self {
             Ok(value.clone())
         } else {
-            Err(LoxError::type_error(format!("{self} is not an array")))
+            Err(LoxError::type_error(
+                format!("{self} is not an array").into(),
+            ))
         }
     }
 
@@ -291,7 +299,9 @@ impl LoxValue {
         if let LoxValue::Function(value) = self {
             Ok(value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not a function")))
+            Err(LoxError::type_error(
+                format!("{self} is not a function").into(),
+            ))
         }
     }
 
@@ -309,7 +319,9 @@ impl LoxValue {
         if let LoxValue::Class(value) = self {
             Ok(value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not a class")))
+            Err(LoxError::type_error(
+                format!("{self} is not a class").into(),
+            ))
         }
     }
 
@@ -327,7 +339,9 @@ impl LoxValue {
         if let LoxValue::Instance(value) = self {
             Ok(value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not an instance")))
+            Err(LoxError::type_error(
+                format!("{self} is not an instance").into(),
+            ))
         }
     }
 
@@ -345,7 +359,7 @@ impl LoxValue {
         if let LoxValue::Map(value) = self {
             Ok(value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not a map")))
+            Err(LoxError::type_error(format!("{self} is not a map").into()))
         }
     }
 
@@ -363,7 +377,9 @@ impl LoxValue {
         if let LoxValue::Bytes(value) = self {
             Ok(value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not a bytestring")))
+            Err(LoxError::type_error(
+                format!("{self} is not a bytestring").into(),
+            ))
         }
     }
 
@@ -381,7 +397,9 @@ impl LoxValue {
         if let LoxValue::Error(value) = self {
             Ok(value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not an error")))
+            Err(LoxError::type_error(
+                format!("{self} is not an error").into(),
+            ))
         }
     }
 
@@ -400,7 +418,9 @@ impl LoxValue {
         if let LoxValue::Coroutine(value) = self {
             Ok(value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not a coroutine")))
+            Err(LoxError::type_error(
+                format!("{self} is not a coroutine").into(),
+            ))
         }
     }
 
@@ -418,7 +438,9 @@ impl LoxValue {
         if let LoxValue::Future(value) = self {
             Ok(value)
         } else {
-            Err(LoxError::type_error(format!("{self} is not a future")))
+            Err(LoxError::type_error(
+                format!("{self} is not a future").into(),
+            ))
         }
     }
 
@@ -455,7 +477,7 @@ impl LoxValue {
         match self {
             LoxValue::Arr(arr) => {
                 let index = index.clone().try_into().map_err(|_| {
-                    LoxError::type_error(format!("invalid base for index: {index}"))
+                    LoxError::type_error(format!("invalid base for index: {index}").into())
                 })?;
 
                 arr.read()
@@ -473,10 +495,13 @@ impl LoxValue {
                 |method| method.call([index].into()),
             ),
             LoxValue::External(external) => external.read().index(index),
-            _ => Err(LoxError::type_error(format!(
-                "cannot index into a value of type '{}'",
-                LoxValueType::from(self)
-            ))),
+            _ => Err(LoxError::type_error(
+                format!(
+                    "cannot index into a value of type '{}'",
+                    LoxValueType::from(self)
+                )
+                .into(),
+            )),
         }
     }
 
@@ -489,7 +514,7 @@ impl LoxValue {
         match self {
             LoxValue::Arr(arr) => {
                 let index = index.clone().try_into().map_err(|_| {
-                    LoxError::type_error(format!("invalid base for index: {index}"))
+                    LoxError::type_error(format!("invalid base for index: {index}").into())
                 })?;
 
                 let mut arr = arr.write();
@@ -516,10 +541,13 @@ impl LoxValue {
                 }
             }
             LoxValue::External(external) => external.write().index_set(index, value),
-            _ => Err(LoxError::type_error(format!(
-                "cannot index into a value of type {}",
-                LoxValueType::from(self)
-            ))),
+            _ => Err(LoxError::type_error(
+                format!(
+                    "cannot index into a value of type {}",
+                    LoxValueType::from(self)
+                )
+                .into(),
+            )),
         }
     }
 
@@ -592,9 +620,8 @@ impl LoxValue {
     ///
     /// Returns an error if the attribute cannot be read.
     pub fn get(&self, key: &str) -> LoxResult {
-        self.get_impl(key).map_err(|err| {
-            err.unwrap_or_else(|| LoxError::invalid_property(key.to_string(), self.to_string()))
-        })
+        self.get_impl(key)
+            .map_err(|err| err.unwrap_or_else(|| LoxError::invalid_property(self.to_string(), key)))
     }
 
     /// Gets the attribute corresponding to `self.key` to `value`.
@@ -615,15 +642,10 @@ impl LoxValue {
                 .set(object.clone(), key, value.clone())
                 .map(|()| value)
                 .map_err(|err| {
-                    err.unwrap_or_else(|| {
-                        LoxError::invalid_property(key.to_string(), self.to_string())
-                    })
+                    err.unwrap_or_else(|| LoxError::invalid_property(self.to_string(), key))
                 })
         } else {
-            Err(LoxError::invalid_property(
-                key.to_string(),
-                self.to_string(),
-            ))
+            Err(LoxError::invalid_property(self.to_string(), key))
         }
     }
 
@@ -632,9 +654,9 @@ impl LoxValue {
         if let LoxValue::Class(class) = self {
             Ok(class)
         } else {
-            Err(LoxError::type_error(format!(
-                "Cannot use {self} as a superclass"
-            )))
+            Err(LoxError::type_error(
+                format!("Cannot use {self} as a superclass").into(),
+            ))
         }
     }
 
@@ -703,15 +725,14 @@ impl LoxValue {
                 |method| method.call(args),
             ),
             Self::External(external) => external.read().call(args),
-            _ => Err(LoxError::type_error(format!(
-                "cannot call value of type '{}'",
-                LoxValueType::from(self)
-            ))),
+            _ => Err(LoxError::type_error(
+                format!("cannot call value of type '{}'", LoxValueType::from(self)).into(),
+            )),
         }
     }
 
     fn as_external_error(&self) -> LoxError {
-        LoxError::type_error(format!("cannot cast {self} to an external object"))
+        LoxError::type_error(format!("cannot cast {self} to an external object").into())
     }
 
     /// Creates a `LoxValue::Arr` from the given array.
@@ -909,19 +930,21 @@ pub struct LoxClass {
 }
 
 static OBJECT_CLASS: LazyLock<Arc<LoxClass>> = LazyLock::new(|| {
-    let instance_of = |args: LoxArgs| -> LoxResult {
+    #[allow(clippy::needless_pass_by_value)] // Specific signature is required.
+    fn instance_of(args: LoxArgs) -> LoxResult {
         let this = args.get(0).unwrap().as_instance().unwrap();
         let target_class = args.get(0).unwrap().expect_class()?.clone();
         let is_instance = this.read().instance_of(&target_class);
 
         Ok(LoxValue::Bool(is_instance))
-    };
+    }
+
     Arc::new(LoxClass {
         name: "object",
         initialiser: RwLock::new(None),
         methods: RwLock::new(HashMap::from_iter([(
             "instance_of",
-            LoxMethod::Sync(Arc::new(LoxFn::new(Box::new(instance_of), vec!["class"]))),
+            LoxMethod::Sync(Arc::new(LoxFn::new(instance_of, vec!["class"]))),
         )])),
         superclass: None,
     })

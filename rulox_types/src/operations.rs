@@ -22,7 +22,7 @@ macro_rules! numeric_operations {
                 fn add(self, rhs: $t) -> Self::Output {
                     match self {
                         LoxValue::Num(num) => Ok(LoxValue::Num(num + rhs as f64)),
-                        _ => Err(LoxError::type_error(format!("cannot add number to {}", LoxValueType::from(self)))),
+                        _ => Err(LoxError::type_error(format!("cannot add number to {}", LoxValueType::from(self)).into())),
                     }
                 }
             }
@@ -42,7 +42,7 @@ macro_rules! numeric_operations {
                 fn sub(self, rhs: $t) -> Self::Output {
                     match self {
                         LoxValue::Num(num) => Ok(LoxValue::Num(num - rhs as f64)),
-                        _ => Err(LoxError::type_error(format!("cannot subtract number from {}", LoxValueType::from(self)))),
+                        _ => Err(LoxError::type_error(format!("cannot subtract number from {}", LoxValueType::from(self)).into())),
                     }
                 }
             }
@@ -62,7 +62,7 @@ macro_rules! numeric_operations {
                 fn mul(self, rhs: $t) -> Self::Output {
                     match self {
                         LoxValue::Num(num) => Ok(LoxValue::Num(num * rhs as f64)),
-                        _ => Err(LoxError::type_error(format!("cannot multiply {} by number", LoxValueType::from(self)))),
+                        _ => Err(LoxError::type_error(format!("cannot multiply {} by number", LoxValueType::from(self)).into())),
                     }
                 }
             }
@@ -82,7 +82,7 @@ macro_rules! numeric_operations {
                 fn div(self, rhs: $t) -> Self::Output {
                     match self {
                         LoxValue::Num(num) => Ok(LoxValue::Num(num / rhs as f64)),
-                        _ => Err(LoxError::type_error(format!("cannot divide {} by number", LoxValueType::from(self)))),
+                        _ => Err(LoxError::type_error(format!("cannot divide {} by number", LoxValueType::from(self)).into())),
                     }
                 }
             }
@@ -102,7 +102,7 @@ macro_rules! numeric_operations {
                 fn rem(self, rhs: $t) -> Self::Output {
                     match self {
                         LoxValue::Num(num) => Ok(LoxValue::Num(num % rhs as f64)),
-                        _ => Err(LoxError::type_error(format!("cannot take the remainder of {} and a number", LoxValueType::from(self)))),
+                        _ => Err(LoxError::type_error(format!("cannot take the remainder of {} and a number", LoxValueType::from(self)).into())),
                     }
                 }
             }
@@ -138,11 +138,14 @@ impl Add for &LoxValue {
                 |method| method.call([rhs.clone()].into()),
             ),
             (LoxValue::External(external), _) => external.read().add(rhs.clone()),
-            _ => Err(LoxError::type_error(format!(
-                "cannot add {} to {}",
-                LoxValueType::from(rhs),
-                LoxValueType::from(self),
-            ))),
+            _ => Err(LoxError::type_error(
+                format!(
+                    "cannot add {} to {}",
+                    LoxValueType::from(rhs),
+                    LoxValueType::from(self),
+                )
+                .into(),
+            )),
         }
     }
 }
@@ -162,10 +165,9 @@ impl Add<&str> for &LoxValue {
         if let LoxValue::Str(this) = self {
             Ok(LoxValue::Str((this.to_string() + rhs).into()))
         } else {
-            Err(LoxError::type_error(format!(
-                "cannot add `&str` to {}",
-                LoxValueType::from(self),
-            )))
+            Err(LoxError::type_error(
+                format!("cannot add `&str` to {}", LoxValueType::from(self),).into(),
+            ))
         }
     }
 }
@@ -189,11 +191,14 @@ impl Sub for &LoxValue {
                 |method| method.call([rhs.clone()].into()),
             ),
             (LoxValue::External(external), _) => external.read().sub(rhs.clone()),
-            _ => Err(LoxError::type_error(format!(
-                "cannot subtract {} from {}",
-                LoxValueType::from(rhs),
-                LoxValueType::from(self),
-            ))),
+            _ => Err(LoxError::type_error(
+                format!(
+                    "cannot subtract {} from {}",
+                    LoxValueType::from(rhs),
+                    LoxValueType::from(self),
+                )
+                .into(),
+            )),
         }
     }
 }
@@ -217,11 +222,14 @@ impl Mul for &LoxValue {
                 |method| method.call([rhs.clone()].into()),
             ),
             (LoxValue::External(external), _) => external.read().mul(rhs.clone()),
-            _ => Err(LoxError::type_error(format!(
-                "cannot multiply {} by {}",
-                LoxValueType::from(self),
-                LoxValueType::from(rhs),
-            ))),
+            _ => Err(LoxError::type_error(
+                format!(
+                    "cannot multiply {} by {}",
+                    LoxValueType::from(self),
+                    LoxValueType::from(rhs),
+                )
+                .into(),
+            )),
         }
     }
 }
@@ -245,11 +253,14 @@ impl Div for &LoxValue {
                 |method| method.call([rhs.clone()].into()),
             ),
             (LoxValue::External(external), _) => external.read().div(rhs.clone()),
-            _ => Err(LoxError::type_error(format!(
-                "cannot divide {} by {}",
-                LoxValueType::from(rhs),
-                LoxValueType::from(self),
-            ))),
+            _ => Err(LoxError::type_error(
+                format!(
+                    "cannot divide {} by {}",
+                    LoxValueType::from(rhs),
+                    LoxValueType::from(self),
+                )
+                .into(),
+            )),
         }
     }
 }
@@ -273,11 +284,14 @@ impl Rem for &LoxValue {
                 |method| method.call([rhs.clone()].into()),
             ),
             (LoxValue::External(external), _) => external.read().rem(rhs.clone()),
-            _ => Err(LoxError::type_error(format!(
-                "cannot take the remainder of {} and {}",
-                LoxValueType::from(self),
-                LoxValueType::from(rhs),
-            ))),
+            _ => Err(LoxError::type_error(
+                format!(
+                    "cannot take the remainder of {} and {}",
+                    LoxValueType::from(self),
+                    LoxValueType::from(rhs),
+                )
+                .into(),
+            )),
         }
     }
 }
@@ -301,10 +315,9 @@ impl Neg for &LoxValue {
                 |method| method.call([].into()),
             ),
             LoxValue::External(external) => external.read().neg(),
-            _ => Err(LoxError::type_error(format!(
-                "cannot negate {}",
-                LoxValueType::from(self)
-            ))),
+            _ => Err(LoxError::type_error(
+                format!("cannot negate {}", LoxValueType::from(self)).into(),
+            )),
         }
     }
 }

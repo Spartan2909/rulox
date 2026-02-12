@@ -8,7 +8,6 @@ use std::fmt;
 use std::future::Future;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::pin::pin;
 use std::pin::Pin;
 use std::ptr;
 use std::task::Context;
@@ -108,7 +107,7 @@ impl PartialEq for LoxFutureInner {
 
 impl Hash for LoxFutureInner {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        hash_ptr(&*self.handle.as_ref(), state);
+        hash_ptr(&raw const *self.handle, state);
     }
 }
 

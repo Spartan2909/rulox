@@ -789,7 +789,9 @@ where
             (Self::Arr(a1), Self::Arr(a2)) => *a1.read() == *a2.read(),
             (Self::Function(f1), Self::Function(f2)) => f1 == &f2,
             (Self::BoundMethod(f1, _), Self::BoundMethod(f2, _)) => f1 == &f2,
-            (Self::PrimitiveMethod(f1, _), Self::PrimitiveMethod(f2, _)) => f1 == &f2,
+            (Self::PrimitiveMethod(f1, _), Self::PrimitiveMethod(f2, _)) => {
+                ptr::fn_addr_eq(*f1, f2)
+            }
             (Self::Class(c1), Self::Class(c2)) => c1 == &c2,
             (Self::Instance(i1), Self::Instance(i2)) => *i1.read() == *i2.read(),
             (Self::Map(m1), Self::Map(m2)) => *m1.read() == *m2.read(),
@@ -815,18 +817,16 @@ impl Display for LoxValue {
                 write!(f, "{value}")
             }
             Self::Arr(values) => {
-                let mut buf = "[".to_string();
+                f.write_str("[")?;
                 let values = values.read();
                 for value in values.iter().take(values.len() - 1) {
-                    buf += &(value.to_string() + ", ");
+                    write!(f, "{value}, ")?;
                 }
                 if let Some(value) = values.last() {
-                    buf += &value.to_string();
+                    write!(f, "{value}")?;
                 }
                 drop(values);
-
-                buf += "]";
-                f.write_str(&buf)
+                f.write_str("]")
             }
             Self::Function(_) => {
                 write!(f, "<function>")
@@ -837,14 +837,11 @@ impl Display for LoxValue {
                 write!(f, "<instance of {}>", instance.read().class.name)
             }
             Self::Map(map) => {
-                let mut buf = "{\n".to_string();
+                f.write_str("{\n")?;
                 for (key, value) in &*map.read() {
-                    buf.push_str("    \n");
-                    buf += &(key.as_inner().to_string() + ": ");
-                    buf += &value.to_string();
+                    writeln!(f, "    {}: {value}", key.as_inner())?;
                 }
-                buf.push('}');
-                f.write_str(&buf)
+                f.write_str("}")
             }
             Self::Bytes(bytes) => write!(f, "{bytes:?}"),
             Self::Error(error) => write!(f, "{error}"),

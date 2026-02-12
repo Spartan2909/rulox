@@ -26,12 +26,12 @@ impl<T> Shared<T> {
 
 impl<T: ?Sized> Shared<T> {
     /// Returns a read-only RAII guard for the contents of `self`.
-    pub fn read(&self) -> ReadGuard<T> {
+    pub fn read(&self) -> ReadGuard<'_, T> {
         ReadGuard(self.0.read().unwrap_or_else(PoisonError::into_inner))
     }
 
     /// Returns a read-write RAII guard for the contents of `self`.
-    pub fn write(&self) -> WriteGuard<T> {
+    pub fn write(&self) -> WriteGuard<'_, T> {
         WriteGuard(self.0.write().unwrap_or_else(PoisonError::into_inner))
     }
 
@@ -86,7 +86,7 @@ impl<T: ?Sized> From<Arc<RwLock<T>>> for Shared<T> {
 
 pub struct ReadGuard<'a, T: ?Sized>(RwLockReadGuard<'a, T>);
 
-impl<'a, T: ?Sized> Deref for ReadGuard<'a, T> {
+impl<T: ?Sized> Deref for ReadGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -96,7 +96,7 @@ impl<'a, T: ?Sized> Deref for ReadGuard<'a, T> {
 
 pub struct WriteGuard<'a, T: ?Sized>(RwLockWriteGuard<'a, T>);
 
-impl<'a, T: ?Sized> Deref for WriteGuard<'a, T> {
+impl<T: ?Sized> Deref for WriteGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -104,7 +104,7 @@ impl<'a, T: ?Sized> Deref for WriteGuard<'a, T> {
     }
 }
 
-impl<'a, T: ?Sized> DerefMut for WriteGuard<'a, T> {
+impl<T: ?Sized> DerefMut for WriteGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

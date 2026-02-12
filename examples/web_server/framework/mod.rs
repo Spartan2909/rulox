@@ -404,14 +404,14 @@ async fn start_server(addr: Addr, routes: Routes, shutdown_signal: Arc<Coroutine
 ///
 /// - `Router`: A class representing the routes of a server.
 /// - `Server`: A class representing a server bound to a particular IP address
-///     and port.
+///   and port.
 /// - `get`, `post`: Functions for turning async functions into request handlers
-///     for the relevant request method.
+///   for the relevant request method.
 /// - `Response`: A class representing an HTTP response from a handler.
 /// - `JsonResponse`: A class representing an HTTP response with a body of JSON.
 /// - `render`: A function that accepts a template path, the incoming request,
-///     and a map or a `Context` object, and returns a response with a rendered
-///     template.
+///   and a map or a `Context` object, and returns a response with a rendered
+///   template.
 /// - `Context`: A class created from a map of strings to values.
 pub fn get_module(templates_dir: &str) -> Result<LoxVariable, LoxError> {
     TEMPLATES

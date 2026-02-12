@@ -1,6 +1,6 @@
 [package]
 name = "rulox_macro"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 description = "A macro for embedding Lox in Rust."
 readme = "README.md"
@@ -9,13 +9,12 @@ keywords = ["lox", "scripting", "parsing"]
 categories = ["parser-implementations"]
 
 repository.workspace = true
-authors.workspace = true
 license.workspace = true
 
 [dependencies]
 "bytes" = "1"
 flexi-parse = { version = "0.10.0", features = ["proc-macro"] }
-"rulox_types" = { path = "../rulox_types", version = "0.6" }
+"rulox_types" = { path = "../rulox_types", version = "0.6.1" }
 "syn" = "2"
 "quote" = "1.0"
 "proc-macro2" = "1.0"

@@ -1,6 +1,6 @@
 [package]
 name = "rulox"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 description = "A lightweight scripting language embedded in Rust."
 documentation = "https://docs.rs/rulox/latest"
@@ -11,12 +11,11 @@ categories = ["parser-implementations"]
 
 repository.workspace = true
 readme.workspace = true
-authors.workspace = true
 license.workspace = true
 
 [dependencies]
-"rulox_macro" = { path = "../rulox_macro", version = "0.9" }
-"rulox_types" = { path = "../rulox_types", version = "0.6" }
+"rulox_macro" = { path = "../rulox_macro", version = "0.9.1" }
+"rulox_types" = { path = "../rulox_types", version = "0.6.1" }
 
 [features]
 serde = ["rulox_types/serde", "rulox_macro/serde"]

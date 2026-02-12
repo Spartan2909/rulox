@@ -68,8 +68,8 @@ impl ToTokens for Except {
         let pattern = self.binding.as_ref().map_or_else(
             || quote! { Err(_) },
             |binding| {
-                self.guard.as_ref().map_or(
-                    quote! { Err(#binding) },
+                self.guard.as_ref().map_or_else(
+                    || quote! { Err(#binding) },
                     |guard| quote! { Err(#binding) if (#guard).is_truthy() },
                 )
             },
@@ -226,7 +226,7 @@ impl ToTokens for Stmt {
             Stmt::Return(expr) => {
                 let expr = expr
                     .as_ref()
-                    .map_or(quote! { LoxValue::Nil }, |expr| quote! { #expr });
+                    .map_or_else(|| quote! { LoxValue::Nil }, |expr| quote! { #expr });
                 tokens.append_all(quote! { return Ok(#expr); });
             }
             Stmt::Function {

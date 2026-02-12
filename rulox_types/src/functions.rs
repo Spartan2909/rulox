@@ -148,7 +148,7 @@ impl LoxArgs {
     /// Creates a new set of arguments from a `Vec<LoxValue>`.
     ///
     /// See also the various [`From`] implementations.
-    pub fn new(values: Vec<LoxValue>) -> LoxArgs {
+    pub const fn new(values: Vec<LoxValue>) -> LoxArgs {
         LoxArgs {
             head: None,
             main: values,

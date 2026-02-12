@@ -63,7 +63,7 @@ impl TryFrom<&Value> for LoxValue {
                 obj.into_iter()
                     .map(|(key, value)| {
                         Ok((
-                            MapKey::verify_key(key.to_string().into()).unwrap(),
+                            MapKey::verify_key(key.as_str().into()).unwrap(),
                             value.try_into()?,
                         ))
                     })
